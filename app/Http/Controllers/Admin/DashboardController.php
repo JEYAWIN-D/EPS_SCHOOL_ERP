@@ -91,6 +91,8 @@ class DashboardController extends Controller
             Cache::forget('mgmt_dashboard_v7_' . $yearId);
             Cache::forget('mgmt_dashboard_v2_' . $yearId);
             Cache::forget('mgmt_dashboard_v2_0');
+            Cache::forget('hr_employee_category_counts');
+            Cache::forget('hr_departments_list');
         } catch (\Exception $e) {}
     }
 
@@ -1422,19 +1424,5 @@ class DashboardController extends Controller
         ));
     }
 
-    /**
-     * Clear cached dashboard data across versions and current date.
-     */
-    public static function clearCache(): void
-    {
-        $currentYear = AcademicYear::current();
-        $yearId = $currentYear?->id ?? 0;
-        $today = today()->toDateString();
 
-        Cache::forget("mgmt_dashboard_v9_{$yearId}_{$today}");
-        Cache::forget("mgmt_dashboard_v8_{$yearId}_{$today}");
-        Cache::forget("mgmt_dashboard_v7_{$yearId}");
-        Cache::forget("hr_employee_category_counts");
-        Cache::forget("hr_departments_list");
-    }
 }

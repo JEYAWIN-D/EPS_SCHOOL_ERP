@@ -24,25 +24,56 @@ class Employee extends Model
         'salary_on_hold', 'investment_80c', 'investment_80d', 'hra_exemption', 'tax_regime',
         'manager_id',
         'approval_status', 'approved_by', 'approved_at', 'rejection_reason',
+        // Excel Master Fields
+        'nationality', 'religion', 'category', 'mother_tongue', 'caste', 'marital_status',
+        'number_of_children', 'children_male', 'children_female',
+        'first_appointment_date', 'current_employment_status',
+        'epf_no',
+        'contact_person', 'name_of_contact_person', 'contact_relationship', 'contact_address', 'contact_no',
+        'previous_from_date', 'previous_to_date', 'previous_school', 'previous_designation',
+        'academic_qualification', 'academic_university', 'academic_medium', 'academic_institution', 'academic_percentage', 'academic_year_of_passing',
+        'professional_qualification', 'professional_university', 'professional_medium', 'professional_institution', 'professional_percentage', 'professional_year_of_passing',
+        'other_qual_1_name', 'other_qual_1_university', 'other_qual_1_medium', 'other_qual_1_institution', 'other_qual_1_percentage', 'other_qual_1_year_of_passing',
+        'other_qual_2_name', 'other_qual_2_university', 'other_qual_2_medium', 'other_qual_2_institution', 'other_qual_2_percentage', 'other_qual_2_year_of_passing',
+        'additional_qual_after_recruitment', 'training_attended_before_recruitment',
     ];
 
     protected $casts = [
-        'dob'            => 'date',
-        'joining_date'   => 'date',
-        'license_expiry' => 'date',
-        'basic_salary'   => 'decimal:2',
-        'hra'            => 'decimal:2',
-        'ta'             => 'decimal:2',
-        'gross_salary'   => 'decimal:2',
-        'is_active'      => 'boolean',
-        'aadhaar_no'      => \App\Casts\EncryptedStringResilient::class,
-        'pan_no'          => \App\Casts\EncryptedStringResilient::class,
-        'bank_account_no' => \App\Casts\EncryptedStringResilient::class,
+        'dob'                     => 'date',
+        'joining_date'            => 'date',
+        'first_appointment_date'  => 'date',
+        'previous_from_date'      => 'date',
+        'previous_to_date'        => 'date',
+        'license_expiry'          => 'date',
+        'basic_salary'            => 'decimal:2',
+        'hra'                     => 'decimal:2',
+        'ta'                      => 'decimal:2',
+        'gross_salary'            => 'decimal:2',
+        'academic_percentage'     => 'decimal:2',
+        'professional_percentage' => 'decimal:2',
+        'other_qual_1_percentage' => 'decimal:2',
+        'other_qual_2_percentage' => 'decimal:2',
+        'number_of_children'      => 'integer',
+        'children_male'           => 'integer',
+        'children_female'         => 'integer',
+        'academic_year_of_passing'=> 'integer',
+        'professional_year_of_passing' => 'integer',
+        'other_qual_1_year_of_passing' => 'integer',
+        'other_qual_2_year_of_passing' => 'integer',
+        'is_active'               => 'boolean',
+        'aadhaar_no'              => \App\Casts\EncryptedStringResilient::class,
+        'pan_no'                  => \App\Casts\EncryptedStringResilient::class,
+        'bank_account_no'         => \App\Casts\EncryptedStringResilient::class,
     ];
 
     public function getFullNameAttribute(): string
     {
-        return trim($this->first_name . ' ' . $this->last_name);
+        $first = trim((string) ($this->first_name ?? ''));
+        $last  = trim((string) ($this->last_name ?? ''));
+        if ($last === '' || strcasecmp($first, $last) === 0) {
+            return $first;
+        }
+        return trim("{$first} {$last}");
     }
 
     public function getEmployeeNumberAttribute(): ?string

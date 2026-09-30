@@ -321,15 +321,16 @@ class HrController extends Controller
     public function rejectStaff(Request $request, int $id)
     {
         $request->validate([
-            'rejection_reason' => 'required|string|max:500',
+            'rejection_reason' => 'nullable|string|max:500',
         ]);
 
+        $reason = $request->input('rejection_reason') ?: 'Rejected by Administrator';
         $employee = Employee::findOrFail($id);
         $employee->update([
             'approval_status' => 'rejected',
             'status'          => 'rejected',
             'is_active'       => false,
-            'rejection_reason'=> $request->rejection_reason,
+            'rejection_reason'=> $reason,
             'approved_by'     => auth()->id(),
             'approved_at'     => now(),
         ]);
@@ -402,7 +403,12 @@ class HrController extends Controller
         // Auto-fill permission in-time if school dispersal reached
         \App\Console\Commands\AutoFillPermissionInTime::executeAutoFill($date);
 
-        $empQuery = Employee::with(['department', 'designation'])->where('is_active', true);
+        $empQuery = Employee::with(['department', 'designation'])
+            ->where('is_active', true)
+            ->where(function($q) {
+                $q->where('approval_status', 'approved')
+                  ->orWhereNull('approval_status');
+            });
         if ($category && $category !== 'all') {
             $empQuery->where('employee_type', $category);
         }
@@ -423,13 +429,15 @@ class HrController extends Controller
             ->get()
             ->keyBy('employee_id');
 
+        $activeApproved = fn($q) => $q->where('is_active', true)->where(fn($sq) => $sq->where('approval_status', 'approved')->orWhereNull('approval_status'));
+
         $categories = [
-            ['key' => 'all',          'label' => 'All Staff',          'count' => Employee::where('is_active', true)->count()],
-            ['key' => 'teaching',     'label' => 'Teaching Staff',     'count' => Employee::where('is_active', true)->where('employee_type', 'teaching')->count()],
-            ['key' => 'non_teaching', 'label' => 'Non-Teaching',       'count' => Employee::where('is_active', true)->where('employee_type', 'non_teaching')->count()],
-            ['key' => 'driver',       'label' => 'Drivers',            'count' => Employee::where('is_active', true)->where('employee_type', 'driver')->count()],
-            ['key' => 'cleaner',      'label' => 'Cleaners / Support', 'count' => Employee::where('is_active', true)->where('employee_type', 'cleaner')->count()],
-            ['key' => 'nanny',        'label' => 'Nannies (Naani)',    'count' => Employee::where('is_active', true)->whereIn('employee_type', ['nanny', 'naani'])->count()],
+            ['key' => 'all',          'label' => 'All Staff',          'count' => $activeApproved(Employee::query())->count()],
+            ['key' => 'teaching',     'label' => 'Teaching Staff',     'count' => $activeApproved(Employee::where('employee_type', 'teaching'))->count()],
+            ['key' => 'non_teaching', 'label' => 'Non-Teaching',       'count' => $activeApproved(Employee::where('employee_type', 'non_teaching'))->count()],
+            ['key' => 'driver',       'label' => 'Drivers',            'count' => $activeApproved(Employee::where('employee_type', 'driver'))->count()],
+            ['key' => 'cleaner',      'label' => 'Cleaners / Support', 'count' => $activeApproved(Employee::where('employee_type', 'cleaner'))->count()],
+            ['key' => 'nanny',        'label' => 'Nannies (Naani)',    'count' => $activeApproved(Employee::whereIn('employee_type', ['nanny', 'naani']))->count()],
         ];
 
         return view('hr.attendance-mark', compact('employees', 'attendances', 'approvedLeaves', 'date', 'today', 'category', 'categories'));
@@ -1690,41 +1698,126 @@ class HrController extends Controller
 
     public function createEmployee()
     {
-        return view('hr.employees-create');
+        $departments = Department::orderBy('name')->get();
+        $designations = Designation::orderBy('name')->get();
+        $generatedEmployeeCode = $this->generateEmployeeNumber();
+        return view('hr.employees-create', compact('departments', 'designations', 'generatedEmployeeCode'));
     }
 
     public function storeEmployee(Request $request)
     {
-        // Sanitize digits before validation
-        if ($request->has('aadhaar_no') && $request->aadhaar_no !== null) {
-            $request->merge(['aadhaar_no' => preg_replace('/[\s\-]+/', '', $request->aadhaar_no)]);
-        }
-        if ($request->has('mobile') && $request->mobile !== null) {
-            $request->merge(['mobile' => preg_replace('/[\s\-]+/', '', $request->mobile)]);
-        }
-        if ($request->has('emergency_contact_mobile') && $request->emergency_contact_mobile !== null) {
-            $request->merge(['emergency_contact_mobile' => preg_replace('/[\s\-]+/', '', $request->emergency_contact_mobile)]);
+        // Handle NAME (Excel heading: NAME)
+        if ($request->filled('name')) {
+            $parts = preg_split('/\s+/', trim((string) $request->input('name')), 2);
+            $request->merge([
+                'first_name' => $parts[0] ?? '',
+                'last_name'  => $parts[1] ?? '',
+            ]);
+        } elseif ($request->filled('first_name')) {
+            $request->merge([
+                'name' => trim($request->input('first_name') . ' ' . ($request->input('last_name') ?? '')),
+            ]);
         }
 
-        $validated = $request->validate([
+        // Sanitize digits and uppercase before validation
+        if ($request->has('aadhaar_no') && $request->aadhaar_no !== null) {
+            $request->merge(['aadhaar_no' => preg_replace('/[\s\-]+/', '', (string) $request->aadhaar_no)]);
+        }
+        if ($request->has('pan_no') && $request->pan_no !== null) {
+            $request->merge(['pan_no' => strtoupper(trim((string) $request->pan_no))]);
+        }
+        if ($request->has('mobile') && $request->mobile !== null) {
+            $request->merge(['mobile' => preg_replace('/[\s\-]+/', '', (string) $request->mobile)]);
+        }
+        if ($request->has('contact_no') && $request->contact_no !== null) {
+            $request->merge(['contact_no' => preg_replace('/[\s\-]+/', '', (string) $request->contact_no)]);
+        }
+        if ($request->has('emergency_contact_mobile') && $request->emergency_contact_mobile !== null) {
+            $request->merge(['emergency_contact_mobile' => preg_replace('/[\s\-]+/', '', (string) $request->emergency_contact_mobile)]);
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            // Section A: Personal Details
+            'name'                   => 'required|string|max:150',
             'first_name'             => 'required|string|max:60',
-            'last_name'              => 'required|string|max:60',
-            'dob'                    => 'nullable|date|before:today',
-            'gender'                 => 'required|in:male,female,other',
-            'mobile'                 => 'required|string|regex:/^[0-9]{10}$/',
-            'official_email'         => 'nullable|email|max:100',
-            'email'                  => 'nullable|email|max:100',
+            'last_name'              => 'nullable|string|max:60',
+            'dob'                    => 'required|date|before:today',
+            'gender'                 => 'required|string|in:male,female,other',
+            'mother_tongue'          => 'required|string|max:100',
+            'nationality'            => 'required|string|max:100',
+            'religion'               => 'required|string|max:100',
+            'caste'                  => 'required|string|max:100',
+            'marital_status'         => 'required|string|in:Single,Married,single,married',
+            'number_of_children'     => 'required|integer|min:0',
+            'children_male'          => 'required|integer|min:0',
+            'children_female'        => 'required|integer|min:0',
+            'address'                => 'required|string|max:500',
+
+            // Section B: Employment Details
+            'employee_code'          => ['nullable', 'string', 'max:50', 'regex:/^EPSS\d{4,}$/i', 'unique:employees,employee_code'],
             'designation'            => 'required|string|max:100',
-            'department'             => 'nullable|string|max:100',
-            'employee_type'          => 'required|string|in:teaching,non_teaching,driver,cleaner,nanny,naani,contract,part_time',
             'joining_date'           => 'required|date',
-            'qualification'          => 'nullable|string|max:200',
-            'address'                => 'nullable|string|max:500',
-            'residential_address'    => 'nullable|string|max:500',
-            'pf_account_no'          => 'nullable|string|max:30',
-            'esi_no'                 => 'nullable|string|max:30',
-            'pan_no'                 => 'nullable|string|regex:/^[A-Za-z]{5}[0-9]{4}[A-Za-z]{1}$/',
-            'aadhaar_no'             => 'nullable|string|regex:/^[0-9]{12}$/',
+            'first_appointment_date' => 'required|date',
+            'current_employment_status' => 'required|string|in:Permanent,Temporary,permanent,temporary',
+            'employee_type'          => 'required|string|in:teaching,non_teaching,driver,cleaner,nanny,naani,contract,part_time,admin,support',
+            'department'             => 'nullable|string|max:100',
+
+            // Section C: Identity / Government Details
+            'aadhaar_no'             => 'required|string|regex:/^[0-9]{12}$/',
+            'pan_no'                 => 'required|string|regex:/^[A-Za-z]{5}[0-9]{4}[A-Za-z]{1}$/',
+            'epf_no'                 => 'required|string|max:50',
+
+            // Section D: Contact Details
+            'official_email'         => 'required|email|max:100',
+            'mobile'                 => 'required|string|regex:/^[0-9]{10}$/',
+            'name_of_contact_person' => 'required|string|max:150',
+            'contact_relationship'   => 'required|string|max:100',
+            'contact_address'        => 'required|string|max:500',
+            'contact_no'             => 'required|string|regex:/^[0-9]{10}$/',
+
+            // Section E: Previous Employment Details
+            'previous_designation'   => 'required|string|max:100',
+            'previous_school'        => 'required|string|max:250',
+            'previous_from_date'     => 'required|date',
+            'previous_to_date'       => 'required|date|after_or_equal:previous_from_date',
+
+            // Section F: Academic Qualification
+            'academic_qualification' => 'required|string|max:150',
+            'academic_university'    => 'required|string|max:150',
+            'academic_medium'        => 'required|string|max:100',
+            'academic_institution'   => 'required|string|max:200',
+            'academic_percentage'    => 'required|numeric|min:0|max:100',
+            'academic_year_of_passing' => 'required|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section G: Professional Qualification
+            'professional_qualification' => 'required|string|max:150',
+            'professional_university'    => 'required|string|max:150',
+            'professional_medium'        => 'required|string|max:100',
+            'professional_institution'   => 'required|string|max:200',
+            'professional_percentage'    => 'required|numeric|min:0|max:100',
+            'professional_year_of_passing' => 'required|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section H: Other Qualification 1 (conditional if provided)
+            'other_qual_1_name'      => 'nullable|string|max:150',
+            'other_qual_1_university'=> 'required_with:other_qual_1_name|nullable|string|max:150',
+            'other_qual_1_medium'    => 'required_with:other_qual_1_name|nullable|string|max:100',
+            'other_qual_1_institution'=> 'required_with:other_qual_1_name|nullable|string|max:200',
+            'other_qual_1_percentage'=> 'required_with:other_qual_1_name|nullable|numeric|min:0|max:100',
+            'other_qual_1_year_of_passing' => 'required_with:other_qual_1_name|nullable|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section I: Other Qualification 2 (conditional if provided)
+            'other_qual_2_name'      => 'nullable|string|max:150',
+            'other_qual_2_university'=> 'required_with:other_qual_2_name|nullable|string|max:150',
+            'other_qual_2_medium'    => 'required_with:other_qual_2_name|nullable|string|max:100',
+            'other_qual_2_institution'=> 'required_with:other_qual_2_name|nullable|string|max:200',
+            'other_qual_2_percentage'=> 'required_with:other_qual_2_name|nullable|numeric|min:0|max:100',
+            'other_qual_2_year_of_passing' => 'required_with:other_qual_2_name|nullable|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section J: Additional Qualification / Training
+            'additional_qual_after_recruitment' => 'required|string|max:1000',
+            'training_attended_before_recruitment' => 'required|string|max:1000',
+
+            // Optional category specific / existing fields
             'photo'                  => 'nullable|image|max:2048',
             'basic_salary'           => 'nullable|numeric|min:0',
             'hra'                    => 'nullable|numeric|min:0',
@@ -1733,25 +1826,87 @@ class HrController extends Controller
             'medical_allowance'      => 'nullable|numeric|min:0',
             'other_allowances'       => 'nullable|numeric|min:0',
             'tds'                    => 'nullable|numeric|min:0',
-            // Category specific fields
             'license_number'         => 'nullable|string|max:100',
             'license_expiry'         => 'nullable|date',
             'assigned_vehicle'       => 'nullable|string|max:100',
             'assigned_block'         => 'nullable|string|max:100',
             'shift_timing'           => 'nullable|string|max:100',
-            'emergency_contact_name' => 'nullable|string|max:100',
-            'emergency_contact_mobile'=> 'nullable|string|regex:/^[0-9]{10}$/',
         ], [
-            'aadhaar_no.regex'               => 'Aadhaar number must be exactly 12 digits.',
-            'pan_no.regex'                   => 'PAN number must be 10 characters in valid format (e.g. ABCDE1234F).',
-            'mobile.regex'                   => 'Mobile number must be exactly 10 digits.',
-            'emergency_contact_mobile.regex' => 'Emergency contact number must be exactly 10 digits.',
-            'first_name.required'            => 'First name is required.',
-            'last_name.required'             => 'Last name is required.',
-            'designation.required'           => 'Designation is required.',
-            'joining_date.required'          => 'Joining date is required.',
-            'dob.before'                     => 'Date of birth must be a date before today.',
+            'name.required'                  => 'NAME is required.',
+            'first_name.required'            => 'NAME is required.',
+            'dob.required'                   => 'DOB is required.',
+            'dob.before'                     => 'DOB must be a date before today.',
+            'gender.required'                => 'M/F is required.',
+            'mother_tongue.required'         => 'MOTHER TONGUE is required.',
+            'nationality.required'           => 'NATIONALITY is required.',
+            'religion.required'              => 'RELIGION is required.',
+            'caste.required'                 => 'CASTE is required.',
+            'marital_status.required'        => 'MARITAL STATUS is required.',
+            'marital_status.in'              => 'MARITAL STATUS must be Single or Married.',
+            'number_of_children.required'    => 'NUMBER OF CHILDREN is required.',
+            'children_male.required'         => 'MALE children count is required.',
+            'children_female.required'       => 'FEMALE children count is required.',
+            'address.required'               => 'ADDRESS is required.',
+            'employee_code.regex'            => 'EMPLOYEE ID must follow format EPSS0001.',
+            'designation.required'           => 'DESIGNATION is required.',
+            'joining_date.required'          => 'DOJ is required.',
+            'first_appointment_date.required'=> 'DATE OF FIRST APPOINTMENT AS TEACHER is required.',
+            'current_employment_status.required' => 'CURRENT EMPLOYMENT STATUS is required.',
+            'current_employment_status.in'   => 'CURRENT EMPLOYMENT STATUS must be Permanent or Temporary.',
+            'aadhaar_no.required'            => 'AADHAR NO is required.',
+            'aadhaar_no.regex'               => 'AADHAR NO must be exactly 12 digits.',
+            'pan_no.required'                => 'PAN NO. is required.',
+            'pan_no.regex'                   => 'PAN NO. must be 10 characters in valid format (e.g. ABCDE1234F).',
+            'epf_no.required'                => 'EPF NO. is required.',
+            'official_email.required'        => 'EMAIL ID is required.',
+            'official_email.email'           => 'EMAIL ID must be a valid email address.',
+            'mobile.required'                => 'CONTACT NO. is required.',
+            'mobile.regex'                   => 'CONTACT NO. must be exactly 10 digits.',
+            'name_of_contact_person.required'=> 'NAME OF THE CONTACT PERSON is required.',
+            'contact_relationship.required'  => 'RELATIONSHIP is required.',
+            'contact_address.required'       => 'CONTACT ADDRESS is required.',
+            'contact_no.required'            => 'CONTACT NO is required.',
+            'contact_no.regex'               => 'CONTACT NO must be exactly 10 digits.',
+            'previous_designation.required'  => 'PREVIOUS POST HELD is required.',
+            'previous_school.required'       => 'NAME & ADDRESS OF THE INSTITUTION is required.',
+            'previous_from_date.required'    => 'FROM date is required.',
+            'previous_to_date.required'      => 'TO date is required.',
+            'previous_to_date.after_or_equal'=> 'Previous Employment "TO" date cannot be earlier than "FROM" date.',
+            'academic_qualification.required'=> 'ACADEMIC QUALIFICATION is required.',
+            'academic_university.required'   => 'Academic UNIVERSITY is required.',
+            'academic_medium.required'       => 'Academic MEDIUM is required.',
+            'academic_institution.required'  => 'Academic NAME OF THE INSTITUTION is required.',
+            'academic_percentage.required'   => 'Academic %MARKS is required.',
+            'academic_percentage.min'        => 'Academic %MARKS cannot be negative.',
+            'academic_percentage.max'        => 'Academic %MARKS cannot exceed 100.',
+            'academic_year_of_passing.required' => 'Academic YEAR OF PASSING is required.',
+            'professional_qualification.required' => 'PROFESSIONAL QUALIFICATION is required.',
+            'professional_university.required'=> 'Professional UNIVERSITY is required.',
+            'professional_medium.required'   => 'Professional MEDIUM is required.',
+            'professional_institution.required' => 'Professional NAME OF INSTITUTION is required.',
+            'professional_percentage.required' => 'Professional %MARKS is required.',
+            'professional_percentage.min'    => 'Professional %MARKS cannot be negative.',
+            'professional_percentage.max'    => 'Professional %MARKS cannot exceed 100.',
+            'professional_year_of_passing.required' => 'Professional YEAR OF PASSING is required.',
+            'other_qual_1_percentage.min'    => 'Other Qualification 1 %MARKS cannot be negative.',
+            'other_qual_1_percentage.max'    => 'Other Qualification 1 %MARKS cannot exceed 100.',
+            'other_qual_2_percentage.min'    => 'Other Qualification 2 %MARKS cannot exceed 100.',
+            'additional_qual_after_recruitment.required' => 'ADDITIONAL QUALIFICATION OBTAINED AFTER RECRUITMENT is required.',
+            'training_attended_before_recruitment.required' => 'TRAINING PROGRAMME ATTENDED BEFORE RECRUITMENT is required.',
         ]);
+
+        $validator->after(function ($validator) use ($request) {
+            if ($request->filled('number_of_children') && $request->filled('children_male') && $request->filled('children_female')) {
+                $total = (int) $request->number_of_children;
+                $m = (int) $request->children_male;
+                $f = (int) $request->children_female;
+                if (($m + $f) !== $total) {
+                    $validator->errors()->add('number_of_children', "The sum of Male ($m) and Female ($f) children must equal the Number of Children ($total).");
+                }
+            }
+        });
+
+        $validated = $validator->validate();
 
         $salaryFields = ['hra', 'da', 'ta', 'medical_allowance', 'other_allowances', 'tds'];
         $salaryData = array_filter(
@@ -1766,27 +1921,99 @@ class HrController extends Controller
             $data['photo'] = $request->file('photo')->store('employee-photos', 'public');
         }
 
-        // Fill email and address aliases
-        if (!empty($data['official_email']) && empty($data['email'])) {
-            $data['email'] = $data['official_email'];
-        }
-        if (!empty($data['address']) && empty($data['residential_address'])) {
-            $data['residential_address'] = $data['address'];
-        }
-        if (!empty($data['residential_address']) && empty($data['address'])) {
-            $data['address'] = $data['residential_address'];
-        }
+        // Fill normalized fields and aliases
+        $data['marital_status'] = ucfirst(strtolower($data['marital_status']));
+        $data['current_employment_status'] = ucfirst(strtolower($data['current_employment_status']));
+        $data['qualification'] = $data['academic_qualification'];
+        $data['contact_person'] = $data['name_of_contact_person'];
+        $data['email'] = $data['official_email'];
+        $data['personal_email'] = $data['personal_email'] ?? $data['official_email'];
+        $data['residential_address'] = $data['address'];
+        $data['emergency_contact_name'] = $data['name_of_contact_person'];
+        $data['emergency_contact_mobile'] = $data['contact_no'];
+        $data['emergency_contact_relation'] = $data['contact_relationship'] ?? null;
+        $data['pf_account_no'] = $data['epf_no'];
+        $data['employee_code'] = !empty($data['employee_code']) ? strtoupper($data['employee_code']) : $this->generateEmployeeNumber();
 
         $employee = Employee::create(array_merge($data, [
-            'employee_code'   => $this->generateEmployeeNumber(),
             'approval_status' => 'pending',
             'status'          => 'pending',
             'is_active'       => false,
         ]));
         AuditLog::record('employee_created', $employee, [], ['employee_code' => $employee->employee_code, 'name' => $employee->full_name]);
 
+        // Sync to relational EmployeeQualification records
+        if (!empty($employee->academic_qualification)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->academic_qualification],
+                [
+                    'education_level'     => 'graduate',
+                    'university'          => $employee->academic_university,
+                    'subject'             => $employee->academic_medium,
+                    'institution'         => $employee->academic_institution,
+                    'grade_or_percentage' => $employee->academic_percentage . '%',
+                    'year_of_passing'     => $employee->academic_year_of_passing,
+                ]
+            );
+        }
+
+        if (!empty($employee->professional_qualification)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->professional_qualification],
+                [
+                    'education_level'     => 'diploma',
+                    'university'          => $employee->professional_university,
+                    'subject'             => $employee->professional_medium,
+                    'institution'         => $employee->professional_institution,
+                    'grade_or_percentage' => $employee->professional_percentage . '%',
+                    'year_of_passing'     => $employee->professional_year_of_passing,
+                ]
+            );
+        }
+
+        if (!empty($employee->other_qual_1_name)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->other_qual_1_name],
+                [
+                    'education_level'     => 'other',
+                    'university'          => $employee->other_qual_1_university,
+                    'subject'             => $employee->other_qual_1_medium,
+                    'institution'         => $employee->other_qual_1_institution,
+                    'grade_or_percentage' => $employee->other_qual_1_percentage !== null ? ($employee->other_qual_1_percentage . '%') : null,
+                    'year_of_passing'     => $employee->other_qual_1_year_of_passing,
+                ]
+            );
+        }
+
+        if (!empty($employee->other_qual_2_name)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->other_qual_2_name],
+                [
+                    'education_level'     => 'other',
+                    'university'          => $employee->other_qual_2_university,
+                    'subject'             => $employee->other_qual_2_medium,
+                    'institution'         => $employee->other_qual_2_institution,
+                    'grade_or_percentage' => $employee->other_qual_2_percentage !== null ? ($employee->other_qual_2_percentage . '%') : null,
+                    'year_of_passing'     => $employee->other_qual_2_year_of_passing,
+                ]
+            );
+        }
+
+        // Sync to relational EmployeeExperience records
+        if (!empty($employee->previous_school) || !empty($employee->previous_designation)) {
+            EmployeeExperience::updateOrCreate(
+                ['employee_id' => $employee->id, 'is_current' => false],
+                [
+                    'organisation' => $employee->previous_school ?? 'Previous Institution',
+                    'role'         => $employee->previous_designation ?? 'Staff',
+                    'from_date'    => $employee->previous_from_date,
+                    'to_date'      => $employee->previous_to_date,
+                ]
+            );
+        }
+
         // Create salary structure if any salary data was provided
-        if ($employee->basic_salary > 0 || count($salaryData) > 0) {
+        if (($employee->basic_salary ?? 0) > 0 || count($salaryData) > 0) {
             DB::table('salary_structures')->insert(array_merge([
                 'employee_id'    => $employee->id,
                 'basic_salary'   => $employee->basic_salary ?? 0,
@@ -1830,6 +2057,7 @@ class HrController extends Controller
         $attOvertime  = $allAttRecords->where('status', 'overtime')->count();
         $attAbsent    = $allAttRecords->where('status', 'absent')->count();
         $attLeave     = $allAttRecords->whereIn('status', ['leave', 'on_leave'])->count();
+        $attPermission= $allAttRecords->filter(fn($r) => $r->status === 'permission' || $r->is_permission)->count();
         $attTotalDays = $allAttRecords->count();
 
         // Calculate total overtime hours worked on Sundays / Holidays
@@ -1919,7 +2147,7 @@ class HrController extends Controller
         return view('hr.employees-show', compact(
             'employee', 'linkedUser', 'staffRoles', 'payroll', 'qualifications',
             'experiences', 'empDocuments', 'certifications',
-            'attPresent', 'attLate', 'attHalfDay', 'attAbsent', 'attLeave', 'attOvertime', 'attOvertimeDuration', 'attTotalDays',
+            'attPresent', 'attLate', 'attHalfDay', 'attAbsent', 'attLeave', 'attPermission', 'attOvertime', 'attOvertimeDuration', 'attTotalDays',
             'effectivePresent', 'cmEffectivePresent', 'currentMonthWorkingDays', 'attendancePercentage', 'recentAttendance', 'monthlyAttendance',
             'leaveRequests', 'approvedLeaveDays', 'pendingLeaveCount', 'rejectedLeaveCount'
         ));
@@ -2322,26 +2550,213 @@ class HrController extends Controller
     public function editEmployee(int $id)
     {
         $employee = Employee::findOrFail($id);
-        return view('hr.employees-edit', compact('employee'));
+        $departments = Department::orderBy('name')->get();
+        $designations = Designation::orderBy('name')->get();
+        return view('hr.employees-edit', compact('employee', 'departments', 'designations'));
     }
 
     public function updateEmployee(Request $request, int $id)
     {
         $employee = Employee::findOrFail($id);
-        $validated = $request->validate([
-            'first_name'    => 'required|string|max:60',
-            'last_name'     => 'required|string|max:60',
-            'mobile'        => 'required|string|max:15',
-            'email'         => 'nullable|email|max:100',
-            'designation'   => 'required|string|max:100',
-            'department'    => 'nullable|string|max:100',
-            'employee_type' => 'required|in:teaching,non_teaching,driver,cleaner,nanny,naani,contract,part_time,admin,support',
-            'is_active'     => 'boolean',
-            'pf_account_no' => 'nullable|string|max:30',
-            'esi_no'        => 'nullable|string|max:30',
-            'pan_no'        => 'nullable|string|max:15',
-            'photo'         => 'nullable|image|max:2048',
+
+        // Handle NAME (Excel heading: NAME)
+        if ($request->filled('name')) {
+            $parts = preg_split('/\s+/', trim((string) $request->input('name')), 2);
+            $request->merge([
+                'first_name' => $parts[0] ?? '',
+                'last_name'  => $parts[1] ?? '',
+            ]);
+        } elseif ($request->filled('first_name')) {
+            $request->merge([
+                'name' => trim($request->input('first_name') . ' ' . ($request->input('last_name') ?? '')),
+            ]);
+        }
+
+        // Sanitize digits and uppercase before validation
+        if ($request->has('aadhaar_no') && $request->aadhaar_no !== null) {
+            $request->merge(['aadhaar_no' => preg_replace('/[\s\-]+/', '', (string) $request->aadhaar_no)]);
+        }
+        if ($request->has('pan_no') && $request->pan_no !== null) {
+            $request->merge(['pan_no' => strtoupper(trim((string) $request->pan_no))]);
+        }
+        if ($request->has('mobile') && $request->mobile !== null) {
+            $request->merge(['mobile' => preg_replace('/[\s\-]+/', '', (string) $request->mobile)]);
+        }
+        if ($request->has('contact_no') && $request->contact_no !== null) {
+            $request->merge(['contact_no' => preg_replace('/[\s\-]+/', '', (string) $request->contact_no)]);
+        }
+        if ($request->has('emergency_contact_mobile') && $request->emergency_contact_mobile !== null) {
+            $request->merge(['emergency_contact_mobile' => preg_replace('/[\s\-]+/', '', (string) $request->emergency_contact_mobile)]);
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            // Section A: Personal Details
+            'name'                   => 'required|string|max:150',
+            'first_name'             => 'required|string|max:60',
+            'last_name'              => 'nullable|string|max:60',
+            'dob'                    => 'required|date|before:today',
+            'gender'                 => 'required|string|in:male,female,other',
+            'mother_tongue'          => 'required|string|max:100',
+            'nationality'            => 'required|string|max:100',
+            'religion'               => 'required|string|max:100',
+            'caste'                  => 'required|string|max:100',
+            'marital_status'         => 'required|string|in:Single,Married,single,married',
+            'number_of_children'     => 'required|integer|min:0',
+            'children_male'          => 'required|integer|min:0',
+            'children_female'        => 'required|integer|min:0',
+            'address'                => 'required|string|max:500',
+
+            // Section B: Employment Details
+            'employee_code'          => 'required|string|max:50|unique:employees,employee_code,' . $id,
+            'designation'            => 'required|string|max:100',
+            'joining_date'           => 'required|date',
+            'first_appointment_date' => 'required|date',
+            'current_employment_status' => 'required|string|in:Permanent,Temporary,permanent,temporary',
+            'employee_type'          => 'required|string|in:teaching,non_teaching,driver,cleaner,nanny,naani,contract,part_time,admin,support',
+            'department'             => 'nullable|string|max:100',
+            'is_active'              => 'nullable|boolean',
+
+            // Section C: Identity / Government Details
+            'aadhaar_no'             => 'required|string|regex:/^[0-9]{12}$/',
+            'pan_no'                 => 'required|string|regex:/^[A-Za-z]{5}[0-9]{4}[A-Za-z]{1}$/',
+            'epf_no'                 => 'required|string|max:50',
+
+            // Section D: Contact Details
+            'official_email'         => 'required|email|max:100',
+            'mobile'                 => 'required|string|regex:/^[0-9]{10}$/',
+            'name_of_contact_person' => 'required|string|max:150',
+            'contact_relationship'   => 'required|string|max:100',
+            'contact_address'        => 'required|string|max:500',
+            'contact_no'             => 'required|string|regex:/^[0-9]{10}$/',
+
+            // Section E: Previous Employment Details
+            'previous_designation'   => 'required|string|max:100',
+            'previous_school'        => 'required|string|max:250',
+            'previous_from_date'     => 'required|date',
+            'previous_to_date'       => 'required|date|after_or_equal:previous_from_date',
+
+            // Section F: Academic Qualification
+            'academic_qualification' => 'required|string|max:150',
+            'academic_university'    => 'required|string|max:150',
+            'academic_medium'        => 'required|string|max:100',
+            'academic_institution'   => 'required|string|max:200',
+            'academic_percentage'    => 'required|numeric|min:0|max:100',
+            'academic_year_of_passing' => 'required|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section G: Professional Qualification
+            'professional_qualification' => 'required|string|max:150',
+            'professional_university'    => 'required|string|max:150',
+            'professional_medium'        => 'required|string|max:100',
+            'professional_institution'   => 'required|string|max:200',
+            'professional_percentage'    => 'required|numeric|min:0|max:100',
+            'professional_year_of_passing' => 'required|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section H: Other Qualification 1 (conditional if provided)
+            'other_qual_1_name'      => 'nullable|string|max:150',
+            'other_qual_1_university'=> 'required_with:other_qual_1_name|nullable|string|max:150',
+            'other_qual_1_medium'    => 'required_with:other_qual_1_name|nullable|string|max:100',
+            'other_qual_1_institution'=> 'required_with:other_qual_1_name|nullable|string|max:200',
+            'other_qual_1_percentage'=> 'required_with:other_qual_1_name|nullable|numeric|min:0|max:100',
+            'other_qual_1_year_of_passing' => 'required_with:other_qual_1_name|nullable|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section I: Other Qualification 2 (conditional if provided)
+            'other_qual_2_name'      => 'nullable|string|max:150',
+            'other_qual_2_university'=> 'required_with:other_qual_2_name|nullable|string|max:150',
+            'other_qual_2_medium'    => 'required_with:other_qual_2_name|nullable|string|max:100',
+            'other_qual_2_institution'=> 'required_with:other_qual_2_name|nullable|string|max:200',
+            'other_qual_2_percentage'=> 'required_with:other_qual_2_name|nullable|numeric|min:0|max:100',
+            'other_qual_2_year_of_passing' => 'required_with:other_qual_2_name|nullable|integer|min:1950|max:' . (date('Y') + 1),
+
+            // Section J: Additional Qualification / Training
+            'additional_qual_after_recruitment' => 'required|string|max:1000',
+            'training_attended_before_recruitment' => 'required|string|max:1000',
+
+            // Optional category specific / existing fields
+            'photo'                  => 'nullable|image|max:2048',
+            'basic_salary'           => 'nullable|numeric|min:0',
+            'pf_account_no'          => 'nullable|string|max:50',
+            'esi_no'                 => 'nullable|string|max:50',
+            'license_number'         => 'nullable|string|max:100',
+            'license_expiry'         => 'nullable|date',
+            'assigned_vehicle'       => 'nullable|string|max:100',
+            'assigned_block'         => 'nullable|string|max:100',
+            'shift_timing'           => 'nullable|string|max:100',
+        ], [
+            'name.required'                  => 'NAME is required.',
+            'first_name.required'            => 'NAME is required.',
+            'dob.required'                   => 'DOB is required.',
+            'dob.before'                     => 'DOB must be a date before today.',
+            'gender.required'                => 'M/F (Gender) is required.',
+            'mother_tongue.required'         => 'MOTHER TONGUE is required.',
+            'nationality.required'           => 'NATIONALITY is required.',
+            'religion.required'              => 'RELIGION is required.',
+            'caste.required'                 => 'CASTE is required.',
+            'marital_status.required'        => 'MARITAL STATUS is required.',
+            'marital_status.in'              => 'MARITAL STATUS must be Single or Married.',
+            'number_of_children.required'    => 'NUMBER OF CHILDREN is required.',
+            'children_male.required'         => 'MALE children count is required.',
+            'children_female.required'       => 'FEMALE children count is required.',
+            'address.required'               => 'ADDRESS is required.',
+            'employee_code.required'         => 'EMPLOYEE ID is required.',
+            'designation.required'           => 'DESIGNATION is required.',
+            'joining_date.required'          => 'DOJ (Date of Joining) is required.',
+            'first_appointment_date.required'=> 'DATE OF FIRST APPOINTMENT AS TEACHER is required.',
+            'current_employment_status.required' => 'CURRENT EMPLOYMENT STATUS is required.',
+            'current_employment_status.in'   => 'CURRENT EMPLOYMENT STATUS must be Permanent or Temporary.',
+            'aadhaar_no.required'            => 'AADHAR NO is required.',
+            'aadhaar_no.regex'               => 'AADHAR NO must be exactly 12 digits.',
+            'pan_no.required'                => 'PAN NO. is required.',
+            'pan_no.regex'                   => 'PAN NO. must be 10 characters in valid format (e.g. ABCDE1234F).',
+            'epf_no.required'                => 'EPF NO. is required.',
+            'official_email.required'        => 'EMAIL ID is required.',
+            'official_email.email'           => 'EMAIL ID must be a valid email address.',
+            'mobile.required'                => 'CONTACT NO. is required.',
+            'mobile.regex'                   => 'CONTACT NO. must be exactly 10 digits.',
+            'name_of_contact_person.required'=> 'NAME OF THE CONTACT PERSON is required.',
+            'contact_relationship.required'  => 'RELATIONSHIP is required.',
+            'contact_address.required'       => 'CONTACT ADDRESS is required.',
+            'contact_no.required'            => 'CONTACT NO (Emergency Contact) is required.',
+            'contact_no.regex'               => 'CONTACT NO must be exactly 10 digits.',
+            'previous_designation.required'  => 'PREVIOUS POST HELD is required.',
+            'previous_school.required'       => 'NAME & ADDRESS OF THE INSTITUTION is required.',
+            'previous_from_date.required'    => 'FROM date is required.',
+            'previous_to_date.required'      => 'TO date is required.',
+            'previous_to_date.after_or_equal'=> 'Previous Employment "TO" date cannot be earlier than "FROM" date.',
+            'academic_qualification.required'=> 'ACADEMIC QUALIFICATION is required.',
+            'academic_university.required'   => 'Academic UNIVERSITY is required.',
+            'academic_medium.required'       => 'Academic MEDIUM is required.',
+            'academic_institution.required'  => 'Academic NAME OF THE INSTITUTION is required.',
+            'academic_percentage.required'   => 'Academic %MARKS is required.',
+            'academic_percentage.min'        => 'Academic %MARKS cannot be negative.',
+            'academic_percentage.max'        => 'Academic %MARKS cannot exceed 100.',
+            'academic_year_of_passing.required' => 'Academic YEAR OF PASSING is required.',
+            'professional_qualification.required' => 'PROFESSIONAL QUALIFICATION is required.',
+            'professional_university.required'=> 'Professional UNIVERSITY is required.',
+            'professional_medium.required'   => 'Professional MEDIUM is required.',
+            'professional_institution.required' => 'Professional NAME OF INSTITUTION is required.',
+            'professional_percentage.required' => 'Professional %MARKS is required.',
+            'professional_percentage.min'    => 'Professional %MARKS cannot be negative.',
+            'professional_percentage.max'    => 'Professional %MARKS cannot exceed 100.',
+            'professional_year_of_passing.required' => 'Professional YEAR OF PASSING is required.',
+            'other_qual_1_percentage.min'    => 'Other Qualification 1 %MARKS cannot be negative.',
+            'other_qual_1_percentage.max'    => 'Other Qualification 1 %MARKS cannot exceed 100.',
+            'other_qual_2_percentage.min'    => 'Other Qualification 2 %MARKS cannot exceed 100.',
+            'additional_qual_after_recruitment.required' => 'ADDITIONAL QUALIFICATION OBTAINED AFTER RECRUITMENT is required.',
+            'training_attended_before_recruitment.required' => 'TRAINING PROGRAMME ATTENDED BEFORE RECRUITMENT is required.',
         ]);
+
+        $validator->after(function ($validator) use ($request) {
+            if ($request->filled('number_of_children') && $request->filled('children_male') && $request->filled('children_female')) {
+                $total = (int) $request->number_of_children;
+                $m = (int) $request->children_male;
+                $f = (int) $request->children_female;
+                if (($m + $f) !== $total) {
+                    $validator->errors()->add('number_of_children', "The sum of Male ($m) and Female ($f) children must equal the Number of Children ($total).");
+                }
+            }
+        });
+
+        $validated = $validator->validate();
 
         $data = $validated;
         unset($data['photo']);
@@ -2353,10 +2768,94 @@ class HrController extends Controller
             $data['photo'] = $request->file('photo')->store('employee-photos', 'public');
         }
 
+        // Fill normalized fields and aliases
+        $data['marital_status'] = ucfirst(strtolower($data['marital_status']));
+        $data['current_employment_status'] = ucfirst(strtolower($data['current_employment_status']));
+        $data['qualification'] = $data['academic_qualification'];
+        $data['contact_person'] = $data['name_of_contact_person'];
+        $data['email'] = $data['official_email'];
+        $data['personal_email'] = $data['personal_email'] ?? $data['official_email'];
+        $data['residential_address'] = $data['address'];
+        $data['emergency_contact_name'] = $data['name_of_contact_person'];
+        $data['emergency_contact_mobile'] = $data['contact_no'];
+        $data['pf_account_no'] = $data['epf_no'];
+        $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : $employee->is_active;
+
         $employee->update($data);
+
+        // Sync to relational EmployeeQualification records
+        if (!empty($employee->academic_qualification)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->academic_qualification],
+                [
+                    'education_level'     => 'graduate',
+                    'university'          => $employee->academic_university,
+                    'subject'             => $employee->academic_medium,
+                    'institution'         => $employee->academic_institution,
+                    'grade_or_percentage' => $employee->academic_percentage . '%',
+                    'year_of_passing'     => $employee->academic_year_of_passing,
+                ]
+            );
+        }
+
+        if (!empty($employee->professional_qualification)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->professional_qualification],
+                [
+                    'education_level'     => 'diploma',
+                    'university'          => $employee->professional_university,
+                    'subject'             => $employee->professional_medium,
+                    'institution'         => $employee->professional_institution,
+                    'grade_or_percentage' => $employee->professional_percentage . '%',
+                    'year_of_passing'     => $employee->professional_year_of_passing,
+                ]
+            );
+        }
+
+        if (!empty($employee->other_qual_1_name)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->other_qual_1_name],
+                [
+                    'education_level'     => 'other',
+                    'university'          => $employee->other_qual_1_university,
+                    'subject'             => $employee->other_qual_1_medium,
+                    'institution'         => $employee->other_qual_1_institution,
+                    'grade_or_percentage' => $employee->other_qual_1_percentage !== null ? ($employee->other_qual_1_percentage . '%') : null,
+                    'year_of_passing'     => $employee->other_qual_1_year_of_passing,
+                ]
+            );
+        }
+
+        if (!empty($employee->other_qual_2_name)) {
+            EmployeeQualification::updateOrCreate(
+                ['employee_id' => $employee->id, 'degree' => $employee->other_qual_2_name],
+                [
+                    'education_level'     => 'other',
+                    'university'          => $employee->other_qual_2_university,
+                    'subject'             => $employee->other_qual_2_medium,
+                    'institution'         => $employee->other_qual_2_institution,
+                    'grade_or_percentage' => $employee->other_qual_2_percentage !== null ? ($employee->other_qual_2_percentage . '%') : null,
+                    'year_of_passing'     => $employee->other_qual_2_year_of_passing,
+                ]
+            );
+        }
+
+        // Sync to relational EmployeeExperience records
+        if (!empty($employee->previous_school) || !empty($employee->previous_designation)) {
+            EmployeeExperience::updateOrCreate(
+                ['employee_id' => $employee->id, 'is_current' => false],
+                [
+                    'organisation' => $employee->previous_school ?? 'Previous Institution',
+                    'role'         => $employee->previous_designation ?? 'Staff',
+                    'from_date'    => $employee->previous_from_date,
+                    'to_date'      => $employee->previous_to_date,
+                ]
+            );
+        }
+
         AuditLog::record('employee_updated', $employee, [], ['employee_code' => $employee->employee_code, 'is_active' => $employee->is_active]);
         return redirect()->route('hr.employees.show', $employee->id)
-            ->with('success', 'Employee updated.');
+            ->with('success', 'Employee updated successfully.');
     }
 
     public function payroll(Request $request)
@@ -2491,19 +2990,18 @@ class HrController extends Controller
         return $this->leaveApprovals($request);
     }
 
-    private function generateEmployeeNumber(): string
+    public function generateEmployeeNumber(): string
     {
-        $year   = date('Y');
-        $prefix = 'EMP-' . $year . '-';
+        $prefix = 'EPSS';
 
-        // Get max numeric suffix for codes starting with EMP-YYYY-
+        // Get max numeric suffix for codes starting with EPSS
         $existingCodes = Employee::withTrashed()
             ->where('employee_code', 'like', $prefix . '%')
             ->pluck('employee_code');
 
         $maxSeq = 0;
         foreach ($existingCodes as $code) {
-            if (preg_match('/EMP-' . $year . '-(\d+)/', $code, $matches)) {
+            if (preg_match('/^EPSS(\d+)$/i', $code, $matches)) {
                 $num = (int)$matches[1];
                 if ($num > $maxSeq) {
                     $maxSeq = $num;

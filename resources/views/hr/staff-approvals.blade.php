@@ -17,7 +17,7 @@
       </div>
       <div>
         <h1 class="page-title text-xl font-black text-slate-800" style="font-family:'Plus Jakarta Sans',sans-serif;">Staff Approvals</h1>
-        <p class="text-xs font-semibold text-slate-500 mt-0.5">Staff registration register &bull; View Only (Awaiting Principal approval)</p>
+        <p class="text-xs font-semibold text-slate-500 mt-0.5">Staff registration register &bull; Review, approve or reject pending staff</p>
       </div>
     </div>
 
@@ -161,12 +161,28 @@
                 @endif
               </td>
 
-              {{-- Actions (Admin is View Only) --}}
+              {{-- Actions --}}
               <td class="py-3.5 px-4 text-right">
                 <div class="flex items-center justify-end gap-1.5">
                   <a href="{{ route('hr.employees.show', $emp->id) }}" class="btn btn-secondary btn-xs font-bold" title="View Full Profile">
                     View Profile
                   </a>
+                  @if($isPending)
+                    <form method="POST" action="{{ route('hr.staff-approvals.approve', $emp->id) }}" class="inline" onsubmit="return confirm('Are you sure you want to approve and activate {{ addslashes($emp->full_name) }}?');">
+                      @csrf
+                      <button type="submit" class="btn btn-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1 shadow-xs" title="Approve Staff Member">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Approve
+                      </button>
+                    </form>
+                    <form method="POST" action="{{ route('hr.staff-approvals.reject', $emp->id) }}" class="inline" onsubmit="return confirm('Are you sure you want to reject {{ addslashes($emp->full_name) }}?');">
+                      @csrf
+                      <button type="submit" class="btn btn-xs font-bold text-white bg-rose-600 hover:bg-rose-700 flex items-center gap-1 shadow-xs" title="Reject Staff Member">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        Reject
+                      </button>
+                    </form>
+                  @endif
                 </div>
               </td>
             </tr>
