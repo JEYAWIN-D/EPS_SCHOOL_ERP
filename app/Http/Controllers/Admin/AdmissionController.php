@@ -1798,6 +1798,39 @@ class AdmissionController extends Controller
         return view('admissions.bulk-import', compact('classes'));
     }
 
+    public function importTemplate()
+    {
+        $headers = [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="admission_enquiry_import_template.csv"',
+        ];
+
+        $callback = function () {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'student_name',
+                'parent_name',
+                'parent_mobile',
+                'parent_email',
+                'class',
+                'source',
+                'notes',
+            ]);
+            fputcsv($handle, [
+                'Arun Kumar',
+                'Ramesh Kumar',
+                '9876543210',
+                'ramesh@example.com',
+                'Grade 1',
+                'walk_in',
+                'Interested in CBSE curriculum',
+            ]);
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
     public function processBulkImport(Request $request)
     {
         $request->validate(['file' => 'required|file|mimes:xlsx,xls,csv|max:2048']);

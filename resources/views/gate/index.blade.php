@@ -18,6 +18,22 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-2.5">
+      {{-- Live Auto-Sync Toggle Widget --}}
+      <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-2xs text-xs">
+        <span class="relative flex h-2 w-2">
+          <span x-show="autoRefreshInterval > 0" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2" :class="autoRefreshInterval > 0 ? 'bg-emerald-500' : 'bg-slate-300'"></span>
+        </span>
+        <span class="font-semibold text-slate-700">Auto-Refresh:</span>
+        <select x-model.number="autoRefreshInterval" @change="updateInterval" class="bg-transparent font-bold text-indigo-600 focus:outline-hidden py-0 pr-4 text-xs border-0 cursor-pointer">
+          <option :value="0">Off</option>
+          <option :value="15">15s</option>
+          <option :value="30">30s</option>
+          <option :value="60">60s</option>
+        </select>
+        <span x-show="autoRefreshInterval > 0" class="text-[10px] font-mono text-slate-400" x-text="countdown + 's'"></span>
+      </div>
+
       <a href="{{ route('gate.scanner') }}" class="btn-secondary text-xs sm:text-sm font-semibold flex items-center gap-2 bg-white border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 shadow-sm transition">
         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
         <span>Fast QR Scanner</span>
@@ -83,12 +99,20 @@
         {{ $overstayCount }} visitor(s) have exceeded their expected exit time and are still marked inside campus!
       </p>
     </div>
-    <a href="{{ route('gate.index', ['tab' => 'overstayed']) }}" class="text-xs font-bold text-rose-800 underline hover:text-rose-950">View Overstayed Visitors →</a>
+    <div class="flex items-center gap-2">
+      <form method="POST" action="{{ route('gate.auto-checkout-overstayed') }}" onsubmit="return confirm('Automated Shift-End Action:\n\nAuto-checkout all {{ $overstayCount }} overstayed visitor(s)?\nThis will record their exit and clear overstay alerts.')">
+        @csrf
+        <button type="submit" class="btn-primary text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1.5 shadow-xs">
+          ⚡ Auto-Checkout All ({{ $overstayCount }})
+        </button>
+      </form>
+      <a href="{{ route('gate.index', ['tab' => 'overstayed']) }}" class="text-xs font-bold text-rose-800 underline hover:text-rose-950 ml-1">View Details →</a>
+    </div>
   </div>
   @endif
 
   {{-- KPI Cards --}}
-  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
     
     {{-- Card 1: Active Inside --}}
     <a href="{{ route('gate.index', ['tab' => 'active']) }}" class="relative overflow-hidden rounded-2xl p-4 sm:p-5 border transition-all duration-200 group {{ $tab === 'active' ? 'bg-gradient-to-br from-indigo-50 to-blue-50/80 border-indigo-300 ring-2 ring-indigo-500/20 shadow-md' : 'bg-white border-slate-200/80 hover:border-indigo-200 hover:shadow-sm' }}">
@@ -119,7 +143,19 @@
       <p class="text-xs text-slate-500 mt-1">{{ today()->format('d M Y') }}</p>
     </a>
 
-    {{-- Card 3: Pending Approvals --}}
+    {{-- Card 3: Completed Visits --}}
+    <a href="{{ route('gate.index', ['tab' => 'all']) }}" class="relative overflow-hidden rounded-2xl p-4 sm:p-5 border transition-all duration-200 group bg-white border-slate-200/80 hover:border-teal-200 hover:shadow-sm">
+      <div class="flex items-center justify-between mb-2 sm:mb-3">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Completed Visits</span>
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-white shadow-sm shadow-teal-500/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        </div>
+      </div>
+      <p class="text-2xl sm:text-3xl font-black text-teal-600 tracking-tight">{{ $completedToday }}</p>
+      <p class="text-xs text-slate-500 mt-1">Checked out today</p>
+    </a>
+
+    {{-- Card 4: Pending Approvals / Expected --}}
     <a href="{{ route('gate.index', ['tab' => 'pending']) }}" class="relative overflow-hidden rounded-2xl p-4 sm:p-5 border transition-all duration-200 group {{ $tab === 'pending' ? 'bg-gradient-to-br from-amber-50 to-orange-50/80 border-amber-300 ring-2 ring-amber-500/20 shadow-md' : 'bg-white border-slate-200/80 hover:border-amber-200 hover:shadow-sm' }}">
       <div class="flex items-center justify-between mb-2 sm:mb-3">
         <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Approvals</span>
@@ -138,7 +174,7 @@
       <p class="text-xs text-slate-500 mt-1">Awaiting Host action</p>
     </a>
 
-    {{-- Card 4: Blacklist Watch --}}
+    {{-- Card 5: Blacklist Watch --}}
     <a href="{{ route('gate.blacklist') }}" class="relative overflow-hidden rounded-2xl p-4 sm:p-5 border transition-all duration-200 group bg-white border-slate-200/80 hover:border-red-200 hover:shadow-sm">
       <div class="flex items-center justify-between mb-2 sm:mb-3">
         <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Blacklist Watch</span>
@@ -150,8 +186,8 @@
       <p class="text-xs text-slate-500 mt-1">Blocked individuals</p>
     </a>
 
-    {{-- Card 5: Student Outpasses --}}
-    <a href="{{ route('gate.outpass') }}" class="col-span-2 lg:col-span-1 relative overflow-hidden rounded-2xl p-4 sm:p-5 border transition-all duration-200 group bg-white border-slate-200/80 hover:border-purple-200 hover:shadow-sm">
+    {{-- Card 6: Student Outpasses --}}
+    <a href="{{ route('gate.outpass') }}" class="relative overflow-hidden rounded-2xl p-4 sm:p-5 border transition-all duration-200 group bg-white border-slate-200/80 hover:border-purple-200 hover:shadow-sm">
       <div class="flex items-center justify-between mb-2 sm:mb-3">
         <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Student Outpasses</span>
         <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white shadow-sm shadow-purple-500/30">
@@ -507,6 +543,40 @@ function visitorDashboard() {
     rejectModalOpen: false,
     rejectVisitorId: null,
     rejectVisitorName: '',
+    autoRefreshInterval: parseInt(localStorage.getItem('gate_auto_refresh') || '0'),
+    countdown: 0,
+    timer: null,
+
+    init() {
+      if (this.autoRefreshInterval > 0) {
+        this.startTimer();
+      }
+    },
+
+    updateInterval() {
+      localStorage.setItem('gate_auto_refresh', this.autoRefreshInterval);
+      if (this.timer) clearInterval(this.timer);
+      if (this.autoRefreshInterval > 0) {
+        this.startTimer();
+      } else {
+        this.countdown = 0;
+      }
+    },
+
+    startTimer() {
+      this.countdown = this.autoRefreshInterval;
+      this.timer = setInterval(() => {
+        this.countdown--;
+        if (this.countdown <= 0) {
+          window.location.reload();
+        }
+      }, 1000);
+    },
+
+    reloadNow() {
+      window.location.reload();
+    },
+
     openRejectModal(id, name) {
       this.rejectVisitorId = id;
       this.rejectVisitorName = name;

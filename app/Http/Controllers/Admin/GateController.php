@@ -39,12 +39,20 @@ class GateController extends Controller
                        ->orWhere('company_name', 'like', "%{$search}%")
                        ->orWhere('child_name', 'like', "%{$search}%")
                        ->orWhere('whom_to_meet', 'like', "%{$search}%")
+                       ->orWhere('purpose', 'like', "%{$search}%")
                        ->orWhereHas('student', fn($sq2) => $sq2->where('first_name', 'like', "%{$search}%")->orWhere('admission_no', 'like', "%{$search}%"));
                 });
             })
             ->when($request->category, fn($q, $cat) => $q->where('category', $cat))
             ->when($request->department, fn($q, $dept) => $q->where('department', $dept))
-            ->when($request->date, fn($q, $date) => $q->whereDate('visit_date', $date));
+            ->when($request->purpose, fn($q, $p) => $q->where('purpose', 'like', "%{$p}%"))
+            ->when($request->person, fn($q, $p) => $q->where(function ($sq) use ($p) {
+                $sq->where('whom_to_meet', 'like', "%{$p}%")
+                   ->orWhereHas('hostEmployee', fn($he) => $he->where('first_name', 'like', "%{$p}%")->orWhere('last_name', 'like', "%{$p}%"));
+            }))
+            ->when($request->date, fn($q, $date) => $q->whereDate('visit_date', $date))
+            ->when($request->from_date, fn($q, $d) => $q->whereDate('visit_date', '>=', $d))
+            ->when($request->to_date, fn($q, $d) => $q->whereDate('visit_date', '<=', $d));
 
         // Tab-specific filters
         match ($tab) {
@@ -90,10 +98,11 @@ class GateController extends Controller
 
         // Unique departments for filter
         $departments = Visitor::whereNotNull('department')->distinct()->pluck('department')->filter()->values();
+        $completedToday = Visitor::today()->where('status', Visitor::STATUS_CHECKED_OUT)->count();
 
         return view('gate.index', compact(
             'visitors', 'insideCount', 'todayTotal', 'pendingCount', 'myPendingCount',
-            'overstayCount', 'blacklistCount', 'pendingOutpasses', 'tab', 'categories', 'departments'
+            'overstayCount', 'blacklistCount', 'pendingOutpasses', 'completedToday', 'tab', 'categories', 'departments'
         ));
     }
 
@@ -126,7 +135,7 @@ class GateController extends Controller
         $data = $request->validate([
             'visitor_name'            => 'required|string|max:150',
             'category'                => 'required|string|in:parent,admission_enquiry,vendor,interview,guest,other',
-            'visitor_phone'           => 'nullable|string|max:20',
+            'visitor_phone'           => ['nullable', 'string', 'max:20', 'regex:/^[0-9+\-\s()]{7,20}$/'],
             'visitor_email'           => 'nullable|email|max:150',
             'visitor_id_type'         => 'nullable|string|max:50',
             'visitor_id_number'       => 'nullable|string|max:50',
@@ -141,6 +150,7 @@ class GateController extends Controller
             'items_carried'           => 'nullable|string',
             'remarks'                 => 'nullable|string',
             'action_type'             => 'nullable|string|in:direct_checkin,request_approval',
+            'auto_print'              => 'nullable|boolean',
             'photo_data'              => 'nullable|string',
             'id_proof_file'           => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
 
@@ -155,10 +165,12 @@ class GateController extends Controller
             'enquiry_source'          => 'nullable|string|max:100',
             'create_admission_lead'   => 'nullable|boolean',
 
-            // 3. Vendor
+            // 3. Vendor / Maintenance (Manual Text Inputs)
             'company_name'            => 'nullable|string|max:150',
+            'vendor_name'             => 'nullable|string|max:150',
             'work_order_number'       => 'nullable|string|max:100',
-            'vendor_id'               => 'nullable|exists:vendors,id',
+            'maintenance_details'     => 'nullable|string|max:255',
+            'vendor_id'               => 'nullable',
 
             // 4. Staff Interview
             'candidate_ref_number'    => 'nullable|string|max:100',
@@ -199,32 +211,67 @@ class GateController extends Controller
             }
         }
 
-        // 5. Calculate Timestamps
+        // 5. Calculate Timestamps & Handle Approval Mode
         $data['visit_date'] = today();
         $actionType = $data['action_type'] ?? 'direct_checkin';
         unset($data['action_type']);
 
+        // Testing requirement: Restrict Send for Post/Host Approval action if submitted
         if ($actionType === 'request_approval') {
-            $data['status'] = Visitor::STATUS_PENDING;
-            $data['in_time'] = null; // will be stamped when approved
-        } else {
-            $data['status'] = Visitor::STATUS_CHECKED_IN;
-            $data['in_time'] = now();
-            $data['approved_by'] = Auth::id();
-            $data['approved_at'] = now();
+            return back()->withInput()->withErrors([
+                'action_type' => 'The "Send for Host Approval" action is disabled for testing. Please use Direct Check-In.'
+            ]);
+        }
+
+        $data['status'] = Visitor::STATUS_CHECKED_IN;
+        $data['in_time'] = now();
+        $data['approved_by'] = Auth::id();
+        $data['approved_at'] = now();
+
+        // Automated Sanitization & Normalization
+        if (!empty($data['visitor_id_number'])) {
+            $data['visitor_id_number'] = strtoupper(trim($data['visitor_id_number']));
+        }
+        if (!empty($data['visitor_phone'])) {
+            $data['visitor_phone'] = trim($data['visitor_phone']);
+        }
+
+        // Map manual vendor and maintenance text inputs
+        if (!empty($data['vendor_name']) && empty($data['company_name'])) {
+            $data['company_name'] = trim($data['vendor_name']);
+        }
+        if (!empty($request->maintenance_details)) {
+            $maintDetails = trim($request->maintenance_details);
+            if (!empty($data['work_order_number'])) {
+                $data['work_order_number'] = trim($data['work_order_number']) . ' (' . $maintDetails . ')';
+            } else {
+                $data['work_order_number'] = $maintDetails;
+            }
         }
 
         if (!empty($data['expected_exit_time'])) {
             try {
                 // If only time provided e.g. "14:30", combine with today's date
                 if (strlen($data['expected_exit_time']) <= 5) {
-                    $data['expected_exit_time'] = Carbon::parse(today()->format('Y-m-d') . ' ' . $data['expected_exit_time']);
+                    $expectedExit = Carbon::parse(today()->format('Y-m-d') . ' ' . $data['expected_exit_time']);
                 } else {
-                    $data['expected_exit_time'] = Carbon::parse($data['expected_exit_time']);
+                    $expectedExit = Carbon::parse($data['expected_exit_time']);
                 }
+
+                // Expected exit time cannot be earlier than entry time / current time
+                if ($expectedExit->lt(now()->subMinutes(2))) {
+                    return back()->withInput()->withErrors([
+                        'expected_exit_time' => 'Expected exit time cannot be earlier than entry time.'
+                    ]);
+                }
+
+                $data['expected_exit_time'] = $expectedExit;
             } catch (\Exception $e) {
-                $data['expected_exit_time'] = null;
+                $data['expected_exit_time'] = now()->addHour();
             }
+        } else {
+            // Automated default expected exit time: 1 hour from entry
+            $data['expected_exit_time'] = now()->addHour();
         }
 
         $data['visitor_count'] = $data['visitor_count'] ?? 1;
@@ -254,6 +301,9 @@ class GateController extends Controller
         }
         unset($data['create_admission_lead']);
 
+        $autoPrint = $request->boolean('auto_print', true);
+        unset($data['auto_print']);
+
         // 7. Create Visitor Record
         $visitor = Visitor::create($data);
 
@@ -267,7 +317,7 @@ class GateController extends Controller
                     ? 'Visit request submitted for Host approval.'
                     : 'Visitor checked in successfully.',
                 'visitor' => $visitor,
-                'pass_url' => route('gate.pass', $visitor->id),
+                'pass_url' => route('gate.pass', ['id' => $visitor->id, 'autoprint' => $autoPrint ? 1 : 0]),
             ]);
         }
 
@@ -276,7 +326,7 @@ class GateController extends Controller
                 ->with('success', "Visit request for '{$visitor->visitor_name}' sent to {$visitor->whom_to_meet} for approval. Pass #{$visitor->pass_number}");
         }
 
-        return redirect()->route('gate.pass', $visitor->id)
+        return redirect()->route('gate.pass', ['id' => $visitor->id, 'autoprint' => $autoPrint ? 1 : 0])
             ->with('success', "Visitor '{$visitor->visitor_name}' logged and checked in successfully.");
     }
 
@@ -306,9 +356,16 @@ class GateController extends Controller
     public function approve(Request $request, int $id)
     {
         $visitor = Visitor::findOrFail($id);
+        $user = Auth::user();
+
+        // Authorization check: Only host employee or admin can approve
+        if (!$user->hasAnyRole(['super_admin', 'admin', 'principal']) && $user->employee_id != $visitor->host_employee_id) {
+            abort(403, 'Unauthorized: Only the designated host or an administrator can approve this visit request.');
+        }
+
         $notes = $request->input('notes');
 
-        $visitor->approve(Auth::user(), $notes);
+        $visitor->approve($user, $notes);
         AuditLog::record('approved', $visitor, ['status' => Visitor::STATUS_PENDING], ['status' => Visitor::STATUS_CHECKED_IN], 'visitor_management');
 
         if ($request->wantsJson()) {
@@ -332,7 +389,14 @@ class GateController extends Controller
         ]);
 
         $visitor = Visitor::findOrFail($id);
-        $visitor->reject(Auth::user(), $request->input('rejection_reason'));
+        $user = Auth::user();
+
+        // Authorization check: Only host employee or admin can reject
+        if (!$user->hasAnyRole(['super_admin', 'admin', 'principal']) && $user->employee_id != $visitor->host_employee_id) {
+            abort(403, 'Unauthorized: Only the designated host or an administrator can reject this visit request.');
+        }
+
+        $visitor->reject($user, $request->input('rejection_reason'));
         AuditLog::record('rejected', $visitor, ['status' => Visitor::STATUS_PENDING], ['status' => Visitor::STATUS_REJECTED, 'reason' => $request->input('rejection_reason')], 'visitor_management');
 
         if ($request->wantsJson()) {
@@ -429,6 +493,52 @@ class GateController extends Controller
             'duration'         => $durationFormatted,
             'out_time_display' => $visitor->out_time->format('h:i A'),
         ]);
+    }
+
+    /**
+     * Automated Bulk Action: Auto-checkout all visitors currently overstayed.
+     */
+    public function autoCheckoutOverstayed(Request $request)
+    {
+        $overstayedQuery = Visitor::whereNull('out_time')
+            ->whereIn('status', [Visitor::STATUS_CHECKED_IN, Visitor::STATUS_APPROVED])
+            ->whereNotNull('expected_exit_time')
+            ->where('expected_exit_time', '<', now());
+
+        $count = $overstayedQuery->count();
+
+        if ($count === 0) {
+            if ($request->wantsJson()) {
+                return response()->json(['success' => true, 'count' => 0, 'message' => 'No overstayed visitors found.']);
+            }
+            return back()->with('info', 'No overstayed visitors currently inside campus.');
+        }
+
+        $now = now();
+        $visitors = $overstayedQuery->get();
+
+        foreach ($visitors as $v) {
+            // Set exit time to their expected exit time (or current time if closer)
+            $exitTime = $v->expected_exit_time ? Carbon::parse($v->expected_exit_time) : $now;
+            if ($exitTime->gt($now)) {
+                $exitTime = $now;
+            }
+            $v->update([
+                'out_time' => $exitTime,
+                'status'   => Visitor::STATUS_CHECKED_OUT,
+                'remarks'  => trim(($v->remarks ?? '') . ' [Auto-checked out at shift-end on ' . $now->format('d M Y, h:i A') . ']'),
+            ]);
+
+            AuditLog::record('auto_checked_out', $v, ['out_time' => null], ['out_time' => $exitTime, 'auto' => true], 'visitor_management');
+        }
+
+        $msg = "Automated shift checkout complete: {$count} overstayed visitor(s) checked out.";
+
+        if ($request->wantsJson()) {
+            return response()->json(['success' => true, 'count' => $count, 'message' => $msg]);
+        }
+
+        return redirect()->route('gate.index', ['tab' => 'today'])->with('success', $msg);
     }
 
     /**

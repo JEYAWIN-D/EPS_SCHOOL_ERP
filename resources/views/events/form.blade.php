@@ -138,7 +138,7 @@
           </label>
           <div class="relative">
             <input type="date" name="event_date"
-                   value="{{ old('event_date', isset($event) && $event->event_date ? $event->event_date->toDateString() : '') }}"
+                   value="{{ old('event_date', isset($event) && $event->event_date ? $event->event_date->toDateString() : (request('date') ?: '')) }}"
                    required
                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:ring-2 focus:ring-maroon-600 focus:outline-hidden shadow-xs transition">
           </div>
@@ -243,15 +243,109 @@
             <input type="file" name="banner_image" id="banner_image" accept="image/*"
                    class="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-maroon-50 file:text-maroon-700 hover:file:bg-maroon-100 cursor-pointer">
             <p class="text-[11px] text-slate-500 mt-1">Recommended size: 1200x500 px. Maximum file size: 2MB (PNG, JPG, WebP).</p>
+            @if(isset($event) && $event->banner_image)
+              <label class="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer">
+                <input type="checkbox" name="remove_banner" value="1" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+                <span>Remove current banner image</span>
+              </label>
+            @endif
           </div>
         </div>
       </div>
     </div>
 
-    {{-- Section 5: Settings, Publishing & RSVP --}}
+    {{-- Section 5: Event In-Charge & Staff Assignment --}}
+    <div id="assignment-section" class="space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="w-6 h-6 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center text-xs font-bold">5</span>
+          <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Event Assignment &amp; Faculty In-Charge</h3>
+        </div>
+        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+              :class="assignmentMode === 'now' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'">
+          <span x-text="assignmentMode === 'now' ? '✓ Assigning Staff Now' : '⏳ Pending Assignment (Assign Later)'"></span>
+        </span>
+      </div>
+
+      {{-- Assignment Choice: Assign Now vs Assign Later --}}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label class="flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition select-none"
+               :class="assignmentMode === 'now' ? 'border-maroon-600 bg-maroon-50/20 ring-1 ring-maroon-600' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'">
+          <input type="radio" name="assignment_mode" value="now" x-model="assignmentMode" class="w-4 h-4 mt-0.5 text-maroon-700 focus:ring-maroon-600">
+          <div>
+            <span class="block text-xs font-bold text-slate-900">Assign Staff / In-Charge Now</span>
+            <span class="block text-[11px] text-slate-500 mt-0.5">
+              Designate conveners, faculty coordinators, and staff responsibilities immediately.
+            </span>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition select-none"
+               :class="assignmentMode === 'later' ? 'border-amber-600 bg-amber-50/20 ring-1 ring-amber-600' : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'">
+          <input type="radio" name="assignment_mode" value="later" x-model="assignmentMode" class="w-4 h-4 mt-0.5 text-amber-700 focus:ring-amber-600">
+          <div>
+            <span class="block text-xs font-bold text-slate-900">Assign Later (Save Draft/Unassigned)</span>
+            <span class="block text-[11px] text-slate-500 mt-0.5">
+              Create and schedule this event first. Staff can be assigned later through the Edit action.
+            </span>
+          </div>
+        </label>
+      </div>
+
+      {{-- Staff Assignment Rows (Visible when assignmentMode === 'now') --}}
+      <div x-show="assignmentMode === 'now'" x-transition class="space-y-3 pt-2">
+        <div class="flex items-center justify-between">
+          <p class="text-xs font-semibold text-slate-600">Designated Faculty &amp; Staff Members:</p>
+          <button type="button" @click="addStaffRow" class="text-xs font-bold text-maroon-700 hover:text-maroon-900 inline-flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            + Add Staff Member
+          </button>
+        </div>
+
+        <template x-for="(st, idx) in staffList" :key="idx">
+          <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            {{-- Employee selection --}}
+            <div class="flex-1 w-full">
+              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Employee / Faculty</label>
+              <select :name="'staff[' + idx + '][employee_id]'" x-model="st.employee_id" :disabled="assignmentMode !== 'now'" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-maroon-600 focus:outline-hidden">
+                <option value="">Select Employee...</option>
+                @foreach($employees ?? [] as $emp)
+                  <option value="{{ $emp->id }}">{{ $emp->full_name }} ({{ $emp->employee_code ?? 'EMP#' . $emp->id }})</option>
+                @endforeach
+              </select>
+            </div>
+
+            {{-- Role --}}
+            <div class="w-full sm:w-44">
+              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Assignment Role</label>
+              <select :name="'staff[' + idx + '][role]'" x-model="st.role" :disabled="assignmentMode !== 'now'" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-maroon-600 focus:outline-hidden">
+                <option value="in_charge">Lead / Convener</option>
+                <option value="coordinator">Faculty Coordinator</option>
+                <option value="support">Support Member</option>
+              </select>
+            </div>
+
+            {{-- Duties / Notes --}}
+            <div class="flex-1 w-full">
+              <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Duties &amp; Responsibilities</label>
+              <input type="text" :name="'staff[' + idx + '][duties]'" x-model="st.duties" :disabled="assignmentMode !== 'now'" placeholder="e.g., Stage setup, student guidance" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium bg-white focus:ring-2 focus:ring-maroon-600 focus:outline-hidden">
+            </div>
+
+            {{-- Remove button --}}
+            <div class="sm:pt-4 self-end sm:self-auto">
+              <button type="button" @click="removeStaffRow(idx)" class="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remove">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    {{-- Section 6: Settings, Publishing & RSVP --}}
     <div class="space-y-4">
       <div class="flex items-center gap-2 border-b border-slate-100 pb-2.5">
-        <span class="w-6 h-6 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center text-xs font-bold">5</span>
+        <span class="w-6 h-6 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center text-xs font-bold">6</span>
         <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Publishing & RSVP Settings</h3>
       </div>
 
@@ -312,9 +406,24 @@
 
 <script>
 function eventFormHandler() {
+  const existingStaff = @json(isset($event) && $event->staff ? $event->staff->map(fn($s) => ['employee_id' => (string)$s->employee_id, 'role' => $s->role, 'duties' => $s->duties ?? '']) : []);
+  const initialMode = @json(old('assignment_mode', (isset($event) && $event->staff && $event->staff->isNotEmpty()) ? 'now' : 'later'));
+
   return {
     allowRsvp: @json(old('allow_rsvp', (bool)($event->allow_rsvp ?? false))),
     audience: @json(old('audience', $event->audience ?? 'all')),
+    assignmentMode: initialMode,
+    staffList: existingStaff.length > 0 ? existingStaff : [{ employee_id: '', role: 'in_charge', duties: '' }],
+    addStaffRow() {
+      this.staffList.push({ employee_id: '', role: 'coordinator', duties: '' });
+    },
+    removeStaffRow(index) {
+      if (this.staffList.length > 1) {
+        this.staffList.splice(index, 1);
+      } else {
+        this.staffList = [{ employee_id: '', role: 'in_charge', duties: '' }];
+      }
+    },
     fmt(cmd) {
       document.execCommand(cmd, false, null);
       document.getElementById('desc-editor').focus();
@@ -326,3 +435,4 @@ function eventFormHandler() {
 }
 </script>
 @endsection
+

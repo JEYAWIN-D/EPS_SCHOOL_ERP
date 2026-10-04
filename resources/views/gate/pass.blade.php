@@ -1,9 +1,131 @@
 @extends('layouts.app')
 @section('title', 'Visitor Gate Pass - ' . $visitor->pass_number)
-@section('content')
-<div class="max-w-2xl mx-auto space-y-6" x-data="{ passFormat: 'badge' }">
 
-  {{-- Actions Header --}}
+@push('head')
+<style>
+/* ==========================================================================
+   80mm Thermal Roll Printer Visitor Gate Pass Stylesheet
+   Standard 80mm Paper Roll • Printable Area ~72mm
+   ========================================================================== */
+
+/* Screen Preview Styling */
+.thermal-receipt-preview {
+  width: 72mm;
+  min-height: 110mm;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #000000;
+  margin: 0 auto;
+  padding: 4mm 3mm;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, monospace;
+}
+
+@media print {
+  /* 1. COMPLETELY HIDE non-printable ERP elements: sidebar, headers, alerts, buttons */
+  #sidebar,
+  aside,
+  header,
+  nav,
+  #toast-container,
+  .alert-success,
+  .alert-error,
+  .no-print,
+  .mobile-nav-speed,
+  .printable-badge,
+  button,
+  a {
+    display: none !important;
+  }
+
+  /* 2. Reset html & body to 80mm roll width, remove any browser default margins */
+  html, body {
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11px !important;
+    line-height: 1.3 !important;
+    overflow: visible !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, monospace !important;
+  }
+
+  /* 3. Strip layout wrappers (flex, h-screen, overflow-hidden) that cause clipping/blank pages */
+  .flex,
+  .h-screen,
+  .overflow-hidden,
+  .overflow-y-auto,
+  main,
+  .page-enter,
+  .max-w-2xl {
+    display: block !important;
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* 4. Display ONLY the dedicated thermal roll pass */
+  .thermal-pass-wrapper {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  #thermal-roll-pass {
+    display: block !important;
+    visibility: visible !important;
+    width: 72mm !important;
+    max-width: 72mm !important;
+    margin: 0 auto !important;
+    padding: 2mm 1mm 4mm 1mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  #thermal-roll-pass * {
+    visibility: visible !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Thermal roll page size */
+  @page {
+    size: 80mm auto;
+    margin: 0mm;
+  }
+}
+</style>
+@endpush
+
+@section('content')
+<div class="max-w-2xl mx-auto space-y-6" x-data="{ passFormat: 'slip' }">
+
+  {{-- Actions Header (No Print) --}}
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
     <div class="flex items-center gap-2">
       <a href="{{ route('gate.index') }}" class="btn-secondary text-xs sm:text-sm font-semibold flex items-center gap-1.5">
@@ -17,17 +139,17 @@
     <div class="flex items-center gap-2">
       {{-- Format Switcher --}}
       <div class="bg-slate-200/80 p-0.5 rounded-lg flex items-center text-xs font-semibold">
-        <button type="button" @click="passFormat = 'badge'" :class="passFormat === 'badge' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'" class="px-2.5 py-1.5 rounded-md transition">
-          ID Badge
+        <button type="button" @click="passFormat = 'slip'" :class="passFormat === 'slip' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'" class="px-2.5 py-1.5 rounded-md transition flex items-center gap-1">
+          <span>80mm Thermal Slip</span>
         </button>
-        <button type="button" @click="passFormat = 'slip'" :class="passFormat === 'slip' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'" class="px-2.5 py-1.5 rounded-md transition">
-          Thermal Slip
+        <button type="button" @click="passFormat = 'badge'" :class="passFormat === 'badge' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'" class="px-2.5 py-1.5 rounded-md transition flex items-center gap-1">
+          <span>Color Badge</span>
         </button>
       </div>
 
-      <button onclick="window.print()" class="btn-primary text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 shadow-sm">
+      <button onclick="window.print()" class="btn-primary text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white shadow-sm">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-        <span>Print Pass</span>
+        <span>Print Pass (80mm)</span>
       </button>
     </div>
   </div>
@@ -64,9 +186,246 @@
     } elseif (file_exists(public_path('images/school-seal-badge.png'))) {
         $schoolSeal = asset('images/school-seal-badge.png');
     }
+
+    $schoolName = $school->school_name ?? 'ERODE PUBLIC SCHOOL';
+    $schoolSub = ($school?->board ? $school->board . ' Board' : 'Senior Secondary') . ($school?->affiliation_no ? ' • CBSE Affil. #' . $school->affiliation_no : '');
+
+    // Mask ID proof for privacy
+    $maskedIdProof = null;
+    if (!empty($visitor->visitor_id_type)) {
+        $idTypeStr = strtoupper(str_replace('_', ' ', $visitor->visitor_id_type));
+        if (!empty($visitor->visitor_id_number)) {
+            $cleaned = trim(preg_replace('/\s+/', '', $visitor->visitor_id_number));
+            $maskedIdProof = $idTypeStr . ' (•••• ' . (strlen($cleaned) > 4 ? substr($cleaned, -4) : $cleaned) . ')';
+        } else {
+            $maskedIdProof = $idTypeStr . ' (Verified)';
+        }
+    }
   @endphp
 
-  {{-- FORMAT 1: Modern Color-Coded ID Badge Card with School Logo & Seal --}}
+  {{-- =========================================================================
+       FORMAT 1: DEDICATED 80mm ROLL PRINTER PASS (Default for Thermal Output)
+       Printable Width: ~72mm • Black & White • Compact • High-Legibility
+       ========================================================================= --}}
+  <div x-show="passFormat === 'slip'" class="thermal-pass-wrapper max-w-sm mx-auto">
+    <div class="no-print mb-2 flex items-center justify-between text-xs text-slate-500 font-medium px-1">
+      <span class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+        80mm Thermal Roll Receipt (~72mm Printable)
+      </span>
+      <span class="font-mono text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
+        Monochrome / Roll
+      </span>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-300 p-4 sm:p-5 shadow-md">
+      <div id="thermal-roll-pass" class="thermal-receipt-preview">
+        
+        {{-- Receipt Header --}}
+        <div style="text-align: center; margin-bottom: 4px;">
+          @if($schoolLogo)
+          <div style="margin-bottom: 3px;">
+            <img src="{{ $schoolLogo }}" alt="School Logo" style="max-height: 36px; max-width: 110px; object-fit: contain; margin: 0 auto; display: block; filter: grayscale(100%) contrast(120%);">
+          </div>
+          @endif
+          <h2 style="font-size: 13px; font-weight: 800; text-transform: uppercase; margin: 0; line-height: 1.2; letter-spacing: 0.3px;">
+            {{ $schoolName }}
+          </h2>
+          @if(!empty($schoolSub))
+          <p style="font-size: 8.5px; color: #333333; margin: 2px 0 0 0; line-height: 1.1;">
+            {{ $schoolSub }}
+          </p>
+          @endif
+        </div>
+
+        {{-- Top Divider --}}
+        <div style="border-top: 1px dashed #000000; margin: 5px 0;"></div>
+
+        {{-- Pass Title & Meta --}}
+        <div style="text-align: center; margin-bottom: 5px;">
+          <div style="font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+            VISITOR GATE PASS
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px; font-size: 9.5px;">
+            <span>Pass: <strong style="font-family: monospace; font-size: 10.5px;">{{ $visitor->pass_number }}</strong></span>
+            <span>Date: <strong>{{ $visitor->visit_date?->format('d/m/Y') ?? now()->format('d/m/Y') }}</strong></span>
+          </div>
+        </div>
+
+        {{-- Category Label Box --}}
+        <div style="text-align: center; border: 1px solid #000000; padding: 2px 0; margin-bottom: 6px; font-weight: 800; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+          {{ $visitor->category_label }}
+        </div>
+
+        {{-- Visitor Photo (if uploaded) & Basic Info --}}
+        @if($visitor->visitor_photo && Storage::disk('public')->exists($visitor->visitor_photo))
+        <div style="display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px;">
+          <img src="{{ Storage::url($visitor->visitor_photo) }}" alt="Photo" style="width: 44px; height: 44px; object-fit: cover; border: 1px solid #000000; filter: grayscale(100%); flex-shrink: 0;">
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 12px; font-weight: 800; line-height: 1.2; word-break: break-word;">{{ $visitor->visitor_name }}</div>
+            <div style="font-size: 9.5px; font-family: monospace; margin-top: 2px;">Phone: {{ $visitor->visitor_phone ?? '—' }}</div>
+            <div style="font-size: 9px; margin-top: 1px;">Visitor Count: <strong>{{ $visitor->visitor_count }} Pax</strong></div>
+          </div>
+        </div>
+        @else
+        <div style="margin-bottom: 6px;">
+          <div style="font-size: 12.5px; font-weight: 800; line-height: 1.2; word-break: break-word;">{{ $visitor->visitor_name }}</div>
+          <div style="font-size: 9.5px; display: flex; justify-content: space-between; margin-top: 2px;">
+            <span>Phone: <strong style="font-family: monospace;">{{ $visitor->visitor_phone ?? '—' }}</strong></span>
+            <span>Visitors: <strong>{{ $visitor->visitor_count }} Pax</strong></span>
+          </div>
+        </div>
+        @endif
+
+        {{-- Divider --}}
+        <div style="border-top: 1px dashed #000000; margin: 4px 0 5px 0;"></div>
+
+        {{-- Visit Details Key-Value List --}}
+        <div style="space-y: 2px;">
+          
+          {{-- Person to Meet --}}
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5px; margin-bottom: 2px;">
+            <span style="font-weight: 700; width: 75px; flex-shrink: 0;">To Meet:</span>
+            <span style="flex: 1; text-align: right; font-weight: 700; word-break: break-word;">
+              {{ $visitor->whom_to_meet ?? ($visitor->hostEmployee ? $visitor->hostEmployee->full_name : 'School Office') }}
+            </span>
+          </div>
+
+          {{-- Department (Only when available) --}}
+          @if(!empty($visitor->department))
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5px; margin-bottom: 2px;">
+            <span style="font-weight: 700; width: 75px; flex-shrink: 0;">Department:</span>
+            <span style="flex: 1; text-align: right; word-break: break-word;">{{ $visitor->department }}</span>
+          </div>
+          @endif
+
+          {{-- Purpose (Wrapped naturally without truncation) --}}
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5px; margin-bottom: 2px;">
+            <span style="font-weight: 700; width: 75px; flex-shrink: 0;">Purpose:</span>
+            <span style="flex: 1; text-align: right; word-break: break-word;">{{ $visitor->purpose }}</span>
+          </div>
+
+          {{-- Conditional: Student Link (Only when linked to student) --}}
+          @if($visitor->student)
+          <div style="border: 1px dashed #000000; padding: 3px 5px; margin: 4px 0;">
+            <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase;">Linked Student:</div>
+            <div style="font-size: 10.5px; font-weight: 800; word-break: break-word;">
+              {{ $visitor->student->first_name }} {{ $visitor->student->last_name }}
+            </div>
+            <div style="font-size: 9px; display: flex; justify-content: space-between; margin-top: 1px;">
+              <span>Adm #: <strong>{{ $visitor->student->admission_no }}</strong></span>
+              @if(!empty($visitor->relationship_to_student))
+              <span>Rel: <strong>{{ $visitor->relationship_to_student }}</strong></span>
+              @endif
+            </div>
+          </div>
+          @elseif($visitor->category === \App\Models\Visitor::CATEGORY_ADMISSION && !empty($visitor->child_name))
+          <div style="border: 1px dashed #000000; padding: 3px 5px; margin: 4px 0;">
+            <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase;">Admission Candidate:</div>
+            <div style="font-size: 10px; font-weight: 800; word-break: break-word;">{{ $visitor->child_name }}</div>
+            <div style="font-size: 9px;">Grade Applying: <strong>{{ $visitor->grade_applying_for ?? 'N/A' }}</strong></div>
+          </div>
+          @elseif($visitor->category === \App\Models\Visitor::CATEGORY_VENDOR && !empty($visitor->company_name))
+          <div style="border: 1px dashed #000000; padding: 3px 5px; margin: 4px 0;">
+            <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase;">Vendor / Agency:</div>
+            <div style="font-size: 10px; font-weight: 800; word-break: break-word;">{{ $visitor->company_name }}</div>
+            @if(!empty($visitor->work_order_number))
+            <div style="font-size: 9px;">Work Order: <strong>{{ $visitor->work_order_number }}</strong></div>
+            @endif
+          </div>
+          @elseif($visitor->category === \App\Models\Visitor::CATEGORY_INTERVIEW && !empty($visitor->job_role_applied))
+          <div style="border: 1px dashed #000000; padding: 3px 5px; margin: 4px 0;">
+            <div style="font-size: 8.5px; font-weight: 800; text-transform: uppercase;">Interview Role:</div>
+            <div style="font-size: 10px; font-weight: 800; word-break: break-word;">{{ $visitor->job_role_applied }}</div>
+            @if(!empty($visitor->candidate_ref_number))
+            <div style="font-size: 9px;">Ref #: <strong>{{ $visitor->candidate_ref_number }}</strong></div>
+            @endif
+          </div>
+          @endif
+
+          {{-- Entry Timestamp --}}
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5px; margin-bottom: 2px;">
+            <span style="font-weight: 700; width: 75px; flex-shrink: 0;">Entry Time:</span>
+            <span style="flex: 1; text-align: right; font-family: monospace; font-weight: 700;">
+              {{ $visitor->in_time ? $visitor->in_time->format('h:i A, d M') : now()->format('h:i A, d M') }}
+            </span>
+          </div>
+
+          {{-- Actual Exit Time (if completed visit) --}}
+          @if($visitor->out_time)
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5px; margin-bottom: 2px; font-weight: 800;">
+            <span style="width: 75px; flex-shrink: 0;">Actual Exit:</span>
+            <span style="flex: 1; text-align: right; font-family: monospace;">
+              {{ $visitor->out_time->format('h:i A, d M') }} (Checked Out)
+            </span>
+          </div>
+          @endif
+
+          {{-- Vehicle Number (if available) --}}
+          @if(!empty($visitor->vehicle_number))
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5px; margin-bottom: 2px;">
+            <span style="font-weight: 700; width: 75px; flex-shrink: 0;">Vehicle No:</span>
+            <span style="flex: 1; text-align: right; font-family: monospace; font-weight: 700; text-transform: uppercase;">
+              {{ $visitor->vehicle_number }}
+            </span>
+          </div>
+          @endif
+
+          {{-- Masked ID Proof (if verified) --}}
+          @if($maskedIdProof)
+          <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 9px; margin-bottom: 2px;">
+            <span style="font-weight: 700; width: 75px; flex-shrink: 0;">ID Proof:</span>
+            <span style="flex: 1; text-align: right; font-family: monospace;">
+              {{ $maskedIdProof }}
+            </span>
+          </div>
+          @endif
+
+        </div>
+
+        {{-- Security Clearance Stamp --}}
+        <div style="border-top: 1px dashed #000000; margin: 5px 0 4px 0;"></div>
+        <div style="text-align: center; border: 1px solid #000000; padding: 3px 2px; margin-bottom: 4px;">
+          <div style="font-size: 9.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">
+            ★ ENTRY AUTHORIZED ★
+          </div>
+          <div style="font-size: 8px; font-weight: 600;">
+            Gate Security Clearance Verified
+          </div>
+          <div style="font-size: 7.5px; font-family: monospace;">
+            Ref: SEC-{{ substr(md5($visitor->pass_number . $visitor->id), 0, 8) }} &bull; {{ $visitor->visit_date?->format('d/m/Y') ?? now()->format('d/m/Y') }}
+          </div>
+        </div>
+
+        {{-- Signatures Area --}}
+        <div style="display: flex; justify-content: space-between; margin-top: 10px; margin-bottom: 4px; font-size: 8.5px;">
+          <div style="text-align: center; width: 46%;">
+            <div style="border-bottom: 1px dotted #000000; height: 16px;"></div>
+            <div style="font-weight: 700; margin-top: 2px;">Security Gatekeeper</div>
+          </div>
+          <div style="text-align: center; width: 46%;">
+            <div style="border-bottom: 1px dotted #000000; height: 16px;"></div>
+            <div style="font-weight: 700; margin-top: 2px;">Visitor Signature</div>
+          </div>
+        </div>
+
+        {{-- Footer Notice --}}
+        <div style="border-top: 1px dashed #000000; margin: 4px 0;"></div>
+        <div style="text-align: center; font-size: 7.5px; line-height: 1.3;">
+          <p style="margin: 0; font-weight: 600;">Please wear this pass visibly while on campus.</p>
+          <p style="margin: 1px 0 0 0; font-weight: 700;">Return pass at the gate when exiting.</p>
+          <p style="margin: 2px 0 0 0; font-size: 7px; font-family: monospace; color: #444;">
+            Printed: {{ now()->format('d/m/Y h:i A') }}
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {{-- =========================================================================
+       FORMAT 2: COLOR ID BADGE CARD (Screen Preview Only - Hidden in Print)
+       ========================================================================= --}}
   <div x-show="passFormat === 'badge'" class="printable-badge bg-white rounded-3xl border-2 {{ $catBadge['border'] }} shadow-xl overflow-hidden max-w-md mx-auto">
     
     {{-- Header Band with Official School Logo --}}
@@ -84,7 +443,7 @@
 
         <div class="min-w-0 flex-1">
           <h2 class="text-sm sm:text-base font-extrabold tracking-tight text-white uppercase truncate">
-            {{ $school->school_name ?? 'DASA English Primary & Secondary School' }}
+            {{ $schoolName }}
           </h2>
           <div class="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-indigo-300 mt-0.5">
             <span>OFFICIAL VISITOR PASS</span>
@@ -105,7 +464,7 @@
       {{-- Visitor Photo & Pass Number --}}
       <div class="flex items-center gap-4">
         <div class="relative flex-shrink-0">
-          @if($visitor->visitor_photo)
+          @if($visitor->visitor_photo && Storage::disk('public')->exists($visitor->visitor_photo))
           <img src="{{ Storage::url($visitor->visitor_photo) }}" alt="{{ $visitor->visitor_name }}" class="w-24 h-24 rounded-2xl object-cover border-2 border-slate-200 shadow-md">
           @else
           <div class="w-24 h-24 rounded-2xl bg-slate-100 border-2 border-slate-200 flex items-center justify-center text-3xl font-black text-slate-600 shadow-inner">
@@ -133,13 +492,15 @@
         
         <div class="flex justify-between items-start border-b border-slate-200/60 pb-2">
           <span class="text-slate-500 font-medium">Person to Meet</span>
-          <span class="font-bold text-slate-900 text-right">{{ $visitor->whom_to_meet ?? 'General / Reception' }}</span>
+          <span class="font-bold text-slate-900 text-right">{{ $visitor->whom_to_meet ?? ($visitor->hostEmployee ? $visitor->hostEmployee->full_name : 'General / Reception') }}</span>
         </div>
 
+        @if(!empty($visitor->department))
         <div class="flex justify-between items-start border-b border-slate-200/60 pb-2">
           <span class="text-slate-500 font-medium">Department</span>
-          <span class="font-semibold text-slate-800 text-right">{{ $visitor->department ?? 'General' }}</span>
+          <span class="font-semibold text-slate-800 text-right">{{ $visitor->department }}</span>
         </div>
+        @endif
 
         <div class="flex justify-between items-start border-b border-slate-200/60 pb-2">
           <span class="text-slate-500 font-medium">Purpose</span>
@@ -147,7 +508,7 @@
         </div>
 
         {{-- Dynamic Category specific row --}}
-        @if($visitor->category === \App\Models\Visitor::CATEGORY_PARENT && $visitor->student)
+        @if($visitor->student)
         <div class="flex justify-between items-start border-b border-slate-200/60 pb-2 bg-emerald-50/70 -mx-2 px-2 py-1.5 rounded-lg border border-emerald-200">
           <span class="text-emerald-800 font-bold">Student Link</span>
           <span class="font-bold text-emerald-950 text-right">{{ $visitor->student->first_name }} {{ $visitor->student->last_name }} ({{ $visitor->student->admission_no }})</span>
@@ -206,7 +567,7 @@
               Verified by Gate Security &amp; Host Clearance
             </p>
             <p class="text-[10px] text-emerald-700 font-mono">
-              Auth Code: SEC-{{ substr(md5($visitor->pass_number . $visitor->id), 0, 8) }} • {{ $visitor->in_time?->format('d/m/Y H:i') ?? now()->format('d/m/Y H:i') }}
+              Auth Code: SEC-{{ substr(md5($visitor->pass_number . $visitor->id), 0, 8) }} &bull; {{ $visitor->in_time?->format('d/m/Y H:i') ?? now()->format('d/m/Y H:i') }}
             </p>
           </div>
         </div>
@@ -237,77 +598,6 @@
     </div>
   </div>
 
-  {{-- FORMAT 2: 80mm POS Thermal Slip Format with School Logo & Seal --}}
-  <div x-show="passFormat === 'slip'" class="printable-thermal bg-white rounded-xl border border-slate-300 p-5 max-w-xs mx-auto shadow-md font-mono text-xs text-slate-900 space-y-3">
-    
-    {{-- Header with School Name & Logo --}}
-    <div class="text-center space-y-1 border-b border-dashed border-slate-400 pb-3">
-      @if($schoolLogo)
-      <img src="{{ $schoolLogo }}" alt="School Logo" class="w-10 h-10 object-contain mx-auto mb-1">
-      @endif
-      <h2 class="font-black text-sm uppercase">{{ $school->school_name ?? 'DASA ENGLISH SCHOOL' }}</h2>
-      <p class="text-[10px] uppercase font-bold text-slate-600">Visitor Gate Pass</p>
-      <p class="text-[10px] text-slate-500">{{ now()->format('d-M-Y H:i:s') }}</p>
-    </div>
-
-    <div class="text-center py-1 bg-slate-100 font-bold uppercase text-[11px] border border-slate-300 rounded">
-      {{ $visitor->category_label }}
-    </div>
-
-    <div class="space-y-1 text-[11px] border-b border-dashed border-slate-400 pb-3">
-      <div class="flex justify-between">
-        <span>Pass #:</span>
-        <span class="font-bold">{{ $visitor->pass_number }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Visitor:</span>
-        <span class="font-bold truncate max-w-[130px]">{{ $visitor->visitor_name }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Phone:</span>
-        <span>{{ $visitor->visitor_phone ?? '—' }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Persons:</span>
-        <span>{{ $visitor->visitor_count }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Host:</span>
-        <span class="font-bold truncate max-w-[130px]">{{ $visitor->whom_to_meet ?? '—' }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Dept:</span>
-        <span>{{ $visitor->department ?? '—' }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>Purpose:</span>
-        <span class="truncate max-w-[130px]">{{ $visitor->purpose }}</span>
-      </div>
-      <div class="flex justify-between">
-        <span>In Time:</span>
-        <span class="font-bold">{{ $visitor->in_time?->format('H:i') ?? '—' }}</span>
-      </div>
-      @if($visitor->vehicle_number)
-      <div class="flex justify-between">
-        <span>Vehicle:</span>
-        <span>{{ $visitor->vehicle_number }}</span>
-      </div>
-      @endif
-    </div>
-
-    {{-- Thermal Seal Stamp Text --}}
-    @if($isApprovedOrDirect)
-    <div class="text-center p-2 border border-slate-400 rounded-lg space-y-0.5">
-      <p class="font-bold text-[10px] uppercase">*** ENTRY AUTHORIZED &amp; VERIFIED ***</p>
-      <p class="text-[9px] text-slate-600">OFFICIAL GATE CLEARANCE</p>
-    </div>
-    @endif
-
-    <div class="text-center text-[9px] text-slate-500 pt-1">
-      Return pass at gate during exit
-    </div>
-  </div>
-
   {{-- On-Page Action Bar (No Print) --}}
   <div class="no-print bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex items-center justify-between gap-3">
     <div class="text-xs">
@@ -334,29 +624,16 @@
 
 </div>
 
-{{-- Dedicated Print Stylesheet --}}
-@push('styles')
-<style>
-@media print {
-  body * {
-    visibility: hidden;
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('autoprint') === '1') {
+    setTimeout(function () {
+      window.print();
+    }, 450);
   }
-  .no-print, nav, header, aside {
-    display: none !important;
-  }
-  .printable-badge, .printable-badge *,
-  .printable-thermal, .printable-thermal * {
-    visibility: visible;
-  }
-  .printable-badge, .printable-thermal {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    box-shadow: none !important;
-  }
-}
-</style>
+});
+</script>
 @endpush
 @endsection

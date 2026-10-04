@@ -82,6 +82,19 @@ class Event extends Model
         return $this->morphMany(ApprovalRequest::class, 'approvable');
     }
 
+    public function getIsAssignedAttribute(): bool
+    {
+        if ($this->relationLoaded('staff')) {
+            return $this->staff->isNotEmpty();
+        }
+        return $this->staff()->exists();
+    }
+
+    public function getAssignmentStatusLabelAttribute(): string
+    {
+        return $this->is_assigned ? 'Assigned' : 'Pending Assignment';
+    }
+
     public function scopePublished($q)
     {
         return $q->where(fn($sub) => $sub->where('is_published', true)->orWhere('status', 'published'));
@@ -92,28 +105,46 @@ class Event extends Model
         return $q->where('event_date', '>=', today());
     }
 
-    public function scopeForUser($query, User $user)
+    public function scopeForUser($query, ?User $user = null)
     {
-        if ($user->hasAnyRole(['super_admin', 'principal', 'admin'])) {
+        if (!$user) {
+            return $query;
+        }
+
+        if ($user->hasAnyRole(['super_admin', 'principal', 'admin', 'vice_principal', 'correspondent', 'correspondant'])) {
+            if (!empty($user->school_id)) {
+                $query->where(fn($sq) => $sq->where('school_id', $user->school_id)->orWhereNull('school_id'));
+            }
             return $query;
         }
 
         return $query->where(function ($q) use ($user) {
             $q->where('audience', 'all')
               ->orWhere(function ($sub) use ($user) {
-                  if ($user->hasRole('teacher') || $user->employee_id) {
+                  $rolesFound = false;
+                  if ($user->hasRole('teacher') || !empty($user->employee_id)) {
                       $sub->where('audience', 'staff');
+                      $rolesFound = true;
                   }
                   if ($user->hasRole('student')) {
                       $sub->orWhere('audience', 'students');
+                      $rolesFound = true;
                   }
                   if ($user->hasRole('parent')) {
                       $sub->orWhere('audience', 'parents');
+                      $rolesFound = true;
+                  }
+                  if (!$rolesFound) {
+                      $sub->whereRaw('1 = 0');
                   }
               })
               ->orWhere('organizer_id', $user->id)
-              ->orWhere('created_by', $user->id)
-              ->orWhereHas('staff', fn($s) => $s->where('employee_id', $user->employee_id));
-        });
+              ->orWhere('created_by', $user->id);
+
+            if (!empty($user->employee_id)) {
+                $q->orWhereHas('staff', fn($s) => $s->where('employee_id', $user->employee_id));
+            }
+        })
+        ->when(!empty($user->school_id), fn($sq) => $sq->where(fn($sub) => $sub->where('school_id', $user->school_id)->orWhereNull('school_id')));
     }
 }
