@@ -61,7 +61,7 @@ class AuditLog extends Model
     public static function record(string $action, $model = null, array $old = [], array $new = [], ?string $module = null): void
     {
         try {
-            static::create([
+            $data = [
                 'user_id'     => auth()->id(),
                 'module'      => $module ?? ($model ? strtolower(class_basename($model)) : 'system'),
                 'action'      => $action,
@@ -73,7 +73,19 @@ class AuditLog extends Model
                 'user_agent'  => substr((string) request()->userAgent(), 0, 255),
                 'url'         => substr((string) request()->fullUrl(), 0, 255),
                 'created_at'  => now(),
-            ]);
+            ];
+
+            if (function_exists('dispatch')) {
+                dispatch(function () use ($data) {
+                    try {
+                        static::create($data);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('Async AuditLog::record failed: ' . $e->getMessage());
+                    }
+                })->afterResponse();
+            } else {
+                static::create($data);
+            }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('AuditLog::record failed: ' . $e->getMessage());
         }

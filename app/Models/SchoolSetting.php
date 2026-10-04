@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
 class SchoolSetting extends Model
 {
+    private static ?self $memoizedInstance = null;
     protected $fillable = [
         'school_name', 'school_code', 'affiliation_no', 'board',
         'address', 'city', 'state', 'pincode', 'phone', 'email',
@@ -100,16 +102,48 @@ class SchoolSetting extends Model
         ];
     }
 
+    public static function instance(): ?self
+    {
+        if (self::$memoizedInstance !== null) {
+            return self::$memoizedInstance;
+        }
+
+        self::$memoizedInstance = Cache::remember('school_setting_singleton', 86400, function () {
+            try {
+                return static::first();
+            } catch (\Throwable $e) {
+                return null;
+            }
+        });
+
+        return self::$memoizedInstance;
+    }
+
+    public static function clearSettingCache(): void
+    {
+        self::$memoizedInstance = null;
+        Cache::forget('school_setting_singleton');
+        Cache::forget('school_theme_css_variables');
+    }
+
+    protected static function booted(): void
+    {
+        static::saved(function () {
+            static::clearSettingCache();
+        });
+
+        static::deleted(function () {
+            static::clearSettingCache();
+        });
+    }
+
     /**
      * Generate dynamic global CSS variables based on active school settings.
      */
     public static function getThemeCssVariables(): string
     {
-        try {
-            $setting = static::first();
-        } catch (\Exception $e) {
-            $setting = null;
-        }
+        return Cache::rememberForever('school_theme_css_variables', function () {
+            $setting = static::instance();
 
         $hex = strtoupper((string)($setting?->primary_color ?: '#8C2826'));
         $validColors = ['#8C2826', '#2563EB', '#731E1C'];
@@ -364,16 +398,17 @@ input[type=\"checkbox\"]:checked {
 }
 ";
         return "<style id=\"app-global-theme-vars\">{$css}</style>";
+        });
     }
 
     public static function get(string $key, mixed $default = null): mixed
     {
         try {
-            $setting = static::first();
+            $setting = static::instance();
             if (!$setting) return $default;
             $val = $setting->getAttribute($key);
             return $val !== null ? $val : $default;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $default;
         }
     }
@@ -384,17 +419,19 @@ input[type=\"checkbox\"]:checked {
             $setting = static::first();
             if ($setting && in_array($key, $setting->getFillable())) {
                 $setting->update([$key => $value]);
+                static::clearSettingCache();
             }
-        } catch (\Exception $e) {}
+        } catch (\Throwable $e) {}
     }
 
     public static function getAll(): ?self
     {
-        try {
-            return static::first();
-        } catch (\Exception $e) {
-            return null;
-        }
+        return static::instance();
+    }
+
+    public static function getSingleton(): ?self
+    {
+        return static::instance();
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -594,48 +631,48 @@ input[type=\"checkbox\"]:checked {
 
     public static function logoUrl(int $slot = 1, ?string $fallback = null): ?string
     {
-        return static::first()?->getLogoUrl($slot, $fallback);
+        return static::instance()?->getLogoUrl($slot, $fallback);
     }
 
     public static function logoPath(int $slot = 1): ?string
     {
-        return static::first()?->getLogoPath($slot);
+        return static::instance()?->getLogoPath($slot);
     }
 
     public static function logoBase64(int $slot = 1): ?string
     {
-        return static::first()?->getLogoBase64($slot);
+        return static::instance()?->getLogoBase64($slot);
     }
 
     public static function sealUrl(int $slot = 1, ?string $fallback = null): ?string
     {
-        return static::first()?->getSealUrl($slot, $fallback);
+        return static::instance()?->getSealUrl($slot, $fallback);
     }
 
     public static function sealPath(int $slot = 1): ?string
     {
-        return static::first()?->getSealPath($slot);
+        return static::instance()?->getSealPath($slot);
     }
 
     public static function sealBase64(int $slot = 1): ?string
     {
-        return static::first()?->getSealBase64($slot);
+        return static::instance()?->getSealBase64($slot);
     }
 
     public static function sealLabel(int $slot = 1): string
     {
-        return static::first()?->getSealLabel($slot) ?? (static::defaultSealLabels()[$slot] ?? "Seal Slot {$slot}");
+        return static::instance()?->getSealLabel($slot) ?? (static::defaultSealLabels()[$slot] ?? "Seal Slot {$slot}");
     }
 
     public static function allLogos(): array
     {
-        $inst = static::first();
+        $inst = static::instance();
         return $inst ? $inst->getLogosList() : [];
     }
 
     public static function allSeals(): array
     {
-        $inst = static::first();
+        $inst = static::instance();
         return $inst ? $inst->getSealsList() : [];
     }
 }

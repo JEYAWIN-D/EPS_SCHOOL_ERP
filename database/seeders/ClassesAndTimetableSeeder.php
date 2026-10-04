@@ -46,9 +46,9 @@ class ClassesAndTimetableSeeder extends Seeder
 
         foreach ($classList as $cData) {
             Classes::updateOrCreate(
-                ['sort_order' => $cData['sort_order']],
+                ['name' => $cData['name']],
                 [
-                    'name'          => $cData['name'],
+                    'sort_order'    => $cData['sort_order'],
                     'numeric_value' => $cData['numeric_value'],
                     'is_active'     => true,
                 ]

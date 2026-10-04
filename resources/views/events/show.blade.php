@@ -6,10 +6,12 @@
     <a href="{{ route('events.index') }}" class="btn-sm btn-secondary">← Events</a>
     <div class="flex gap-2">
       <a href="{{ route('events.edit', $event->id) }}" class="btn-sm btn-secondary">Edit</a>
+      @if(auth()->user() && auth()->user()->hasAnyRole(['super_admin', 'admin', 'principal', 'correspondent', 'correspondant']))
       <form method="POST" action="{{ route('events.destroy', $event->id) }}" onsubmit="return confirm('Delete this event?')">
         @csrf @method('DELETE')
         <button type="submit" class="btn-sm btn-secondary text-rose-600">Delete</button>
       </form>
+      @endif
     </div>
   </div>
 

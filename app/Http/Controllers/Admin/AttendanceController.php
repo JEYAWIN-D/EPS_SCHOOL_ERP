@@ -18,6 +18,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -26,7 +27,7 @@ class AttendanceController extends Controller
     public function index()
     {
         $currentYear = AcademicYear::current();
-        $classes     = Classes::with(['sections' => fn($q) => $q->where('is_active', true)->orderBy('name', 'asc')])->active()->get();
+        $classes     = Classes::activeWithSectionsCached();
 
         // Section-wise attendance & stats for today (single DB query)
         $todayRecords = AttendanceRecord::whereDate('date', today())
@@ -74,7 +75,7 @@ class AttendanceController extends Controller
 
     public function mark(Request $request)
     {
-        $classes  = Classes::active()->get();
+        $classes  = Classes::activeCached();
         $sections = collect();
         $students = collect();
         $existing = collect();
@@ -117,18 +118,23 @@ class AttendanceController extends Controller
                     ->get();
             }
 
-            $students = $enrollments->map(function($e) use ($currentYear) {
+            $studentIds = $enrollments->pluck('student_id')->filter()->unique();
+
+            // Single aggregate query replaces 2*N queries across remote database
+            $histStats = AttendanceRecord::whereIn('student_id', $studentIds)
+                ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
+                ->selectRaw("student_id, count(*) as total, count(case when status in ('present', 'late') then 1 end) as present")
+                ->groupBy('student_id')
+                ->get()
+                ->keyBy('student_id');
+
+            $students = $enrollments->map(function($e) use ($histStats) {
                 $std = $e->student;
                 if ($std) {
                     $std->enrollment = $e;
-                    // Compute historical attendance percentage for quick badge
-                    $tot = AttendanceRecord::where('student_id', $std->id)
-                        ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
-                        ->count();
-                    $prs = AttendanceRecord::where('student_id', $std->id)
-                        ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
-                        ->whereIn('status', ['present', 'late'])
-                        ->count();
+                    $stat = $histStats->get($std->id);
+                    $tot = (int) ($stat?->total ?? 0);
+                    $prs = (int) ($stat?->present ?? 0);
                     $std->hist_pct = $tot > 0 ? round(($prs / $tot) * 100, 1) : null;
                 }
                 return $std;
@@ -159,7 +165,7 @@ class AttendanceController extends Controller
 
         $carbonDate  = \Carbon\Carbon::parse($date);
         $isSunday    = $carbonDate->isSunday();
-        $holiday     = \App\Models\Holiday::whereDate('date', $date)->first();
+        $holiday     = Cache::remember("holiday_{$date}", 3600, fn() => \App\Models\Holiday::whereDate('date', $date)->first());
         $isHoliday   = $isSunday || !is_null($holiday);
         $holidayName = $isSunday ? 'Sunday Weekly Off' : ($holiday?->name ?? 'Declared School Holiday');
 
@@ -208,32 +214,47 @@ class AttendanceController extends Controller
 
         $counts = ['present' => 0, 'absent' => 0, 'late' => 0, 'half_day' => 0, 'leave' => 0];
 
-        DB::transaction(function () use ($request, $currentYear, $date, $lateTime, $isOverride, &$counts) {
-            foreach ($request->attendance as $studentId => $status) {
-                $arrivalTime = $request->arrival_time[$studentId] ?? null;
-                $isLate      = ($status === 'late') || ($arrivalTime && $arrivalTime > $lateTime);
-                if (isset($counts[$status])) {
-                    $counts[$status]++;
-                }
+        $upsertRows = [];
+        $now = now();
+        $authId = Auth::id();
 
-                AttendanceRecord::updateOrCreate(
-                    ['student_id' => $studentId, 'date' => $date],
-                    [
-                        'class_id'           => $request->class_id,
-                        'section_id'         => $request->section_id ?? null,
-                        'academic_year_id'   => $currentYear?->id,
-                        'status'             => $status,
-                        'remark'             => $request->remarks[$studentId] ?? null,
-                        'arrival_time'       => $arrivalTime,
-                        'departure_time'     => $request->departure_time[$studentId] ?? null,
-                        'is_late'            => $isLate,
-                        'cutoff_override'    => $isOverride,
-                        'cutoff_override_by' => $isOverride ? Auth::id() : null,
-                        'marked_by'          => Auth::id(),
-                    ]
-                );
+        foreach ($request->attendance as $studentId => $status) {
+            $arrivalTime = $request->arrival_time[$studentId] ?? null;
+            $isLate      = ($status === 'late') || ($arrivalTime && $arrivalTime > $lateTime);
+            if (isset($counts[$status])) {
+                $counts[$status]++;
             }
-        });
+
+            $upsertRows[] = [
+                'student_id'         => (int) $studentId,
+                'date'               => $date,
+                'class_id'           => (int) $request->class_id,
+                'section_id'         => $request->section_id ? (int) $request->section_id : null,
+                'academic_year_id'   => $currentYear?->id,
+                'status'             => $status,
+                'remark'             => $request->remarks[$studentId] ?? null,
+                'arrival_time'       => $arrivalTime,
+                'departure_time'     => $request->departure_time[$studentId] ?? null,
+                'is_late'            => $isLate,
+                'cutoff_override'    => $isOverride,
+                'cutoff_override_by' => $isOverride ? $authId : null,
+                'marked_by'          => $authId,
+                'updated_at'         => $now,
+                'created_at'         => $now,
+            ];
+        }
+
+        if (!empty($upsertRows)) {
+            AttendanceRecord::upsert(
+                $upsertRows,
+                ['student_id', 'date'],
+                [
+                    'class_id', 'section_id', 'academic_year_id', 'status',
+                    'remark', 'arrival_time', 'departure_time', 'is_late',
+                    'cutoff_override', 'cutoff_override_by', 'marked_by', 'updated_at'
+                ]
+            );
+        }
 
         $msg = "Attendance saved: {$counts['present']} Present, {$counts['absent']} Absent, {$counts['late']} Late, {$counts['leave']} On Leave.";
 
@@ -316,7 +337,7 @@ class AttendanceController extends Controller
 
     public function periodWise(Request $request)
     {
-        $classes  = Classes::active()->get();
+        $classes  = Classes::activeCached();
         $sections = collect();
         $students = collect();
         if ($request->class_id) {
@@ -429,13 +450,27 @@ class AttendanceController extends Controller
                         'holidayName'      => $holidayName,
                     ];
 
+        $todayStaffAttRows = DB::table('staff_attendance as sa')
+            ->join('employees as e', 'e.id', '=', 'sa.employee_id')
+            ->where('sa.date', $today)
+            ->where('e.is_active', true)
+            ->select('e.department_id', 'e.employee_type', 'sa.status')
+            ->get();
+
+        $deptAttGroups = $todayStaffAttRows->groupBy('department_id');
+        $catAttGroups  = $todayStaffAttRows->groupBy('employee_type');
+
+        $empTypeCounts = DB::table('employees')
+            ->where('is_active', true)
+            ->select('employee_type', DB::raw('count(*) as total'))
+            ->groupBy('employee_type')
+            ->pluck('total', 'employee_type');
+
         $departmentStats = Department::where('is_active', true)
             ->withCount(['employees as total_count' => fn($q) => $q->where('is_active', true)])
             ->get()
-            ->map(function ($dept) use ($today) {
-                $deptAttendances = StaffAttendance::where('date', $today)
-                    ->whereHas('employee', fn($q) => $q->where('department_id', $dept->id))
-                    ->get();
+            ->map(function ($dept) use ($deptAttGroups) {
+                $deptAttendances = $deptAttGroups->get($dept->id, collect());
                 $dept->present_count = $deptAttendances->whereIn('status', ['present', 'late', 'overtime'])->count();
                 $dept->absent_count  = $deptAttendances->where('status', 'absent')->count();
                 return $dept;
@@ -448,11 +483,9 @@ class AttendanceController extends Controller
             'driver'       => ['label' => 'Drivers'],
             'nanny'        => ['label' => 'Nannies (Naani)'],
             'cleaner'      => ['label' => 'Cleaners / Support'],
-        ])->map(function ($meta, $catKey) use ($today) {
-            $total = Employee::where('is_active', true)->where('employee_type', $catKey)->count();
-            $catAttendances = StaffAttendance::where('date', $today)
-                ->whereHas('employee', fn($q) => $q->where('employee_type', $catKey))
-                ->get();
+        ])->map(function ($meta, $catKey) use ($catAttGroups, $empTypeCounts) {
+            $total = (int) ($empTypeCounts[$catKey] ?? 0);
+            $catAttendances = $catAttGroups->get($catKey, collect());
             $present = $catAttendances->whereIn('status', ['present', 'late', 'overtime'])->count();
             $halfDay = $catAttendances->where('status', 'half_day')->count();
             $absent  = $catAttendances->where('status', 'absent')->count();

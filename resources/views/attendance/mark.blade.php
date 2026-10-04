@@ -21,47 +21,63 @@
     @endforeach
   },
 
+  counts: {
+    present: 0,
+    absent: 0,
+    late: 0,
+    half_day: 0,
+    leave: 0,
+    holiday: 0,
+    total: {{ $students->count() }},
+    rate: 0
+  },
+  recalc() {
+    let p = 0, a = 0, l = 0, h = 0, lv = 0, hol = 0;
+    const vals = Object.values(this.statuses);
+    for (let i = 0; i < vals.length; i++) {
+      const s = vals[i];
+      if (s === 'present') p++;
+      else if (s === 'absent') a++;
+      else if (s === 'late') l++;
+      else if (s === 'half_day') h++;
+      else if (s === 'leave') lv++;
+      else if (s === 'holiday') hol++;
+    }
+    const tot = vals.length;
+    let rate = 0;
+    if (tot > 0) {
+      if ({{ $isHoliday ? 'true' : 'false' }} && p === 0) rate = 100;
+      else rate = Math.round(((p + l + (h * 0.5)) / tot) * 100);
+    }
+    this.counts = { present: p, absent: a, late: l, half_day: h, leave: lv, holiday: hol, total: tot, rate: rate };
+  },
+  init() {
+    this.recalc();
+  },
   setStatus(id, status) {
     this.statuses[id] = status;
+    this.recalc();
   },
   markAll(status) {
-    Object.keys(this.statuses).forEach(id => {
+    for (const id in this.statuses) {
       this.statuses[id] = status;
-    });
+    }
+    this.recalc();
   },
   invertStatus() {
-    Object.keys(this.statuses).forEach(id => {
+    for (const id in this.statuses) {
       this.statuses[id] = this.statuses[id] === 'present' ? 'absent' : 'present';
-    });
+    }
+    this.recalc();
   },
-  getPresentCount() {
-    return Object.values(this.statuses).filter(s => s === 'present').length;
-  },
-  getAbsentCount() {
-    return Object.values(this.statuses).filter(s => s === 'absent').length;
-  },
-  getLateCount() {
-    return Object.values(this.statuses).filter(s => s === 'late').length;
-  },
-  getHalfDayCount() {
-    return Object.values(this.statuses).filter(s => s === 'half_day').length;
-  },
-  getLeaveCount() {
-    return Object.values(this.statuses).filter(s => s === 'leave').length;
-  },
-  getHolidayCount() {
-    return Object.values(this.statuses).filter(s => s === 'holiday').length;
-  },
-  getTotalCount() {
-    return Object.keys(this.statuses).length;
-  },
-  getRate() {
-    let tot = this.getTotalCount();
-    if (tot === 0) return 0;
-    if ({{ $isHoliday ? 'true' : 'false' }} && this.getPresentCount() === 0) return 100;
-    let effective = this.getPresentCount() + this.getLateCount() + (this.getHalfDayCount() * 0.5);
-    return Math.round((effective / tot) * 100);
-  }
+  getPresentCount() { return this.counts.present; },
+  getAbsentCount() { return this.counts.absent; },
+  getLateCount() { return this.counts.late; },
+  getHalfDayCount() { return this.counts.half_day; },
+  getLeaveCount() { return this.counts.leave; },
+  getHolidayCount() { return this.counts.holiday; },
+  getTotalCount() { return this.counts.total; },
+  getRate() { return this.counts.rate; }
 }">
 
   {{-- ── Top Navigation & Selector Bar ────────────────────────── --}}

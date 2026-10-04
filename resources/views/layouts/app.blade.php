@@ -18,47 +18,6 @@
   {{-- Dynamic Theme Styling --}}
   {!! \App\Models\SchoolSetting::getThemeCssVariables() !!}
 
-  {{-- Ultimate Instant Navigation: Speculation Rules API --}}
-  <script type="speculationrules">
-  {
-    "prefetch": [
-      {
-        "source": "list",
-        "urls": [
-          "{{ route('dashboard') }}",
-          "{{ route('students.index') }}",
-          "{{ route('admissions.index') }}",
-          "{{ route('classes.index') }}",
-          "{{ route('academics.index') }}",
-          "{{ route('attendance.index') }}",
-          "{{ route('examinations.index') }}",
-          "{{ route('fees.index') }}",
-          "{{ route('accounts.index') }}",
-          "{{ route('hr.index') }}",
-          "{{ route('library.index') }}",
-          "{{ route('transport.index') }}",
-          "{{ route('hostel.index') }}",
-          "{{ route('settings.index') }}"
-        ],
-        "eagerness": "moderate"
-      },
-      {
-        "where": {
-          "and": [
-            { "href_matches": "/*" },
-            { "not": { "href_matches": "/*logout*" } },
-            { "not": { "href_matches": "/*export*" } },
-            { "not": { "href_matches": "/*download*" } },
-            { "not": { "href_matches": "/*.pdf" } },
-            { "not": { "href_matches": "/*.xlsx" } },
-            { "not": { "selector_matches": "[data-no-instant]" } }
-          ]
-        },
-        "eagerness": "moderate"
-      }
-    ]
-  }
-  </script>
   @stack('head')
 </head>
 <body class="bg-slate-50 font-sans">
@@ -235,7 +194,8 @@
       <x-nav-item route="system.audit-log" icon="shield-check" label="Audit/Security" :active="str_starts_with($currentRoute, 'system')" :open="$sidebarOpen ?? true" />
       @endcanany
       @can('manage settings')
-      <x-nav-item route="settings.index"  icon="cog-6-tooth"   label="Settings"   :active="str_starts_with($currentRoute, 'settings')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="settings.index"  icon="cog-6-tooth"   label="Settings"   :active="$currentRoute === 'settings.index' || str_starts_with($currentRoute, 'settings.save')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="settings.books-notes.index" icon="book-open" label="Book, Note & Uniform Distribution" :active="str_starts_with($currentRoute, 'settings.books-notes')" :open="$sidebarOpen ?? true" />
       @endcan
       @endcanany
 

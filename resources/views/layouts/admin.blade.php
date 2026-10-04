@@ -167,6 +167,22 @@
       @endcan
       @endcanany
 
+      {{-- COLLABORATION & ACTIVITY HUB --}}
+      <p class="nav-group-label">COLLABORATION</p>
+      <x-nav-item route="activities.my-day" icon="home" label="My Day" :active="str_starts_with($currentRoute, 'activities.my-day')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="circulars.index" icon="document-duplicate" label="Circulars & Orders" :active="str_starts_with($currentRoute, 'circulars')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="activities.notices.index" icon="document-text" label="Notices & Bulletins" :active="str_starts_with($currentRoute, 'activities.notices')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="activities.events.index" icon="calendar" label="School Events" :active="str_starts_with($currentRoute, 'activities.events')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="activities.meetings.index" icon="users" label="Meetings & MoM" :active="str_starts_with($currentRoute, 'activities.meetings')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="activities.tasks.index" icon="clipboard-document-list" label="Task Desk" :active="str_starts_with($currentRoute, 'activities.tasks')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="activities.calendar" icon="calendar-days" label="Unified Calendar" :active="str_starts_with($currentRoute, 'activities.calendar')" :open="$sidebarOpen ?? true" />
+      @canany(['manage notices', 'approve notices', 'manage tasks', 'approve tasks'])
+      <x-nav-item route="activities.approvals" icon="shield-check" label="Approvals Desk" :active="str_starts_with($currentRoute, 'activities.approvals')" :open="$sidebarOpen ?? true" />
+      @endcanany
+      @can('view reports')
+      <x-nav-item route="activities.reports" icon="chart-bar" label="Activity Reports" :active="str_starts_with($currentRoute, 'activities.reports')" :open="$sidebarOpen ?? true" />
+      @endcan
+
       {{-- ENGAGEMENT --}}
       @canany(['send email','view lms','view events','view gate','view alumni'])
       <p class="nav-group-label">ENGAGEMENT</p>
@@ -178,6 +194,7 @@
       @endcan
       @can('view events')
       <x-nav-item route="events.index"  icon="calendar"       label="Events"    :active="str_starts_with($currentRoute, 'events')"  :open="$sidebarOpen ?? true" />
+      <x-nav-item route="circulars.index" icon="document-duplicate" label="Circulars & Orders" :active="str_starts_with($currentRoute, 'circulars')" :open="$sidebarOpen ?? true" />
       @endcan
       @can('view gate')
       <x-nav-item route="gate.index"     icon="user-plus"     label="Gate/Visitors" :active="str_starts_with($currentRoute, 'gate')" :open="$sidebarOpen ?? true" />
@@ -197,7 +214,8 @@
       <x-nav-item route="system.audit-log" icon="shield-check" label="Audit/Security" :active="str_starts_with($currentRoute, 'system')" :open="$sidebarOpen ?? true" />
       @endcanany
       @can('manage settings')
-      <x-nav-item route="settings.index"  icon="cog-6-tooth"   label="Settings"   :active="str_starts_with($currentRoute, 'settings')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="settings.index"  icon="cog-6-tooth"   label="Settings"   :active="$currentRoute === 'settings.index' || str_starts_with($currentRoute, 'settings.save')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="settings.books-notes.index" icon="book-open" label="Book, Note & Uniform Distribution" :active="str_starts_with($currentRoute, 'settings.books-notes')" :open="$sidebarOpen ?? true" />
       @endcan
       @endcanany
 
@@ -283,11 +301,33 @@
           </span>
         @endif
 
-        {{-- Notifications Dropdown --}}
-        <div class="relative" @click.outside="notifOpen = false">
-          <button @click="notifOpen = !notifOpen; if(notifOpen) topUserOpen = false" class="btn-icon relative w-9 h-9" title="Notifications">
+        {{-- Notifications Dropdown (Live Activity Hub Engine) --}}
+        <div class="relative" x-data="{
+          notifOpen: false,
+          unreadCount: 0,
+          recent: [],
+          async fetchNotifs() {
+            try {
+              const res = await fetch('{{ route('api.notifications.unread-count') }}');
+              const d = await res.json();
+              this.unreadCount = d.unread_count || 0;
+              this.recent = d.recent || [];
+            } catch(e) {}
+          },
+          async markAllRead() {
+            try {
+              await fetch('{{ route('api.notifications.mark-all-read') }}', {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').getAttribute('content') }
+              });
+              this.unreadCount = 0;
+              this.fetchNotifs();
+            } catch(e) {}
+          }
+        }" x-init="fetchNotifs(); setInterval(() => fetchNotifs(), 30000)" @click.outside="notifOpen = false">
+          <button @click="notifOpen = !notifOpen; if(notifOpen) { topUserOpen = false; fetchNotifs(); }" class="btn-icon relative w-9 h-9" title="Notifications">
             <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+            <span x-show="unreadCount > 0" class="absolute top-1 right-1 px-1 min-w-[16px] h-4 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white" x-text="unreadCount"></span>
           </button>
 
           {{-- Notification Box --}}
@@ -301,28 +341,22 @@
                class="absolute right-0 top-full mt-2 z-50 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[80vh] flex flex-col"
                style="display:none">
             <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-              <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">Notifications</span>
-              <span class="badge-blue text-[10px]">3 New</span>
+              <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">Activity Alerts</span>
+              <button @click="markAllRead()" class="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">Mark all read</button>
             </div>
             <div class="divide-y divide-slate-100 overflow-y-auto max-h-72">
-              <a href="{{ route('communication.index') }}" class="block p-3 hover:bg-slate-50 transition">
-                <p class="text-xs font-semibold text-slate-800">Fee Collection Summary</p>
-                <p class="text-[11px] text-slate-500 mt-0.5">Today's collection report is ready.</p>
-                <span class="text-[10px] text-slate-400 mt-1 block">5 minutes ago</span>
-              </a>
-              <a href="{{ route('attendance.index') }}" class="block p-3 hover:bg-slate-50 transition">
-                <p class="text-xs font-semibold text-slate-800">Attendance Alert</p>
-                <p class="text-[11px] text-slate-500 mt-0.5">Class 10-A attendance marked successfully.</p>
-                <span class="text-[10px] text-slate-400 mt-1 block">1 hour ago</span>
-              </a>
-              <a href="{{ route('admissions.index') }}" class="block p-3 hover:bg-slate-50 transition">
-                <p class="text-xs font-semibold text-slate-800">New Admission Enquiry</p>
-                <p class="text-[11px] text-slate-500 mt-0.5">Parent submitted a new enquiry for Class 1.</p>
-                <span class="text-[10px] text-slate-400 mt-1 block">2 hours ago</span>
-              </a>
+              <template x-for="item in recent" :key="item.id">
+                <a :href="item.action_url" class="block p-3 hover:bg-slate-50 transition" :class="!item.read_at ? 'bg-indigo-50/30' : ''">
+                  <p class="text-xs font-semibold text-slate-800" x-text="item.title"></p>
+                  <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2" x-text="item.message"></p>
+                </a>
+              </template>
+              <div x-show="recent.length === 0" class="p-6 text-center text-slate-400 text-xs">
+                No recent notifications.
+              </div>
             </div>
             <div class="p-2.5 bg-slate-50 border-t border-slate-100 text-center flex-shrink-0">
-              <a href="{{ route('communication.index') }}" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">View All Communications &rarr;</a>
+              <a href="{{ route('activities.my-day') }}" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Open My Day Cockpit &rarr;</a>
             </div>
           </div>
         </div>

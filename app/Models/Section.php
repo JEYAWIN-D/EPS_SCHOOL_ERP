@@ -50,8 +50,14 @@ class Section extends Model
 
     protected static function booted(): void
     {
-        static::saved(fn() => Cache::forget('all_sections_list'));
-        static::deleted(fn() => Cache::forget('all_sections_list'));
+        static::saved(function() {
+            Cache::forget('all_sections_list');
+            Cache::forget('active_classes_with_sections_list');
+        });
+        static::deleted(function() {
+            Cache::forget('all_sections_list');
+            Cache::forget('active_classes_with_sections_list');
+        });
     }
 }
 

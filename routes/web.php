@@ -49,6 +49,8 @@ Route::post('/pay/fee/{classId}', [PublicFeePaymentController::class, 'processPa
 Route::get('/visitor-card/view/{token}',   [\App\Http\Controllers\Public\VisitorCardController::class, 'viewPass'])->name('public.visitor-card.view');
 Route::get('/visitor-card/verify/{token}', [\App\Http\Controllers\Public\VisitorCardController::class, 'verifyPass'])->name('public.visitor-card.verify');
 
+// ── Public Gate Visitor Pass QR Verification (no auth) ────
+Route::get('/gate/verify/{token}', [\App\Http\Controllers\Admin\GateController::class, 'verifyPass'])->name('gate.verify');
 
 // ── Authenticated routes ──────────────────────────────────
 Route::middleware(['auth'])->group(function () {
@@ -1091,22 +1093,48 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/photos/{photoId}', [\App\Http\Controllers\Admin\EventController::class, 'deletePhoto'])->name('photos.delete');
     });
 
+    // ── Module 15b — Official Circulars & Orders ────────────────
+    Route::prefix('circulars')->name('circulars.')->group(function () {
+        Route::get('/',                           [\App\Http\Controllers\Admin\CircularOrderController::class, 'index'])->name('index');
+        Route::get('/create',                     [\App\Http\Controllers\Admin\CircularOrderController::class, 'create'])->name('create');
+        Route::post('/',                          [\App\Http\Controllers\Admin\CircularOrderController::class, 'store'])->name('store');
+        Route::get('/{id}',                       [\App\Http\Controllers\Admin\CircularOrderController::class, 'show'])->name('show');
+        Route::get('/{id}/edit',                  [\App\Http\Controllers\Admin\CircularOrderController::class, 'edit'])->name('edit');
+        Route::put('/{id}',                       [\App\Http\Controllers\Admin\CircularOrderController::class, 'update'])->name('update');
+        Route::delete('/{id}',                    [\App\Http\Controllers\Admin\CircularOrderController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/acknowledge',          [\App\Http\Controllers\Admin\CircularOrderController::class, 'acknowledge'])->name('acknowledge');
+        Route::post('/{id}/pin',                  [\App\Http\Controllers\Admin\CircularOrderController::class, 'togglePin'])->name('pin');
+    });
+    Route::get('/events/circulars', fn() => redirect()->route('circulars.index'));
+
     // ── Module 16 — Gate & Visitor Management ─────────────────
-    Route::middleware('permission:view gate')->prefix('gate')->name('gate.')->group(function () {
-        Route::get('/',              [\App\Http\Controllers\Admin\GateController::class, 'index'])->name('index');
-        Route::get('/create',        [\App\Http\Controllers\Admin\GateController::class, 'create'])->name('create');
-        Route::post('/',             [\App\Http\Controllers\Admin\GateController::class, 'store'])->name('store');
-        Route::get('/{id}/pass',     [\App\Http\Controllers\Admin\GateController::class, 'pass'])->name('pass');
-        Route::patch('/{id}/checkout',[\App\Http\Controllers\Admin\GateController::class, 'checkout'])->name('checkout');
-        Route::get('/report',        [\App\Http\Controllers\Admin\GateController::class, 'report'])->name('report');
-        Route::get('/blacklist',     [\App\Http\Controllers\Admin\GateController::class, 'blacklist'])->name('blacklist');
-        Route::post('/blacklist',    [\App\Http\Controllers\Admin\GateController::class, 'storeBlacklist'])->name('blacklist.store');
-        Route::patch('/blacklist/{id}/remove', [\App\Http\Controllers\Admin\GateController::class, 'removeBlacklist'])->name('blacklist.remove');
-        Route::get('/outpass',       [\App\Http\Controllers\Admin\GateController::class, 'outpass'])->name('outpass');
-        Route::get('/outpass/create',[\App\Http\Controllers\Admin\GateController::class, 'createOutpass'])->name('outpass.create');
-        Route::post('/outpass',      [\App\Http\Controllers\Admin\GateController::class, 'storeOutpass'])->name('outpass.store');
-        Route::patch('/outpass/{id}/return', [\App\Http\Controllers\Admin\GateController::class, 'returnOutpass'])->name('outpass.return');
-        Route::get('/verify/{token}',  [\App\Http\Controllers\Admin\GateController::class, 'verifyPass'])->name('verify')->withoutMiddleware('auth');
+    Route::prefix('gate')->name('gate.')->group(function () {
+        Route::middleware('permission:view gate')->group(function () {
+            Route::get('/',              [\App\Http\Controllers\Admin\GateController::class, 'index'])->name('index');
+            Route::get('/create',        [\App\Http\Controllers\Admin\GateController::class, 'create'])->name('create');
+            Route::post('/',             [\App\Http\Controllers\Admin\GateController::class, 'store'])->name('store');
+            Route::get('/scanner',       [\App\Http\Controllers\Admin\GateController::class, 'scanner'])->name('scanner');
+            Route::post('/scan-checkout',[\App\Http\Controllers\Admin\GateController::class, 'scanCheckout'])->name('scan-checkout');
+            Route::get('/lookup/students',[\App\Http\Controllers\Admin\GateController::class, 'lookupStudents'])->name('lookup.students');
+            Route::get('/lookup/hosts',  [\App\Http\Controllers\Admin\GateController::class, 'lookupHosts'])->name('lookup.hosts');
+            Route::get('/report',        [\App\Http\Controllers\Admin\GateController::class, 'report'])->name('report');
+            Route::get('/blacklist',     [\App\Http\Controllers\Admin\GateController::class, 'blacklist'])->name('blacklist');
+            Route::post('/blacklist',    [\App\Http\Controllers\Admin\GateController::class, 'storeBlacklist'])->name('blacklist.store');
+            Route::patch('/blacklist/{id}/remove', [\App\Http\Controllers\Admin\GateController::class, 'removeBlacklist'])->name('blacklist.remove');
+            Route::get('/outpass',       [\App\Http\Controllers\Admin\GateController::class, 'outpass'])->name('outpass');
+            Route::get('/outpass/create',[\App\Http\Controllers\Admin\GateController::class, 'createOutpass'])->name('outpass.create');
+            Route::post('/outpass',      [\App\Http\Controllers\Admin\GateController::class, 'storeOutpass'])->name('outpass.store');
+            Route::patch('/outpass/{id}/return', [\App\Http\Controllers\Admin\GateController::class, 'returnOutpass'])->name('outpass.return');
+            Route::get('/{id}',          [\App\Http\Controllers\Admin\GateController::class, 'show'])->name('show');
+            Route::get('/{id}/pass',     [\App\Http\Controllers\Admin\GateController::class, 'pass'])->name('pass');
+            Route::patch('/{id}/checkout',[\App\Http\Controllers\Admin\GateController::class, 'checkout'])->name('checkout');
+        });
+
+        // Host Approval & Rejection endpoints (accessible by authenticated staff & gatekeepers)
+        Route::middleware('auth')->group(function () {
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\GateController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject',  [\App\Http\Controllers\Admin\GateController::class, 'reject'])->name('reject');
+        });
     });
 
     // ── Module 18 — Alumni Management ─────────────────────────
@@ -1215,6 +1243,27 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/settings/notification-templates',    [App\Http\Controllers\Admin\SettingsController::class, 'notificationTemplates'])->name('settings.notification-templates');
     Route::post('/settings/notification-templates',   [App\Http\Controllers\Admin\SettingsController::class, 'saveNotificationTemplate'])->name('settings.notification-templates.save');
 
+    // ── Books & Notes Management (Settings → Books & Notes) ──────
+    Route::get('/settings/books-notes', [App\Http\Controllers\Admin\BooksNotesController::class, 'index'])->name('settings.books-notes.index');
+    Route::get('/settings/books-notes/slip/{studentId}', [App\Http\Controllers\Admin\BooksNotesController::class, 'slip'])->name('settings.books-notes.slip');
+    Route::prefix('api/books-notes')->name('api.books-notes.')->group(function () {
+        Route::get('/cards',                           [App\Http\Controllers\Admin\BooksNotesController::class, 'apiCards'])->name('cards');
+        Route::get('/checklist',                       [App\Http\Controllers\Admin\BooksNotesController::class, 'apiChecklist'])->name('checklist');
+        Route::get('/distribution/summary',            [App\Http\Controllers\Admin\BooksNotesController::class, 'apiDistributionSummary'])->name('distribution.summary');
+        Route::get('/distribution/students',           [App\Http\Controllers\Admin\BooksNotesController::class, 'apiDistributionStudents'])->name('distribution.students');
+        Route::get('/distribution/search-students',    [App\Http\Controllers\Admin\BooksNotesController::class, 'apiSearchStudents'])->name('distribution.search-students');
+        Route::get('/distribution/student/{studentId}',[App\Http\Controllers\Admin\BooksNotesController::class, 'apiStudentChecklist'])->name('distribution.student');
+        Route::post('/distribution/issue-item',        [App\Http\Controllers\Admin\BooksNotesController::class, 'apiIssueItem'])->name('distribution.issue-item');
+        Route::post('/distribution/issue-all/{studentId}', [App\Http\Controllers\Admin\BooksNotesController::class, 'apiIssueAll'])->name('distribution.issue-all');
+        Route::get('/',                                [App\Http\Controllers\Admin\BooksNotesController::class, 'apiList'])->name('index');
+        Route::post('/',                               [App\Http\Controllers\Admin\BooksNotesController::class, 'apiStore'])->name('store');
+        Route::get('/{id}',                            [App\Http\Controllers\Admin\BooksNotesController::class, 'apiShow'])->name('show');
+        Route::put('/{id}',                            [App\Http\Controllers\Admin\BooksNotesController::class, 'apiUpdate'])->name('update');
+        Route::delete('/{id}',                         [App\Http\Controllers\Admin\BooksNotesController::class, 'apiDestroy'])->name('destroy');
+        Route::patch('/{id}/status',                   [App\Http\Controllers\Admin\BooksNotesController::class, 'apiToggleStatus'])->name('status');
+    });
+    Route::get('/api/academic-groups', [App\Http\Controllers\Admin\BooksNotesController::class, 'apiGroups'])->name('api.academic-groups');
+
     // API helpers
     Route::get('/api/sections', function (\Illuminate\Http\Request $r) {
         $sections = \App\Models\Section::where('class_id', $r->class_id)
@@ -1222,6 +1271,124 @@ Route::middleware(['auth'])->group(function () {
             ->get(['id', 'name']);
         return response()->json($sections);
     })->name('api.sections');
+
+    // ── Unified Activity Hub Module (Notices, Events, Meetings, Tasks, Calendar, Approvals) ──
+    Route::prefix('activities')->name('activities.')->group(function () {
+        Route::get('/my-day',     [\App\Http\Controllers\Admin\ActivityHubController::class, 'myDay'])->name('my-day');
+        Route::get('/calendar',   [\App\Http\Controllers\Admin\ActivityHubController::class, 'calendar'])->name('calendar');
+        Route::get('/approvals',  [\App\Http\Controllers\Admin\ActivityHubController::class, 'approvals'])->name('approvals');
+        Route::get('/reports',    [\App\Http\Controllers\Admin\ActivityHubController::class, 'reports'])->name('reports');
+
+        // Notices
+        Route::prefix('notices')->name('notices.')->group(function () {
+            Route::get('/',        [\App\Http\Controllers\Admin\ActivityHubController::class, 'notices'])->name('index');
+            Route::get('/create',  [\App\Http\Controllers\Admin\ActivityHubController::class, 'createNotice'])->name('create');
+            Route::get('/{id}',    [\App\Http\Controllers\Admin\ActivityHubController::class, 'showNotice'])->name('show');
+        });
+
+        // Events
+        Route::prefix('events')->name('events.')->group(function () {
+            Route::get('/',        [\App\Http\Controllers\Admin\ActivityHubController::class, 'events'])->name('index');
+            Route::get('/create',  [\App\Http\Controllers\Admin\ActivityHubController::class, 'createEvent'])->name('create');
+            Route::get('/{id}',    [\App\Http\Controllers\Admin\ActivityHubController::class, 'showEvent'])->name('show');
+        });
+
+        // Meetings
+        Route::prefix('meetings')->name('meetings.')->group(function () {
+            Route::get('/',        [\App\Http\Controllers\Admin\ActivityHubController::class, 'meetings'])->name('index');
+            Route::get('/create',  [\App\Http\Controllers\Admin\ActivityHubController::class, 'createMeeting'])->name('create');
+            Route::get('/{id}',    [\App\Http\Controllers\Admin\ActivityHubController::class, 'showMeeting'])->name('show');
+        });
+
+        // Tasks
+        Route::prefix('tasks')->name('tasks.')->group(function () {
+            Route::get('/',        [\App\Http\Controllers\Admin\ActivityHubController::class, 'tasks'])->name('index');
+            Route::get('/create',  [\App\Http\Controllers\Admin\ActivityHubController::class, 'createTask'])->name('create');
+            Route::get('/{id}',    [\App\Http\Controllers\Admin\ActivityHubController::class, 'showTask'])->name('show');
+        });
+    });
+
+    // ── Activity Hub REST APIs ────────────────────────────────
+    Route::prefix('api')->name('api.')->group(function () {
+        // Notices API
+        Route::prefix('notices')->name('notices.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\NoticeApiController::class, 'index'])->name('index');
+            Route::post('/',                       [\App\Http\Controllers\Api\NoticeApiController::class, 'store'])->name('store');
+            Route::get('/{id}',                    [\App\Http\Controllers\Api\NoticeApiController::class, 'show'])->name('show');
+            Route::patch('/{id}',                  [\App\Http\Controllers\Api\NoticeApiController::class, 'update'])->name('update');
+            Route::post('/{id}/submit',            [\App\Http\Controllers\Api\NoticeApiController::class, 'submitForApproval'])->name('submit');
+            Route::post('/{id}/approve',           [\App\Http\Controllers\Api\NoticeApiController::class, 'approve'])->name('approve');
+            Route::post('/{id}/publish',           [\App\Http\Controllers\Api\NoticeApiController::class, 'publish'])->name('publish');
+            Route::post('/{id}/acknowledge',       [\App\Http\Controllers\Api\NoticeApiController::class, 'acknowledge'])->name('acknowledge');
+            Route::get('/{id}/acknowledgements',   [\App\Http\Controllers\Api\NoticeApiController::class, 'acknowledgements'])->name('acknowledgements');
+        });
+
+        // Circulars & Official Orders API
+        Route::prefix('circulars')->name('circulars.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\CircularApiController::class, 'index'])->name('index');
+            Route::post('/',                       [\App\Http\Controllers\Api\CircularApiController::class, 'store'])->name('store');
+            Route::get('/{id}',                    [\App\Http\Controllers\Api\CircularApiController::class, 'show'])->name('show');
+            Route::post('/{id}/acknowledge',       [\App\Http\Controllers\Api\CircularApiController::class, 'acknowledge'])->name('acknowledge');
+            Route::delete('/{id}',                 [\App\Http\Controllers\Api\CircularApiController::class, 'destroy'])->name('destroy');
+        });
+
+        // Events API
+        Route::prefix('events')->name('events.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\EventApiController::class, 'index'])->name('index');
+            Route::post('/',                       [\App\Http\Controllers\Api\EventApiController::class, 'store'])->name('store');
+            Route::get('/{id}',                    [\App\Http\Controllers\Api\EventApiController::class, 'show'])->name('show');
+            Route::patch('/{id}',                  [\App\Http\Controllers\Api\EventApiController::class, 'update'])->name('update');
+            Route::post('/{id}/approve',           [\App\Http\Controllers\Api\EventApiController::class, 'approve'])->name('approve');
+            Route::post('/{id}/participants',      [\App\Http\Controllers\Api\EventApiController::class, 'addParticipants'])->name('participants');
+            Route::post('/{id}/attendance',        [\App\Http\Controllers\Api\EventApiController::class, 'recordAttendance'])->name('attendance');
+            Route::post('/{id}/complete',          [\App\Http\Controllers\Api\EventApiController::class, 'complete'])->name('complete');
+            Route::delete('/{id}',                [\App\Http\Controllers\Api\EventApiController::class, 'destroy'])->name('destroy');
+        });
+
+        // Meetings API
+        Route::prefix('meetings')->name('meetings.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\MeetingApiController::class, 'index'])->name('index');
+            Route::post('/',                       [\App\Http\Controllers\Api\MeetingApiController::class, 'store'])->name('store');
+            Route::get('/{id}',                    [\App\Http\Controllers\Api\MeetingApiController::class, 'show'])->name('show');
+            Route::patch('/{id}',                  [\App\Http\Controllers\Api\MeetingApiController::class, 'update'])->name('update');
+            Route::post('/{id}/rsvp',              [\App\Http\Controllers\Api\MeetingApiController::class, 'rsvp'])->name('rsvp');
+            Route::post('/{id}/attendance',        [\App\Http\Controllers\Api\MeetingApiController::class, 'recordAttendance'])->name('attendance');
+            Route::post('/{id}/minutes',           [\App\Http\Controllers\Api\MeetingApiController::class, 'recordMinutes'])->name('minutes');
+            Route::post('/{id}/action-items',      [\App\Http\Controllers\Api\MeetingApiController::class, 'createActionItems'])->name('action-items');
+        });
+
+        // Tasks API
+        Route::prefix('tasks')->name('tasks.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\TaskApiController::class, 'index'])->name('index');
+            Route::post('/',                       [\App\Http\Controllers\Api\TaskApiController::class, 'store'])->name('store');
+            Route::get('/{id}',                    [\App\Http\Controllers\Api\TaskApiController::class, 'show'])->name('show');
+            Route::patch('/{id}',                  [\App\Http\Controllers\Api\TaskApiController::class, 'update'])->name('update');
+            Route::post('/{id}/updates',           [\App\Http\Controllers\Api\TaskApiController::class, 'postUpdate'])->name('updates');
+            Route::post('/{id}/submit',            [\App\Http\Controllers\Api\TaskApiController::class, 'submitForReview'])->name('submit');
+            Route::post('/{id}/review',            [\App\Http\Controllers\Api\TaskApiController::class, 'review'])->name('review');
+            Route::post('/{id}/reassign',          [\App\Http\Controllers\Api\TaskApiController::class, 'reassign'])->name('reassign');
+        });
+
+        // Calendar API
+        Route::prefix('calendar')->name('calendar.')->group(function () {
+            Route::get('/activities',              [\App\Http\Controllers\Api\CalendarApiController::class, 'activities'])->name('activities');
+            Route::get('/conflicts',               [\App\Http\Controllers\Api\CalendarApiController::class, 'conflicts'])->name('conflicts');
+        });
+
+        // Notifications API
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Api\NotificationApiController::class, 'index'])->name('index');
+            Route::get('/unread-count',            [\App\Http\Controllers\Api\NotificationApiController::class, 'unreadCount'])->name('unread-count');
+            Route::patch('/{id}/read',             [\App\Http\Controllers\Api\NotificationApiController::class, 'markAsRead'])->name('read');
+            Route::post('/mark-all-read',          [\App\Http\Controllers\Api\NotificationApiController::class, 'markAllAsRead'])->name('mark-all-read');
+        });
+
+        // Dashboard API
+        Route::prefix('dashboard')->name('dashboard.')->group(function () {
+            Route::get('/my-activities',           [\App\Http\Controllers\Api\DashboardApiController::class, 'myActivities'])->name('my-activities');
+            Route::get('/management-summary',      [\App\Http\Controllers\Api\DashboardApiController::class, 'managementSummary'])->name('management-summary');
+        });
+    });
 });
 
 // ── Module 11 — Parent & Student Portal ───────────────────────

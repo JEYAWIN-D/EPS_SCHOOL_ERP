@@ -31,7 +31,7 @@ class WarehouseController extends Controller
             ->orderBy('name')
             ->get();
 
-        $classes = Classes::active()->orderBy('numeric_value')->get();
+        $classes = Classes::active()->orderBy('sort_order')->orderBy('numeric_value')->get();
 
         $query = InventoryItem::with('category')
             ->when(!$request->show_inactive, fn($q) => $q->where('is_active', true));
@@ -380,7 +380,7 @@ class WarehouseController extends Controller
 
     public function admissionKitConfig(Request $request)
     {
-        $classes       = Classes::active()->orderBy('numeric_value')->get();
+        $classes       = Classes::active()->orderBy('sort_order')->orderBy('numeric_value')->get();
         $academicYear  = AcademicYear::current();
         $academicItems = InventoryItem::active()->academic()->orderBy('name')->get();
 

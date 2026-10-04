@@ -20,47 +20,54 @@ use App\Models\Student;
 use App\Models\StudentFeeCharge;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class HostelController extends Controller
 {
     public function index()
     {
-        $hostels = Hostel::withCount([
-            'rooms',
-            'rooms as occupied_count' => fn($q) => $q->where('status', 'full'),
-        ])->get();
+        $data = Cache::remember('hostel_index_overview', 60, function () {
+            $hostels = Hostel::withCount([
+                'rooms',
+                'rooms as occupied_count' => fn($q) => $q->where('status', 'full'),
+            ])->get();
 
-        $totalRooms    = HostelRoom::count();
-        $occupiedRooms = HostelRoom::where('status', 'full')->count();
-        $availableRooms = max(0, $totalRooms - $occupiedRooms);
-        $residents      = HostelAllotment::where('status', 'active')->count();
-        $occupancyPct   = $totalRooms > 0 ? round($occupiedRooms / $totalRooms * 100, 1) : 0;
+            $roomStats = DB::table('hostel_rooms')->selectRaw("
+                count(*) as total,
+                count(case when status = 'full' then 1 end) as occupied
+            ")->first();
 
-        $stats = compact('totalRooms', 'occupiedRooms', 'availableRooms', 'residents', 'occupancyPct');
+            $totalRooms     = (int) ($roomStats->total ?? 0);
+            $occupiedRooms  = (int) ($roomStats->occupied ?? 0);
+            $availableRooms = max(0, $totalRooms - $occupiedRooms);
+            $residents      = HostelAllotment::where('status', 'active')->count();
+            $occupancyPct   = $totalRooms > 0 ? round($occupiedRooms / $totalRooms * 100, 1) : 0;
 
-        $pendingComplaints = 0;
-        try {
-            $pendingComplaints = HostelComplaint::where('status', 'open')->count();
-        } catch (\Exception $e) {}
+            $stats = compact('totalRooms', 'occupiedRooms', 'availableRooms', 'residents', 'occupancyPct');
 
-        $pendingOutpasses = 0;
-        try {
-            $pendingOutpasses = DB::table('hostel_outpasses')->where('status', 'pending')->count();
-        } catch (\Exception $e) {}
+            $pendingComplaints = 0;
+            try {
+                $pendingComplaints = HostelComplaint::where('status', 'open')->count();
+            } catch (\Exception $e) {}
 
-        $overdueOutpasses = 0;
-        try {
-            $overdueOutpasses = DB::table('hostel_outpasses')
-                ->where('status', 'approved')
-                ->where('return_date', '<', today()->toDateString())
-                ->count();
-        } catch (\Exception $e) {}
+            $pendingOutpasses = 0;
+            try {
+                $pendingOutpasses = DB::table('hostel_outpasses')->where('status', 'pending')->count();
+            } catch (\Exception $e) {}
 
-        return view('hostel.index', compact(
-            'hostels', 'stats',
-            'pendingComplaints', 'pendingOutpasses', 'overdueOutpasses'
-        ));
+            $overdueOutpasses = 0;
+            try {
+                $overdueOutpasses = DB::table('hostel_outpasses')
+                    ->where('status', 'approved')
+                    ->where('return_date', '<', today()->toDateString())
+                    ->count();
+            } catch (\Exception $e) {}
+
+            return compact('hostels', 'stats', 'pendingComplaints', 'pendingOutpasses', 'overdueOutpasses');
+        });
+
+        return view('hostel.index', $data);
     }
 
     public function storeBuilding(Request $request)

@@ -34,7 +34,13 @@ class AdmissionController extends Controller
         $yearId = (int) ($academicYear?->id ?? 0);
 
         return Cache::remember("admission_fee_structure_data_{$yearId}", 3600, function () use ($academicYear) {
-            $classes = Classes::with('sections')->active()->orderBy('numeric_value')->get();
+            $classes = Classes::with('sections')
+                ->active()
+                ->orderBy('sort_order')
+                ->orderBy('numeric_value')
+                ->get()
+                ->unique('name')
+                ->values();
 
             $enquiryCounts = Enquiry::selectRaw('class_id, count(*) as total')
                 ->groupBy('class_id')
@@ -412,8 +418,12 @@ class AdmissionController extends Controller
             'emis_slip'             => 'Previous EMIS / PEN Number Slip',
         ];
 
+        // Fetch academic years and groups for Books & Notes auto-checklist
+        $academicYears = \App\Models\AcademicYear::orderByDesc('is_current')->orderByDesc('start_date')->get();
+        $academicGroups = \App\Models\AcademicGroup::where('is_active', true)->orderBy('display_order')->get();
+
         return view('admissions.create', compact(
-            'classes', 'sections', 'academicYear', 'standardFees', 'activities', 'users', 'admissionKits',
+            'classes', 'sections', 'academicYear', 'academicYears', 'academicGroups', 'standardFees', 'activities', 'users', 'admissionKits',
             'transportRoutes', 'concessionTypes', 'officialDocChecklist'
         ));
     }
@@ -1332,6 +1342,45 @@ class AdmissionController extends Controller
                 'is_inventory_issued' => true,
                 'status'              => $enquiryStatus,
             ]);
+
+            // Save immutable Books & Notes checklist snapshot for this admission
+            try {
+                $bookNoteService = app(\App\Services\BookNoteService::class);
+                $bookNoteGroupId = null;
+                if ($request->filled('book_note_group_id')) {
+                    $bookNoteGroupId = (int) $request->book_note_group_id;
+                } elseif ($request->filled('academic_group_id')) {
+                    $bookNoteGroupId = (int) $request->academic_group_id;
+                } elseif ($request->filled('stream_group')) {
+                    $stStr = strtoupper($request->stream_group);
+                    if (str_contains($stStr, 'ACCOUNT') || str_contains($stStr, 'COMMERCE') || str_contains($stStr, 'GROUP C')) {
+                        $bookNoteGroupId = \App\Models\AcademicGroup::where('code', 'ACCOUNTS')->value('id');
+                    } elseif (str_contains($stStr, 'CS') || str_contains($stStr, 'COMPUTER')) {
+                        $bookNoteGroupId = \App\Models\AcademicGroup::where('code', 'CS')->value('id');
+                    } elseif (str_contains($stStr, 'BIO') || str_contains($stStr, 'GROUP A') || str_contains($stStr, 'GROUP B')) {
+                        $bookNoteGroupId = \App\Models\AcademicGroup::where('code', 'BIO')->value('id') ?? \App\Models\AcademicGroup::where('code', 'BIO_CS')->value('id');
+                    }
+                }
+
+                $targetYearId = $request->filled('academic_year_id') ? (int)$request->academic_year_id : ($currentYear?->id ?? 0);
+                $issuedIds = $request->input('issued_book_note_ids');
+                $studentGender = $request->input('gender') ?: $student->gender;
+                if ($targetYearId && $request->class_id) {
+                    $bookNoteService->snapshotForAdmission(
+                        $targetYearId,
+                        (int)$request->class_id,
+                        $bookNoteGroupId,
+                        $student->id,
+                        $student->id,
+                        $enquiry->id,
+                        is_array($issuedIds) ? $issuedIds : null,
+                        \Illuminate\Support\Facades\Auth::id(),
+                        $studentGender
+                    );
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Books & Notes admission snapshot error: " . $e->getMessage());
+            }
         });
 
         $successMsg = $this->requireApprovalWorkflow

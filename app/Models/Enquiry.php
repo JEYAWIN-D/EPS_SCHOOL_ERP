@@ -103,4 +103,9 @@ class Enquiry extends Model
             default      => ucfirst($this->status),
         };
     }
+
+    public function bookNoteItems(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\AdmissionBookNoteItem::class, 'enquiry_id');
+    }
 }

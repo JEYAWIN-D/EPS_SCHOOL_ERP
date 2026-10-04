@@ -1,0 +1,31 @@
+name: Auto Deploy to Live Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to Live Server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Hostinger VPS Deployment
+        run: |
+          echo "Sending deployment trigger to live server..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "X-Deploy-Token: dasa_eps_live_deploy_2026" \
+            https://eps.dasatech.in/api/deploy-webhook)
+          
+          HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n 1)
+
+          echo "Response Body: $HTTP_BODY"
+          echo "HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Deployment failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Deployment successfully triggered!"

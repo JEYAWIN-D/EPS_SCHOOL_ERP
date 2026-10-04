@@ -1,0 +1,208 @@
+openapi: 3.0.3
+info:
+  title: School ERP Activity Hub API
+  description: Production-grade REST API specification for Notices, Events, Meetings, Tasks, Unified Calendar, and Notifications in DC Innovision School ERP.
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8000/api
+    description: Local ERP API
+  - url: https://eps.dasatech.in/api
+    description: Production Live Server
+paths:
+  /notices:
+    get:
+      summary: List targeted notices
+      description: Returns paginated notices filtered by priority, status, and role-based audience permissions.
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: priority
+          in: query
+          schema: { type: string, enum: [low, normal, high, urgent] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, pending_approval, published, expired, archived] }
+      responses:
+        '200':
+          description: Paginated notices
+    post:
+      summary: Create notice
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content, target_audience, publish_date]
+              properties:
+                title: { type: string }
+                content: { type: string }
+                notice_type: { type: string }
+                priority: { type: string, enum: [low, normal, high, urgent] }
+                target_audience: { type: string, enum: [all, staff, students, parents, class_specific] }
+                target_class_id: { type: integer }
+                publish_date: { type: string, format: date }
+                expiry_date: { type: string, format: date }
+                requires_acknowledgement: { type: boolean }
+                requires_approval: { type: boolean }
+      responses:
+        '201': { description: Notice created }
+        '422': { description: Validation error }
+
+  /notices/{id}/acknowledge:
+    post:
+      summary: Acknowledge notice
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                feedback_note: { type: string }
+      responses:
+        '200': { description: Acknowledged successfully }
+
+  /events:
+    get:
+      summary: List events
+      security:
+        - sessionAuth: []
+      responses:
+        '200': { description: List of school events }
+    post:
+      summary: Create and schedule event
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, event_type, event_date]
+              properties:
+                name: { type: string }
+                event_type: { type: string, enum: [academic, cultural, sports, holiday, meeting, other] }
+                event_date: { type: string, format: date }
+                start_time: { type: string }
+                end_time: { type: string }
+                venue: { type: string }
+                budget_estimated: { type: number }
+                audience: { type: string }
+      responses:
+        '201': { description: Event scheduled }
+
+  /meetings:
+    get:
+      summary: List meetings
+      security:
+        - sessionAuth: []
+      responses:
+        '200': { description: Scheduled meetings }
+    post:
+      summary: Schedule meeting
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, meeting_type, start_time, end_time, attendees]
+              properties:
+                title: { type: string }
+                meeting_type: { type: string }
+                start_time: { type: string, format: date-time }
+                end_time: { type: string, format: date-time }
+                venue: { type: string }
+                meeting_link: { type: string }
+                attendees: { type: array, items: { type: integer } }
+      responses:
+        '201': { description: Meeting scheduled }
+
+  /tasks:
+    get:
+      summary: List tasks
+      security:
+        - sessionAuth: []
+      responses:
+        '200': { description: List of tasks }
+    post:
+      summary: Create and assign task
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, due_date, assignees]
+              properties:
+                title: { type: string }
+                priority: { type: string, enum: [low, normal, high, urgent] }
+                due_date: { type: string, format: date }
+                assignees: { type: array, items: { type: integer } }
+      responses:
+        '201': { description: Task assigned }
+
+  /calendar/activities:
+    get:
+      summary: Aggregate activities for calendar
+      parameters:
+        - name: month
+          in: query
+          schema: { type: integer }
+        - name: year
+          in: query
+          schema: { type: integer }
+      responses:
+        '200': { description: Consolidated activity events }
+
+  /calendar/conflicts:
+    get:
+      summary: Detect scheduling conflicts
+      parameters:
+        - name: start
+          in: query
+          required: true
+          schema: { type: string }
+        - name: end
+          in: query
+          required: true
+          schema: { type: string }
+        - name: venue
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { description: List of conflict warnings }
+
+  /notifications/unread-count:
+    get:
+      summary: Get unread notification badge count
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread_count: { type: integer }
+                  recent: { type: array }
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: dasa-eduerp-session

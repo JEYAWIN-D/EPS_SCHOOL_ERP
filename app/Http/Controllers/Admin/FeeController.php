@@ -111,7 +111,7 @@ class FeeController extends Controller
     public function structure()
     {
         $currentYear = AcademicYear::current();
-        $classes     = Classes::active()->get();
+        $classes     = Classes::activeCached();
         $feeHeads    = FeeHead::where('is_active', true)->get();
         $structures  = FeeStructure::with(['class', 'feeHead', 'academicYear'])
             ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))

@@ -96,64 +96,7 @@
     }
   }
 
-  var prefetchedUrls = new Set();
-  var hoverTimer = null;
-
-  function prefetchUrl(url) {
-    if (!url || prefetchedUrls.has(url)) return;
-    prefetchedUrls.add(url);
-
-    // 1. Try link rel=prefetch
-    try {
-      var link = document.createElement('link');
-      link.rel = 'prefetch';
-      link.href = url;
-      link.as = 'document';
-      document.head.appendChild(link);
-    } catch(e) {}
-
-    // 2. Fetch API with low priority
-    try {
-      if (window.fetch) {
-        fetch(url, { priority: 'low', credentials: 'same-origin' }).catch(function() {});
-      }
-    } catch(e) {}
-  }
-
-  // Hover-intent prefetch (50ms hover delay)
-  document.addEventListener('mouseover', function(e) {
-    var a = e.target.closest('a');
-    var validUrl = isEligibleLink(a);
-    if (!validUrl || prefetchedUrls.has(validUrl)) return;
-
-    clearTimeout(hoverTimer);
-    hoverTimer = setTimeout(function() {
-      prefetchUrl(validUrl);
-    }, 50);
-  }, { passive: true });
-
-  document.addEventListener('mouseout', function(e) {
-    clearTimeout(hoverTimer);
-  }, { passive: true });
-
-  // Instant prefetch on touchstart / pointerdown (before click fires)
-  document.addEventListener('touchstart', function(e) {
-    var a = e.target.closest('a');
-    var validUrl = isEligibleLink(a);
-    if (validUrl) {
-      prefetchUrl(validUrl);
-    }
-  }, { passive: true });
-
-  document.addEventListener('pointerdown', function(e) {
-    var a = e.target.closest('a');
-    var validUrl = isEligibleLink(a);
-    if (validUrl) {
-      prefetchUrl(validUrl);
-    }
-  }, { passive: true });
-
-  // Visual loader on click
+  // Visual loader only when the user deliberately clicks a valid link
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a');
     var validUrl = isEligibleLink(a);

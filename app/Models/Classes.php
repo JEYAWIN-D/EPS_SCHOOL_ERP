@@ -88,10 +88,25 @@ class Classes extends Model
         });
     }
 
+    public static function activeWithSectionsCached()
+    {
+        return Cache::remember('active_classes_with_sections_list', 3600, function () {
+            return static::with(['sections' => fn($q) => $q->where('is_active', true)->orderBy('name', 'asc')])
+                ->active()
+                ->get();
+        });
+    }
+
+    public static function clearClassCache(): void
+    {
+        Cache::forget('active_classes_list');
+        Cache::forget('active_classes_with_sections_list');
+    }
+
     protected static function booted(): void
     {
-        static::saved(fn() => Cache::forget('active_classes_list'));
-        static::deleted(fn() => Cache::forget('active_classes_list'));
+        static::saved(fn() => static::clearClassCache());
+        static::deleted(fn() => static::clearClassCache());
     }
 }
 

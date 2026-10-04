@@ -173,6 +173,11 @@ class Student extends Model
         return $this->hasMany(\App\Models\StudentDocument::class);
     }
 
+    public function bookNoteItems(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\AdmissionBookNoteItem::class, 'student_id');
+    }
+
     public function getDocumentTokenAttribute($value): string
     {
         if (empty($value)) {

@@ -67,7 +67,7 @@
 @endpush
 
 @section('content')
-<div class="max-w-5xl mx-auto space-y-6 admission-form-wrapper" x-data="{
+<div class="max-w-5xl mx-auto space-y-6 admission-form-wrapper" x-init="initAdmission()" x-data="{
   classList: {{ json_encode($classes->map(fn($c) => ['id' => $c->id, 'name' => $c->name])) }},
   sectionsList: {{ json_encode($sections->map(fn($s) => ['id' => $s->id, 'class_id' => $s->class_id, 'name' => $s->name])) }},
   standardFees: {{ json_encode($standardFees) }},
@@ -76,6 +76,134 @@
   transportRoutesData: {{ json_encode($transportRoutes ?? []) }},
   selectedClassId: '{{ request("class_id", "") }}',
   selectedSectionId: '',
+
+  // Books & Notes Master Checklist State
+  academicYearId: '{{ $academicYear?->id ?? "" }}',
+  academicYearsList: {{ json_encode(($academicYears ?? collect([$academicYear]))->map(fn($y) => ['id' => $y->id, 'name' => $y->name, 'is_current' => $y->is_current])) }},
+  academicGroupsList: {{ json_encode(($academicGroups ?? collect([]))->map(fn($g) => ['id' => $g->id, 'name' => $g->name, 'code' => $g->code])) }},
+  selectedBookNoteGroupId: '',
+  selectedGender: '{{ old('gender', '') }}',
+  bookNoteList: { books: [], notes: [], uniforms: [] },
+  bookNoteLoading: false,
+  curriculumTab: 'all', // 'all' | 'books' | 'notes' | 'uniforms'
+  curriculumExpanded: false,
+
+  get selectedYearName() {
+    let y = this.academicYearsList.find(x => x.id == this.academicYearId);
+    return y ? y.name : '2026–2027';
+  },
+
+  async fetchBooksNotesChecklist() {
+    if (!this.selectedClassId) {
+      this.bookNoteList = { books: [], notes: [], uniforms: [] };
+      return;
+    }
+    if (this.isSeniorSecondary && !this.selectedBookNoteGroupId) {
+      this.bookNoteList = { books: [], notes: [], uniforms: [] };
+      return;
+    }
+    this.bookNoteLoading = true;
+    try {
+      let params = new URLSearchParams({
+        academicYearId: this.academicYearId,
+        classId: this.selectedClassId,
+      });
+      if (this.selectedGender) {
+        params.append('gender', this.selectedGender);
+      }
+      if (this.selectedBookNoteGroupId) {
+        params.append('groupId', this.selectedBookNoteGroupId);
+      }
+      let res = await fetch(`{{ route('api.books-notes.checklist') }}?${params.toString()}`, {
+        headers: { 'Accept': 'application/json' }
+      });
+      let json = await res.json();
+      if (json.success) {
+        this.bookNoteList = {
+          books: (json.books || []).map(b => ({ ...b, is_issued: true })),
+          notes: (json.notes || []).map(n => ({ ...n, is_issued: true })),
+          uniforms: (json.uniforms || []).map(u => ({ ...u, is_issued: true })),
+        };
+      } else {
+        this.bookNoteList = { books: [], notes: [], uniforms: [] };
+      }
+    } catch (e) {
+      console.error('Error fetching books & notes checklist:', e);
+      this.bookNoteList = { books: [], notes: [], uniforms: [] };
+    } finally {
+      this.bookNoteLoading = false;
+    }
+  },
+
+  setAllBookNoteIssuance(issued) {
+    this.bookNoteList.books.forEach(b => b.is_issued = issued);
+    this.bookNoteList.notes.forEach(n => n.is_issued = issued);
+    (this.bookNoteList.uniforms || []).forEach(u => u.is_issued = issued);
+  },
+
+  get bookNoteIssuedTotalUnits() {
+    let b = this.bookNoteList.books.filter(x => x.is_issued).reduce((a,c) => a + (c.quantity || 1), 0);
+    let n = this.bookNoteList.notes.filter(x => x.is_issued).reduce((a,c) => a + (c.quantity || 1), 0);
+    let u = (this.bookNoteList.uniforms || []).filter(x => x.is_issued).reduce((a,c) => a + (c.quantity || 1), 0);
+    return b + n + u;
+  },
+
+  get bookNotePendingTotalUnits() {
+    let b = this.bookNoteList.books.filter(x => !x.is_issued).reduce((a,c) => a + (c.quantity || 1), 0);
+    let n = this.bookNoteList.notes.filter(x => !x.is_issued).reduce((a,c) => a + (c.quantity || 1), 0);
+    let u = (this.bookNoteList.uniforms || []).filter(x => !x.is_issued).reduce((a,c) => a + (c.quantity || 1), 0);
+    return b + n + u;
+  },
+
+  get bookNoteTotalUnits() {
+    let b = this.bookNoteList.books.reduce((a,c) => a + (c.quantity || 1), 0);
+    let n = this.bookNoteList.notes.reduce((a,c) => a + (c.quantity || 1), 0);
+    let u = (this.bookNoteList.uniforms || []).reduce((a,c) => a + (c.quantity || 1), 0);
+    return b + n + u;
+  },
+
+  syncGroupFromStream() {
+    if (this.isSeniorSecondary) {
+      let st = (this.selectedStreamGroup || '').toUpperCase();
+      let matchGrp = null;
+      if (st.includes('GROUP C') || st.includes('ACCOUNT') || st.includes('COMMERCE') || st.includes('CA')) {
+        matchGrp = this.academicGroupsList.find(g => (g.code && g.code.includes('ACCOUNT')) || g.name.includes('ACCOUNT'));
+      } else if (st.includes('CS') || st.includes('COMPUTER') || st.includes('ENGINEERING')) {
+        matchGrp = this.academicGroupsList.find(g => (g.code && g.code === 'CS') || g.name.includes('CS'));
+      } else if (st.includes('GROUP A') || st.includes('GROUP B') || st.includes('BIOLOGY') || st.includes('RESEARCH') || st.includes('MEDICAL') || st.includes('BIO')) {
+        matchGrp = this.academicGroupsList.find(g => (g.code && g.code.includes('BIO')) || g.name.includes('BIO'));
+      }
+      if (matchGrp) {
+        this.selectedBookNoteGroupId = matchGrp.id;
+      }
+    } else {
+      this.selectedBookNoteGroupId = '';
+    }
+    this.fetchBooksNotesChecklist();
+  },
+
+  initAdmission() {
+    this.$watch('selectedClassId', () => {
+      this.syncGroupFromStream();
+      this.fetchBooksNotesChecklist();
+    });
+    this.$watch('selectedGender', () => {
+      this.fetchBooksNotesChecklist();
+    });
+    this.$watch('selectedStreamGroup', () => {
+      this.syncGroupFromStream();
+    });
+    this.$watch('selectedBookNoteGroupId', () => {
+      this.fetchBooksNotesChecklist();
+    });
+    this.$watch('academicYearId', () => {
+      this.fetchBooksNotesChecklist();
+    });
+    if (this.selectedClassId) {
+      this.syncGroupFromStream();
+      this.fetchBooksNotesChecklist();
+    }
+  },
 
   // After School Program (ASP) State — replaces Hostel per school requirement
   aspRequired: false,
@@ -685,56 +813,79 @@
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
         <div>
           <div class="flex items-center gap-3">
-            <span class="w-9 h-9 rounded-2xl bg-[#8C2826] text-white flex items-center justify-center font-extrabold text-sm shadow-sm">1</span>
-            <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Student Profile &amp; Academic Placement</h2>
+            <span class="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#8C2826] to-[#A83230] text-white flex items-center justify-center font-black text-base shadow-sm ring-4 ring-[#8C2826]/10">1</span>
+            <div>
+              <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Student Profile &amp; Academic Placement</h2>
+              <p class="text-xs text-slate-500 font-medium mt-0.5">Personal identity, vital records, curriculum allocation, and official government registration identifiers.</p>
+            </div>
           </div>
-          <p class="text-xs text-slate-500 font-medium mt-1.5 pl-12">Personal identity, vital records, curriculum allocation, and official government registration identifiers.</p>
         </div>
-        <span class="step-badge self-start sm:self-auto text-xs font-bold text-[#8C2826] bg-[#FFF5F5] px-4 py-1.5 rounded-full border border-[#FECACA] shadow-2xs">Step 1 of 3</span>
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FFF5F5] border border-[#FECACA] shadow-2xs self-start sm:self-auto">
+          <span class="w-2 h-2 rounded-full bg-[#8C2826] animate-pulse"></span>
+          <span class="text-xs font-extrabold text-[#8C2826] tracking-wide">Step 1 of 3</span>
+        </div>
       </div>
 
-      {{-- Section 1.1: Photograph & Student Name --}}
-      <div class="space-y-6">
-        <div class="flex flex-col md:flex-row items-center md:items-start gap-6 p-6 rounded-2xl bg-slate-50/70 border border-slate-200/90">
-          {{-- Passport Photo Container --}}
-          <div class="relative group shrink-0">
-            <div class="w-32 h-36 rounded-2xl bg-white border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden shadow-xs transition group-hover:border-[#8C2826]">
+      {{-- Section 1.1: Student Legal Identity & Photograph Card --}}
+      <div class="p-6 sm:p-8 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-6">
+        {{-- Section Subhead --}}
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-[#FFF5F5] text-[#8C2826] border border-[#FECACA] flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Student Legal Identity &amp; Photograph</h3>
+              <p class="text-[11px] text-slate-500 font-medium">Official student identity as documented in birth certificate or Aadhaar</p>
+            </div>
+          </div>
+          <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200/80 self-start sm:self-auto">
+            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            Official Record
+          </span>
+        </div>
+
+        {{-- Row 1: Student Passport Photo Uploader Bar --}}
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row items-center gap-5">
+          {{-- Passport Photo Preview Frame --}}
+          <div class="relative shrink-0 cursor-pointer group" @click="$refs.studentPhotoInput.click()">
+            <div class="w-24 h-28 rounded-2xl bg-white border-2 border-dashed border-slate-300 group-hover:border-[#8C2826] flex items-center justify-center overflow-hidden shadow-xs transition-all duration-200">
               <template x-if="photoPreview">
-                <img :src="photoPreview" class="w-full h-full object-cover" alt="Student Passport Photo">
+                <div class="w-full h-full relative">
+                  <img :src="photoPreview" class="w-full h-full object-cover" alt="Student Passport Photo">
+                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                    <span>Change</span>
+                  </div>
+                </div>
               </template>
               <template x-if="!photoPreview">
-                <div class="text-center p-3 text-slate-400">
-                  <svg class="w-9 h-9 mx-auto text-slate-400 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                  <span class="text-[10px] font-bold uppercase tracking-wider block text-slate-500">Student Photo</span>
-                  <span class="text-[9px] text-slate-400 block mt-0.5">Passport Size</span>
+                <div class="text-center p-2 text-slate-400 group-hover:text-[#8C2826] transition-colors">
+                  <svg class="w-7 h-7 mx-auto text-slate-400 group-hover:text-[#8C2826] mb-1 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3" stroke-width="1.75"/></svg>
+                  <span class="text-[10px] font-bold block uppercase tracking-wider">Photo</span>
                 </div>
               </template>
             </div>
+
+            {{-- Remove Button if Uploaded --}}
             <template x-if="photoPreview">
-              <button type="button" @click="clearPhoto()" title="Remove photo"
-                      class="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md transition cursor-pointer">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+              <button type="button" @click.stop="clearPhoto()" title="Remove photo"
+                      class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-md transition cursor-pointer z-10">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             </template>
           </div>
 
-          {{-- Photo Action & Guidance --}}
-          <div class="flex-1 space-y-2.5 text-center md:text-left">
-            <div>
-              <div class="flex items-center justify-center md:justify-start gap-2">
-                <label class="block text-xs font-extrabold text-slate-900 uppercase tracking-wide">Student Passport Photograph</label>
-                <span class="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">Optional at Desk</span>
-              </div>
-              <p class="text-xs text-slate-500 leading-relaxed mt-1">Upload a clear formal color passport photograph against a plain background (JPEG, PNG &bull; max 3MB). Rendered on student ID card, academic register, and transfer records.</p>
+          {{-- Guidance & Actions --}}
+          <div class="flex-1 min-w-0 text-center sm:text-left space-y-2">
+            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              <label class="block text-xs font-extrabold text-slate-900 uppercase tracking-wide">Student Passport Photograph</label>
+              <span class="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">Optional at Desk</span>
             </div>
-
-            {{-- Hidden native file input --}}
-            <input type="file" id="student_photo_input" x-ref="studentPhotoInput" name="photo" accept="image/*"
-                   @change="handlePhotoChange($event)" class="hidden">
-
-            <div class="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-1">
+            <p class="text-xs text-slate-500 leading-relaxed">Upload a clear formal color passport photograph against a plain background (JPEG, PNG &bull; max 3MB). Rendered on student ID card, academic register, and transfer records.</p>
+            
+            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-1">
               <button type="button" @click="$refs.studentPhotoInput.click()"
-                      class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 shadow-xs hover:border-[#8C2826] transition cursor-pointer">
+                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 shadow-2xs hover:border-[#8C2826] transition cursor-pointer">
                 <svg class="w-4 h-4 text-[#8C2826]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 <span x-text="photoPreview ? 'Change Photograph' : 'Upload Photograph'"></span>
               </button>
@@ -750,33 +901,74 @@
             </div>
             @error('photo') <p class="text-xs text-rose-500 font-semibold">{{ $message }}</p> @enderror
           </div>
+
+          {{-- Hidden Native File Input --}}
+          <input type="file" id="student_photo_input" x-ref="studentPhotoInput" name="photo" accept="image/*"
+                 @change="handlePhotoChange($event)" class="hidden">
         </div>
 
-        {{-- First Name & Last Name (Balanced 2-Column Grid) --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {{-- Row 2: Student Full Legal Names (Balanced 2-Column Grid) --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-1">
           <div>
-            <label for="first_name" class="block text-xs font-bold text-slate-700 mb-2">First / Given Name <span class="text-rose-500">*</span></label>
-            <input type="text" id="first_name" name="first_name" required maxlength="50" value="{{ old('first_name') }}"
-                   placeholder="Student first name (e.g. Akash)"
-                   class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="first_name" class="block text-xs font-bold text-slate-800">
+                First / Given Name <span class="text-rose-500">*</span>
+              </label>
+              <span class="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">Required</span>
+            </div>
+            <div class="relative group/input">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-[#8C2826] transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+              </div>
+              <input type="text" id="first_name" name="first_name" required maxlength="50" value="{{ old('first_name') }}"
+                     placeholder="Student first name (e.g. Akash)"
+                     class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal hover:border-slate-300 focus:border-[#8C2826] focus:ring-4 focus:ring-[#8C2826]/10 transition shadow-2xs outline-none">
+            </div>
             @error('first_name') <p class="text-xs text-rose-500 mt-1.5 font-semibold">{{ $message }}</p> @enderror
             <p id="first_name_client_err" class="text-xs text-rose-500 mt-1.5 font-semibold hidden"></p>
           </div>
 
           <div>
-            <label for="last_name" class="block text-xs font-bold text-slate-700 mb-2">Last Name / Surname / Initial</label>
-            <input type="text" id="last_name" name="last_name" maxlength="50" value="{{ old('last_name') }}"
-                   placeholder="Surname or initial (e.g. A R)"
-                   class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="last_name" class="block text-xs font-bold text-slate-800">
+                Last Name / Surname / Initial
+              </label>
+              <span class="text-[10px] font-medium text-slate-400">Optional</span>
+            </div>
+            <div class="relative group/input">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-[#8C2826] transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+              </div>
+              <input type="text" id="last_name" name="last_name" maxlength="50" value="{{ old('last_name') }}"
+                     placeholder="Surname or initial (e.g. A R)"
+                     class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal hover:border-slate-300 focus:border-[#8C2826] focus:ring-4 focus:ring-[#8C2826]/10 transition shadow-2xs outline-none">
+            </div>
             @error('last_name') <p class="text-xs text-rose-500 mt-1.5 font-semibold">{{ $message }}</p> @enderror
             <p id="last_name_client_err" class="text-xs text-rose-500 mt-1.5 font-semibold hidden"></p>
           </div>
+        </div>
+
+        {{-- Row 3: Guidance Note Banner --}}
+        <div class="flex items-start gap-2.5 p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 text-xs font-medium leading-relaxed">
+          <svg class="w-4 h-4 text-[#8C2826] shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Please enter student name exactly as registered in official Municipal Birth Certificate or Aadhaar Card. Used for CBSE register, permanent transfer certificates, and grade cards.</span>
         </div>
       </div>
 
       {{-- Section 1.2: Date of Birth & Demographic Profile (Spacious 3-Column Grids) --}}
       <div class="pt-8 border-t border-slate-100 space-y-6">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Date of Birth &amp; Demographic Records</h3>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-rose-50 text-[#8C2826] border border-rose-100 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Date of Birth &amp; Demographic Profile</h3>
+              <p class="text-[11px] text-slate-500 font-medium">Vital statistics, computed admission age, and statutory community category</p>
+            </div>
+          </div>
+          <div class="hidden sm:block h-px bg-slate-100 flex-1 ml-4"></div>
+        </div>
 
         {{-- Row 1: DOB, Gender, Blood Group --}}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -787,8 +979,9 @@
               <div class="flex items-center gap-1.5">
                 <span x-show="calculatedAge" class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded-full border border-[#FECACA]" x-text="'Age: ' + calculatedAge"></span>
                 <button type="button" @click="dobMode = (dobMode === 'dropdown' ? 'text' : 'dropdown')"
-                        class="text-[10px] text-[#8C2826] hover:text-[#731E1C] font-semibold cursor-pointer underline">
-                  <span x-text="dobMode === 'dropdown' ? 'Type DD/MM/YYYY' : 'Use Selectors'"></span>
+                        class="inline-flex items-center gap-1 text-[10px] text-[#8C2826] hover:text-[#731E1C] font-bold cursor-pointer bg-[#FFF5F5] hover:bg-rose-100/60 px-2 py-0.5 rounded-md border border-[#FECACA] transition">
+                  <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                  <span x-text="dobMode === 'dropdown' ? 'Type Date' : 'Selectors'"></span>
                 </button>
               </div>
             </div>
@@ -841,7 +1034,7 @@
           {{-- Gender --}}
           <div>
             <label for="gender" class="block text-xs font-bold text-slate-700 mb-2">Gender <span class="text-rose-500">*</span></label>
-            <select id="gender" name="gender" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-700 bg-white">
+            <select id="gender" name="gender" x-model="selectedGender" @change="fetchBooksNotesChecklist()" required class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-700 bg-white">
               <option value="">Select gender</option>
               <option value="male" {{ old('gender') === 'male' ? 'selected' : '' }}>Male</option>
               <option value="female" {{ old('gender') === 'female' ? 'selected' : '' }}>Female</option>
@@ -940,10 +1133,31 @@
 
       {{-- Section 1.3: Class Enrollment & Stage Selection --}}
       <div class="pt-8 border-t border-slate-100 space-y-6">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Class Enrollment &amp; Academic Stage</h3>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Class Enrollment &amp; Academic Stage</h3>
+              <p class="text-[11px] text-slate-500 font-medium">Academic year, standard selection, section placement, and stage curriculum</p>
+            </div>
+          </div>
+          <div class="hidden sm:block h-px bg-slate-100 flex-1 ml-4"></div>
+        </div>
 
-        {{-- Class, Section & Enquiry Source (Spacious 3-Column Grid) --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {{-- Academic Year, Class, Section & Enquiry Source (Spacious 4-Column Grid) --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div>
+            <label for="academic_year_id" class="block text-xs font-bold text-slate-700 mb-2">Academic Year <span class="text-rose-500">*</span></label>
+            <select id="academic_year_id" name="academic_year_id" required x-model="academicYearId"
+                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-bold text-slate-900 bg-white">
+              <template x-for="y in academicYearsList" :key="y.id">
+                <option :value="y.id" :selected="y.id == academicYearId" x-text="y.name + (y.is_current ? ' (Current)' : '')"></option>
+              </template>
+            </select>
+          </div>
+
           <div>
             <label for="class_id" class="block text-xs font-bold text-slate-700 mb-2">Applying for Standard / Class <span class="text-rose-500">*</span></label>
             <select id="class_id" name="class_id" required x-model="selectedClassId" @change="selectedSectionId = ''"
@@ -1127,6 +1341,26 @@
                 <p class="text-slate-600 text-[11px] leading-relaxed">English, History, Political Science / Legal, Psychology, Entr / Economics</p>
               </div>
             </label>
+          </div>
+
+          {{-- Academic Group Selection for Books & Notes --}}
+          <div class="p-4 rounded-xl bg-white border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-extrabold text-slate-800 uppercase tracking-wide">Books &amp; Notes Checklist Group</span>
+                <span class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] border border-[#FECACA] px-2 py-0.5 rounded">Auto-synced from stream</span>
+              </div>
+              <p class="text-slate-500 text-[11px] mt-0.5">Determines the exact textbooks and notebook checklists prescribed for Grade XI &amp; XII</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <select name="book_note_group_id" x-model="selectedBookNoteGroupId" @change="fetchBooksNotesChecklist()"
+                      class="px-3.5 py-2 rounded-xl border border-slate-300 focus:border-[#8C2826] focus:ring-[#8C2826] text-xs font-bold text-slate-800 bg-slate-50">
+                <option value="">-- Select Academic Group --</option>
+                <template x-for="grp in academicGroupsList" :key="grp.id">
+                  <option :value="grp.id" :selected="grp.id == selectedBookNoteGroupId" x-text="grp.name"></option>
+                </template>
+              </select>
+            </div>
           </div>
 
           {{-- Class X Qualifying Board Information --}}
@@ -1363,9 +1597,21 @@
         </div>
       </div>
 
+
       {{-- Section 1.4: Official Government Registry & Uniform Sizing --}}
       <div class="pt-8 border-t border-slate-100 space-y-6">
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Official Identification &amp; Uniform Sizing Records</h3>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Official Identification &amp; Uniform Sizing Records</h3>
+              <p class="text-[11px] text-slate-500 font-medium">Aadhaar, EMIS PEN number, student email, and kit measurements</p>
+            </div>
+          </div>
+          <div class="hidden sm:block h-px bg-slate-100 flex-1 ml-4"></div>
+        </div>
 
         {{-- Row 1: Aadhaar, EMIS, Student Email (Balanced 3-Column Grid) --}}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -2111,89 +2357,430 @@
     </div>
 
     {{-- ══════════════════════════════════════════════════════════════════════ --}}
-    {{-- ── STEP 3: BOOKS PACKAGE, FEES, DOCUMENTS & ENROLLMENT ───────────── --}}
+    {{-- ── STEP 3: PRESCRIBED BOOKS, FEES, DOCUMENTS & ENROLLMENT ───────── --}}
     {{-- ══════════════════════════════════════════════════════════════════════ --}}
     <div id="section-billing" class="bg-white p-7 sm:p-10 lg:p-12 rounded-3xl border border-slate-200/90 shadow-sm space-y-9 print-card scroll-mt-24">
       {{-- Step Header --}}
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6">
         <div>
           <div class="flex items-center gap-3">
-            <span class="w-9 h-9 rounded-2xl bg-[#8C2826] text-white flex items-center justify-center font-extrabold text-sm shadow-sm">3</span>
-            <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Books Package, Fees, Documents &amp; Enrollment</h2>
+            <span class="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#8C2826] to-[#A83230] text-white flex items-center justify-center font-black text-base shadow-sm ring-4 ring-[#8C2826]/10">3</span>
+            <div>
+              <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Prescribed Books, Kits, Fees &amp; Billing</h2>
+              <p class="text-xs text-slate-500 font-medium mt-0.5">Prescribed statutory curriculum books, notebooks, fee concessions, documents, and fee collection terms.</p>
+            </div>
           </div>
-          <p class="text-xs text-slate-500 font-medium mt-1.5 pl-12">Official kit package, fee concessions, document verification checklist, and fee collection terms.</p>
         </div>
-        <span class="step-badge self-start sm:self-auto text-xs font-bold text-[#8C2826] bg-[#FFF5F5] px-4 py-1.5 rounded-full border border-[#FECACA] shadow-2xs">Step 3 of 3</span>
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#FFF5F5] border border-[#FECACA] shadow-2xs self-start sm:self-auto">
+          <span class="w-2 h-2 rounded-full bg-[#8C2826] animate-pulse"></span>
+          <span class="text-xs font-extrabold text-[#8C2826] tracking-wide">Step 3 of 3</span>
+        </div>
       </div>
 
-      {{-- Section 3.1: Standard Admission Kit & Academic Package --}}
+      {{-- Section 3.1: Prescribed Books, Notebooks & Academic Materials --}}
+      <div x-show="!selectedClassId" class="p-6 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-amber-900 text-xs flex items-center gap-3 shadow-2xs">
+        <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-sm shrink-0">📚</div>
+        <div>
+          <span class="font-bold block text-sm">No Class / Standard Selected Yet</span>
+          <span class="text-amber-700 mt-0.5 block">Please select an Academic Standard (Class) in Step 1 to preview its prescribed statutory curriculum textbooks, notebooks and school uniform checklist.</span>
+        </div>
+      </div>
+
       <div x-show="selectedClassId" x-transition class="space-y-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <div>
-            <div class="flex items-center gap-2">
-              <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wide">Standard Admission Kit &amp; Course Materials</h3>
-              <span class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded border border-[#FECACA]" x-text="currentClassKit.length + ' Items Included'"></span>
+        
+        {{-- Section Subheading --}}
+        <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-[#FFF5F5] text-[#8C2826] border border-[#FECACA] flex items-center justify-center shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
             </div>
-            <p class="text-xs text-slate-500 font-medium mt-0.5">Approved academic kit, notebook bundles, and student essentials for <span class="font-bold text-slate-800" x-text="'Class ' + selectedClassName"></span></p>
-          </div>
-          <span class="text-xs font-semibold text-slate-400 self-start sm:self-auto">Auto-assigned upon admission</span>
-        </div>
-
-        {{-- Low Stock Administrative Notice --}}
-        <div x-show="hasLowStockWarning" class="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-xs font-medium text-amber-800 flex items-center gap-2.5">
-          <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-          <span>Note: Store has incoming stock shipments for one or more kit items. Enrollment can proceed normally.</span>
-        </div>
-
-        {{-- Clean Itemized Cards (Zero raw warehouse inventory counters dumped on UI) --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <template x-for="cfg in currentClassKit" :key="cfg.id">
-            <div class="p-4 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-2xs flex items-center justify-between gap-4">
-              <div class="space-y-1.5 min-w-0">
-                <span class="font-bold text-slate-900 text-xs block truncate" x-text="cfg.item?.name || 'Academic Kit Item'"></span>
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="inline-flex items-center text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                    Package: <strong class="ml-1 font-bold tabular-nums" x-text="cfg.default_quantity + ' ' + (cfg.item?.unit || 'Unit')"></strong>
-                  </span>
-                  <span class="text-[11px] text-slate-500 font-medium">
-                    Rate: <strong class="text-slate-800 font-bold tabular-nums" x-text="formatMoney(cfg.student_charge > 0 ? cfg.student_charge : (cfg.item?.student_price || 0))"></strong>
-                  </span>
-                </div>
-              </div>
-
-              {{-- Optional Extra Quantity Stepper (Minimal & Elegant) --}}
-              <div x-show="cfg.allow_additional_qty" class="flex flex-col items-end gap-1 shrink-0">
-                <div class="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
-                  <span class="text-[10px] font-bold text-slate-400 pl-1">Extra:</span>
-                  <button type="button" @click="additionalItems[cfg.item_id] = Math.max(0, Number(additionalItems[cfg.item_id]||0) - 1)"
-                          class="w-6 h-6 rounded-lg bg-white hover:bg-slate-200 border border-slate-200 font-bold text-slate-700 text-xs cursor-pointer flex items-center justify-center transition">-</button>
-                  <input type="number" :name="'additional_items[' + cfg.item_id + ']'" x-model.number="additionalItems[cfg.item_id]" min="0" readonly
-                         class="w-7 text-center text-xs font-bold text-[#8C2826] bg-transparent border-0 p-0 focus:ring-0 tabular-nums">
-                  <button type="button" @click="additionalItems[cfg.item_id] = Number(additionalItems[cfg.item_id]||0) + 1"
-                          class="w-6 h-6 rounded-lg bg-[#FFF5F5] hover:bg-[#FEE2E2] border border-[#FECACA] font-bold text-[#8C2826] text-xs cursor-pointer flex items-center justify-center transition">+</button>
-                </div>
-                <span class="text-[10px] font-bold text-[#8C2826] tabular-nums pr-0.5" x-show="Number(additionalItems[cfg.item_id]||0) > 0"
-                      x-text="'+ ' + formatMoney((Number(additionalItems[cfg.item_id]||0)) * Number(cfg.student_charge > 0 ? cfg.student_charge : (cfg.item?.student_price || 0)))"></span>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        {{-- Custom Kit Items & Specialized Textbooks Sub-panel --}}
-        <div class="p-6 rounded-2xl bg-slate-50/70 border border-slate-200 space-y-5">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/70 pb-3">
             <div>
-              <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wide">Language Textbooks &amp; Custom Kit Items</h4>
-              <p class="text-[11px] text-slate-500 font-medium mt-0.5">Select second language reader, curriculum package, and optional student-specific items</p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Prescribed Books, Notebooks &amp; Uniforms</h3>
+                <span class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2.5 py-0.5 rounded-full border border-[#FECACA]" x-text="selectedClassName.toUpperCase().startsWith('CLASS') || selectedClassName.toUpperCase().includes('KG') ? selectedClassName : 'Class ' + selectedClassName"></span>
+              </div>
+              <p class="text-[11px] text-slate-500 font-medium">Statutory curriculum titles, student exercise notebooks and uniform allocation</p>
             </div>
-            <button type="button" @click="addCustomKitItem()"
-                    class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-bold text-xs shadow-xs transition cursor-pointer self-start sm:self-auto">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-              <span>Add Custom Kit Item</span>
+          </div>
+          <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 self-start sm:self-auto">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Auto-Assigned from Master Checklist
+          </span>
+        </div>
+
+        {{-- Custom Sleek Scrollbar Styles for Curriculum Inventory --}}
+        <style>
+          .curriculum-scroll {
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #CBD5E1 #F8FAFC;
+          }
+          .curriculum-scroll::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+          }
+          .curriculum-scroll::-webkit-scrollbar-track {
+            background: #F8FAFC;
+            border-radius: 4px;
+          }
+          .curriculum-scroll::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 4px;
+          }
+          .curriculum-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
+          }
+        </style>
+
+        {{-- Interactive Segmented Tabs, Filter & View Controls Bar --}}
+        <div class="p-3 sm:p-3.5 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 shadow-2xs"
+             x-show="!bookNoteLoading && (bookNoteList.books.length > 0 || bookNoteList.notes.length > 0 || (bookNoteList.uniforms && bookNoteList.uniforms.length > 0))">
+          
+          {{-- Left: Segmented Tab Switcher --}}
+          <div class="flex items-center gap-1.5 flex-wrap">
+            {{-- Tab: All Columns --}}
+            <button type="button"
+                    @click="curriculumTab = 'all'"
+                    :class="curriculumTab === 'all' ? 'bg-[#8C2826] text-white shadow-xs font-bold' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 font-semibold'"
+                    class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+              <span>⊞</span>
+              <span>All 3 Columns</span>
+              <span :class="curriculumTab === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'" class="px-1.5 py-0.2 rounded-full text-[10px] font-bold" x-text="bookNoteList.books.length + bookNoteList.notes.length + (bookNoteList.uniforms ? bookNoteList.uniforms.length : 0)"></span>
+            </button>
+
+            {{-- Tab: Textbooks --}}
+            <button type="button"
+                    @click="curriculumTab = 'books'"
+                    :class="curriculumTab === 'books' ? 'bg-amber-500 text-white shadow-xs font-bold' : 'bg-white text-slate-700 hover:bg-amber-50/60 border border-slate-200 font-semibold'"
+                    class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+              <span class="w-2 h-2 rounded-full" :class="curriculumTab === 'books' ? 'bg-white' : 'bg-amber-500'"></span>
+              <span>Textbooks</span>
+              <span :class="curriculumTab === 'books' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'" class="px-1.5 py-0.2 rounded-full text-[10px] font-bold" x-text="bookNoteList.books.length"></span>
+            </button>
+
+            {{-- Tab: Notebooks --}}
+            <button type="button"
+                    @click="curriculumTab = 'notes'"
+                    :class="curriculumTab === 'notes' ? 'bg-indigo-600 text-white shadow-xs font-bold' : 'bg-white text-slate-700 hover:bg-indigo-50/60 border border-slate-200 font-semibold'"
+                    class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+              <span class="w-2 h-2 rounded-full" :class="curriculumTab === 'notes' ? 'bg-white' : 'bg-indigo-500'"></span>
+              <span>Notebooks</span>
+              <span :class="curriculumTab === 'notes' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-900'" class="px-1.5 py-0.2 rounded-full text-[10px] font-bold" x-text="bookNoteList.notes.length"></span>
+            </button>
+
+            {{-- Tab: Uniforms --}}
+            <button type="button"
+                    x-show="bookNoteList.uniforms && bookNoteList.uniforms.length > 0"
+                    @click="curriculumTab = 'uniforms'"
+                    :class="curriculumTab === 'uniforms' ? 'bg-teal-600 text-white shadow-xs font-bold' : 'bg-white text-slate-700 hover:bg-teal-50/60 border border-slate-200 font-semibold'"
+                    class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer">
+              <span class="w-2 h-2 rounded-full" :class="curriculumTab === 'uniforms' ? 'bg-white' : 'bg-teal-500'"></span>
+              <span>Uniforms</span>
+              <span :class="curriculumTab === 'uniforms' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-900'" class="px-1.5 py-0.2 rounded-full text-[10px] font-bold" x-text="(bookNoteList.uniforms || []).length"></span>
             </button>
           </div>
 
-          {{-- Row 1: Second Language & Curriculum Pack --}}
+          {{-- Right: Compact/Expand Toggle, Total Units --}}
+          <div class="flex items-center gap-2 flex-wrap">
+            {{-- Compact / Expand Height Toggle --}}
+            <button type="button"
+                    @click="curriculumExpanded = !curriculumExpanded"
+                    class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 flex items-center gap-1 transition-all cursor-pointer"
+                    :title="curriculumExpanded ? 'Switch to compact scrollable view' : 'Expand full list without scrolling'">
+              <span x-text="curriculumExpanded ? '⇕ Compact' : '↕ Expand'"></span>
+            </button>
+
+            {{-- Prescribed Units Badge --}}
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold text-xs">
+              <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              <span x-text="bookNoteTotalUnits + ' Units Prescribed'"></span>
+            </div>
+          </div>
+        </div>
+
+        {{-- Hidden Form Inputs for Automatic Submission & Snapshotting --}}
+        <template x-for="book in bookNoteList.books" :key="'in_b_' + book.id">
+          <input type="hidden" name="issued_book_note_ids[]" :value="book.id">
+        </template>
+        <template x-for="note in bookNoteList.notes" :key="'in_n_' + note.id">
+          <input type="hidden" name="issued_book_note_ids[]" :value="note.id">
+        </template>
+        <template x-for="uniform in (bookNoteList.uniforms || [])" :key="'in_u_' + uniform.sku">
+          <input type="hidden" name="issued_book_note_ids[]" :value="uniform.sku">
+        </template>
+        <input type="hidden" name="custom_kit_items" value="[]">
+
+        {{-- Loading State --}}
+        <div x-show="bookNoteLoading" class="py-12 text-center text-xs text-slate-500 font-bold bg-white rounded-3xl border border-slate-200/80 p-8 shadow-xs space-y-3">
+          <div class="w-8 h-8 border-3 border-[#8C2826] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p>Loading prescribed books and learning materials from master inventory...</p>
+        </div>
+
+        {{-- Senior Secondary Group Notice --}}
+        <div x-show="!bookNoteLoading && isSeniorSecondary && !selectedBookNoteGroupId"
+             class="p-6 rounded-3xl bg-purple-50/80 border border-purple-200/90 text-purple-950 text-xs flex items-center gap-4 shadow-xs">
+          <div class="w-10 h-10 rounded-2xl bg-purple-100 text-purple-800 flex items-center justify-center font-black text-lg shrink-0">
+            ℹ️
+          </div>
+          <div>
+            <span class="font-black text-sm block">Please select an Academic Group in Section 1</span>
+            <span class="text-xs text-purple-800 mt-0.5 block">For Class XI and XII, the curriculum is strictly customized by academic stream (e.g., BIO &amp; CS GROUP or ACCOUNTS GROUP). Choosing a group will automatically load its respective textbooks and notebooks.</span>
+          </div>
+        </div>
+
+        {{-- Empty State --}}
+        <div x-show="!bookNoteLoading && (!isSeniorSecondary || selectedBookNoteGroupId) && bookNoteList.books.length === 0 && bookNoteList.notes.length === 0 && (!bookNoteList.uniforms || bookNoteList.uniforms.length === 0)"
+             class="py-12 px-6 text-center rounded-3xl border border-dashed border-slate-300 bg-white shadow-xs space-y-2">
+          <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-xl">📚</div>
+          <p class="text-sm font-black text-slate-800">No Books, Notes &amp; Uniforms configured for this class.</p>
+          <p class="text-xs text-slate-500">Administrators can register curriculum requirements under Settings &rarr; Book, Note &amp; Uniform Distribution.</p>
+        </div>
+
+        {{-- Itemized Details Container (Tabs & Bounded Scrolling) --}}
+        <div x-show="!bookNoteLoading && (bookNoteList.books.length > 0 || bookNoteList.notes.length > 0 || (bookNoteList.uniforms && bookNoteList.uniforms.length > 0))" class="space-y-4">
+
+          {{-- VIEW MODE 1: All 3 Columns Side-by-Side (Bounded Fixed-Height Scrolling) --}}
+          <div x-show="curriculumTab === 'all'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            
+            {{-- Column 1: Prescribed Textbooks --}}
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col">
+              <div class="p-3 px-3.5 bg-amber-50/70 border-b border-amber-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center text-xs font-bold shadow-2xs">📚</div>
+                  <div>
+                    <h4 class="text-xs font-black text-amber-950 uppercase tracking-wide">Textbooks</h4>
+                    <span class="text-[10px] text-amber-800 font-medium">Standard curriculum titles</span>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-white text-amber-900 border border-amber-200 shadow-2xs tabular-nums"
+                      x-text="bookNoteList.books.length + ' Titles'"></span>
+              </div>
+
+              {{-- Bounded Scrollable List --}}
+              <div class="p-2 space-y-1 divide-y divide-slate-100 curriculum-scroll"
+                   :style="curriculumExpanded ? 'max-height: none;' : 'max-height: 250px; overflow-y: auto;'">
+                <template x-for="(book, index) in bookNoteList.books" :key="book.id">
+                  <div class="pt-2 first:pt-0 py-1.5 px-2 flex items-center justify-between gap-2.5 hover:bg-amber-50/40 rounded-xl transition-colors">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-semibold text-slate-900 leading-snug" x-text="book.name"></p>
+                      <div class="flex items-center gap-2 mt-0.5" x-show="book.sku">
+                        <span class="font-mono text-[10px] text-slate-400 font-medium tracking-tight" x-text="book.sku"></span>
+                      </div>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black tabular-nums bg-amber-50 text-amber-900 border border-amber-200/80 shrink-0">
+                      <span class="text-[10px] font-bold text-amber-600 mr-1">Qty:</span>
+                      <span x-text="book.quantity || 1"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+
+              <div class="px-3 py-1.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                <span x-text="bookNoteList.books.length + ' titles prescribed'"></span>
+                <span x-show="!curriculumExpanded && bookNoteList.books.length > 5" class="text-amber-700 font-semibold">↕ Scroll for more</span>
+              </div>
+            </div>
+
+            {{-- Column 2: Notebooks & Workbooks --}}
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col">
+              <div class="p-3 px-3.5 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">📝</div>
+                  <div>
+                    <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wide">Notebooks</h4>
+                    <span class="text-[10px] text-indigo-800 font-medium">Ruled, unruled &amp; activity</span>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-white text-indigo-900 border border-indigo-200 shadow-2xs tabular-nums"
+                      x-text="bookNoteList.notes.length + ' Items'"></span>
+              </div>
+
+              {{-- Bounded Scrollable List --}}
+              <div class="p-2 space-y-1 divide-y divide-slate-100 curriculum-scroll"
+                   :style="curriculumExpanded ? 'max-height: none;' : 'max-height: 250px; overflow-y: auto;'">
+                <template x-for="(note, index) in bookNoteList.notes" :key="note.id">
+                  <div class="pt-2 first:pt-0 py-1.5 px-2 flex items-center justify-between gap-2.5 hover:bg-indigo-50/40 rounded-xl transition-colors">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-semibold text-slate-900 leading-snug" x-text="note.name"></p>
+                      <div class="flex items-center gap-2 mt-0.5" x-show="note.sku">
+                        <span class="font-mono text-[10px] text-slate-400 font-medium tracking-tight" x-text="note.sku"></span>
+                      </div>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black tabular-nums bg-indigo-50 text-indigo-900 border border-indigo-200/80 shrink-0">
+                      <span class="text-[10px] font-bold text-indigo-600 mr-1">Qty:</span>
+                      <span x-text="note.quantity || 1"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+
+              <div class="px-3 py-1.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                <span x-text="bookNoteList.notes.length + ' items prescribed'"></span>
+                <span x-show="!curriculumExpanded && bookNoteList.notes.length > 5" class="text-indigo-700 font-semibold">↕ Scroll for more</span>
+              </div>
+            </div>
+
+            {{-- Column 3: Prescribed Uniforms --}}
+            <div class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col"
+                 x-show="bookNoteList.uniforms && bookNoteList.uniforms.length > 0">
+              <div class="p-3 px-3.5 bg-teal-50/70 border-b border-teal-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-6 h-6 rounded-lg bg-teal-600 text-white flex items-center justify-center text-xs font-bold shadow-2xs">👔</div>
+                  <div>
+                    <h4 class="text-xs font-black text-teal-950 uppercase tracking-wide"
+                        x-text="(selectedGender || '').toLowerCase() === 'female' ? 'Uniform (Girls)' : ((selectedGender || '').toLowerCase() === 'male' ? 'Uniform (Boys)' : 'Uniforms')"></h4>
+                    <span class="text-[10px] text-teal-800 font-medium"
+                          x-text="selectedGender ? (selectedGender.toUpperCase() + ' Standard Kit') : 'Auto-assigned by Standard'"></span>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-white text-teal-900 border border-teal-200 shadow-2xs tabular-nums"
+                      x-text="(bookNoteList.uniforms || []).length + ' Items'"></span>
+              </div>
+
+              {{-- Bounded Scrollable List --}}
+              <div class="p-2 space-y-1 divide-y divide-slate-100 curriculum-scroll"
+                   :style="curriculumExpanded ? 'max-height: none;' : 'max-height: 250px; overflow-y: auto;'">
+                <template x-for="(uniform, index) in (bookNoteList.uniforms || [])" :key="uniform.sku">
+                  <div class="pt-2 first:pt-0 py-1.5 px-2 flex items-center justify-between gap-2.5 hover:bg-teal-50/40 rounded-xl transition-colors">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-semibold text-slate-900 leading-snug" x-text="uniform.name"></p>
+                      <div class="flex items-center gap-2 mt-0.5" x-show="uniform.sku">
+                        <span class="font-mono text-[10px] text-slate-400 font-medium tracking-tight" x-text="uniform.sku"></span>
+                      </div>
+                    </div>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black tabular-nums bg-teal-50 text-teal-900 border border-teal-200/80 shrink-0">
+                      <span class="text-[10px] font-bold text-teal-600 mr-1">Qty:</span>
+                      <span x-text="uniform.quantity || 1"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+
+              <div class="px-3 py-1.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                <span x-text="(bookNoteList.uniforms || []).length + ' items prescribed'"></span>
+                <span x-show="!curriculumExpanded && (bookNoteList.uniforms || []).length > 5" class="text-teal-700 font-semibold">↕ Scroll for more</span>
+              </div>
+            </div>
+
+          </div>
+
+          {{-- VIEW MODE 2: Dedicated Textbooks Tab (Multi-Column Compact Grid) --}}
+          <div x-show="curriculumTab === 'books'" class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div class="p-3.5 px-4 bg-amber-50/70 border-b border-amber-100 flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-2xs">📚</div>
+                <div>
+                  <h4 class="text-xs font-black text-amber-950 uppercase tracking-wide">Prescribed Textbooks Master List</h4>
+                  <span class="text-[10px] text-amber-800 font-medium">Official academic curriculum titles for current academic year</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-white text-amber-900 border border-amber-200 shadow-2xs"
+                      x-text="bookNoteList.books.length + ' Titles • ' + bookNoteList.books.reduce((acc,b) => acc + (b.quantity || 1), 0) + ' Units'"></span>
+              </div>
+            </div>
+
+            <div class="p-3.5 curriculum-scroll"
+                 :style="curriculumExpanded ? 'max-height: none;' : 'max-height: 260px; overflow-y: auto;'">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <template x-for="book in bookNoteList.books" :key="book.id">
+                  <div class="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-amber-50/30 hover:border-amber-300 transition-all flex items-center justify-between gap-2.5">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-bold text-slate-800 leading-snug" x-text="book.name"></p>
+                      <span class="font-mono text-[10px] text-slate-400 font-medium" x-text="book.sku"></span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-lg text-xs font-black bg-amber-100/80 text-amber-900 border border-amber-200 shrink-0">
+                      Qty: <span x-text="book.quantity || 1"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          {{-- VIEW MODE 3: Dedicated Notebooks Tab (Multi-Column Compact Grid) --}}
+          <div x-show="curriculumTab === 'notes'" class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div class="p-3.5 px-4 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">📝</div>
+                <div>
+                  <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wide">Notebooks &amp; Workbooks Master List</h4>
+                  <span class="text-[10px] text-indigo-800 font-medium">Prescribed exercise books, activity diaries and graph workbooks</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-white text-indigo-900 border border-indigo-200 shadow-2xs"
+                      x-text="bookNoteList.notes.length + ' Items • ' + bookNoteList.notes.reduce((acc,n) => acc + (n.quantity || 1), 0) + ' Units'"></span>
+              </div>
+            </div>
+
+            <div class="p-3.5 curriculum-scroll"
+                 :style="curriculumExpanded ? 'max-height: none;' : 'max-height: 260px; overflow-y: auto;'">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <template x-for="note in bookNoteList.notes" :key="note.id">
+                  <div class="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-indigo-50/30 hover:border-indigo-300 transition-all flex items-center justify-between gap-2.5">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-bold text-slate-800 leading-snug" x-text="note.name"></p>
+                      <span class="font-mono text-[10px] text-slate-400 font-medium" x-text="note.sku"></span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-100/80 text-indigo-900 border border-indigo-200 shrink-0">
+                      Qty: <span x-text="note.quantity || 1"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          {{-- VIEW MODE 4: Dedicated Uniforms Tab (Multi-Column Compact Grid) --}}
+          <div x-show="curriculumTab === 'uniforms'" class="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
+            <div class="p-3.5 px-4 bg-teal-50/70 border-b border-teal-100 flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">👔</div>
+                <div>
+                  <h4 class="text-xs font-black text-teal-950 uppercase tracking-wide"
+                      x-text="(selectedGender || '').toLowerCase() === 'female' ? 'Girls School Uniform Master Kit' : ((selectedGender || '').toLowerCase() === 'male' ? 'Boys School Uniform Master Kit' : 'School Uniform Kit')"></h4>
+                  <span class="text-[10px] text-teal-800 font-medium">Prescribed standard uniform apparel, shirts, pants/skirts and sportswear</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-white text-teal-900 border border-teal-200 shadow-2xs"
+                      x-text="(bookNoteList.uniforms || []).length + ' Items • ' + (bookNoteList.uniforms || []).reduce((acc,u) => acc + (u.quantity || 1), 0) + ' Units'"></span>
+              </div>
+            </div>
+
+            <div class="p-3.5 curriculum-scroll"
+                 :style="curriculumExpanded ? 'max-height: none;' : 'max-height: 260px; overflow-y: auto;'">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <template x-for="uniform in (bookNoteList.uniforms || [])" :key="uniform.sku">
+                  <div class="p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-teal-50/30 hover:border-teal-300 transition-all flex items-center justify-between gap-2.5">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-xs font-bold text-slate-800 leading-snug" x-text="uniform.name"></p>
+                      <span class="font-mono text-[10px] text-slate-400 font-medium" x-text="uniform.sku"></span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-lg text-xs font-black bg-teal-100/80 text-teal-900 border border-teal-200 shrink-0">
+                      Qty: <span x-text="uniform.quantity || 1"></span>
+                    </span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {{-- Footer Reassurance Note --}}
+        <div x-show="!bookNoteLoading && (bookNoteList.books.length > 0 || bookNoteList.notes.length > 0)"
+             class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-500 font-medium">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            <span>Statutory curriculum titles, exercise notebooks and uniforms above are automatically recorded upon admission submission.</span>
+          </div>
+          <span class="font-bold text-slate-700 shrink-0">Master Curriculum Standard</span>
+        </div>
+
+        {{-- Language & Curriculum Notes (Clean & Minimal) --}}
+        <div class="p-5 rounded-2xl bg-slate-50/70 border border-slate-200">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs">
             <div>
               <div class="flex items-center justify-between mb-1.5">
@@ -2229,74 +2816,9 @@
             <div>
               <label class="block text-xs font-bold text-slate-700 mb-1.5">Textbook &amp; Kit Notes</label>
               <input type="text" name="textbook_notes" x-model="textbookNotes"
-                     placeholder="e.g. Includes full cover set &amp; lab manual"
+                     placeholder="e.g. Full cover set &amp; lab manuals included"
                      class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-xs font-medium text-slate-700 bg-white">
-            </div>
           </div>
-
-          {{-- Row 2: Dynamic Custom Kit Items List --}}
-          <div class="space-y-3 pt-2">
-            <div class="flex items-center justify-between text-xs">
-              <span class="font-bold text-slate-700 uppercase tracking-wide text-[11px]">
-                Custom Kit &amp; Textbook Items Added (<span x-text="customKitItems.length"></span>)
-              </span>
-              <span class="font-bold text-[#8C2826] text-xs tabular-nums" x-show="customKitFeeTotal > 0" x-text="'Custom Fee Total: ' + formatMoney(customKitFeeTotal)"></span>
-            </div>
-
-            <template x-if="customKitItems.length === 0">
-              <div class="p-4 bg-white rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500 font-medium">
-                <span>No custom kit items added. Click <strong>"+ Add Custom Kit Item"</strong> above if this student requires specialized books, lab coats, or art materials.</span>
-              </div>
-            </template>
-
-            <div class="space-y-2.5">
-              <template x-for="(cItem, cIdx) in customKitItems" :key="cItem.id">
-                <div class="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                  <div class="sm:col-span-4">
-                    <input type="text" x-model="cItem.name" placeholder="Item Name (e.g. Lab Coat, Drawing Kit)"
-                           class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 focus:border-[#8C2826]">
-                  </div>
-
-                  <div class="sm:col-span-3">
-                    <select x-model="cItem.category"
-                            class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 bg-white">
-                      <option value="Textbook">Textbook</option>
-                      <option value="Notebook Set">Notebook Set</option>
-                      <option value="Uniform / Wearable">Uniform / Wearable</option>
-                      <option value="Stationery Kit">Stationery Kit</option>
-                      <option value="Lab Equipment">Lab Equipment</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  <div class="sm:col-span-2">
-                    <input type="text" x-model="cItem.specification" placeholder="Size / Spec"
-                           class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-700">
-                  </div>
-
-                  <div class="sm:col-span-1">
-                    <input type="number" min="1" x-model.number="cItem.quantity" placeholder="Qty"
-                           class="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs font-bold text-center tabular-nums">
-                  </div>
-
-                  <div class="sm:col-span-1">
-                    <input type="number" min="0" step="10" x-model.number="cItem.unit_price" placeholder="₹ Price"
-                           class="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs font-bold text-center text-[#8C2826] tabular-nums">
-                  </div>
-
-                  <div class="sm:col-span-1 text-right">
-                    <button type="button" @click="removeCustomKitItem(cIdx)"
-                            class="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold flex items-center justify-center transition cursor-pointer mx-auto" title="Remove">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-
-          {{-- Hidden Submission for Custom Kit Items JSON --}}
-          <input type="hidden" name="custom_kit_items" :value="JSON.stringify(customKitItems)">
         </div>
       </div>
 

@@ -16,24 +16,28 @@ class EventController extends Controller
 {
     public function index(Request $request)
     {
+        $user = Auth::user();
         $events = Event::with('createdBy')
+            ->forUser($user)
             ->when($request->type, fn($q, $v) => $q->where('event_type', $v))
             ->when($request->search, fn($q, $v) => $q->where('name', 'like', "%$v%"))
             ->when($request->from, fn($q, $v) => $q->whereDate('event_date', '>=', $v))
             ->when($request->to, fn($q, $v) => $q->whereDate('event_date', '<=', $v))
             ->when($request->status === 'draft',     fn($q) => $q->where('is_published', false))
             ->when($request->status === 'published', fn($q) => $q->where('is_published', true))
-            ->when($request->status === 'upcoming',  fn($q) => $q->where('is_published', true)->where('event_date', '>=', today()))
-            ->when($request->status === 'past',      fn($q) => $q->where('event_date', '<', today()))
+            ->when(in_array($request->status, ['today', 'present']), fn($q) => $q->whereDate('event_date', today()))
+            ->when($request->status === 'upcoming',  fn($q) => $q->where('is_published', true)->whereDate('event_date', '>', today()))
+            ->when(in_array($request->status, ['past', 'completed']), fn($q) => $q->whereDate('event_date', '<', today()))
             ->orderBy('event_date', 'desc')
             ->paginate(20)->withQueryString();
 
-        $totalEvents   = Event::count();
-        $todayEvents   = Event::whereDate('event_date', today())->count();
-        $upcomingCount = Event::where('event_date', '>', today())->where('is_published', true)->count();
-        $thisMonthCount = Event::whereMonth('event_date', now()->month)->whereYear('event_date', now()->year)->count();
+        $totalEvents    = Event::forUser($user)->count();
+        $todayEvents    = Event::forUser($user)->whereDate('event_date', today())->count();
+        $upcomingCount  = Event::forUser($user)->whereDate('event_date', '>', today())->where('is_published', true)->count();
+        $completedCount = Event::forUser($user)->whereDate('event_date', '<', today())->count();
+        $thisMonthCount = Event::forUser($user)->whereMonth('event_date', now()->month)->whereYear('event_date', now()->year)->count();
 
-        $upcomingEvents = Event::where('event_date', '>=', today())
+        $upcomingEvents = Event::forUser($user)->whereDate('event_date', '>=', today())
             ->where('is_published', true)
             ->orderBy('event_date')
             ->limit(5)
@@ -41,18 +45,20 @@ class EventController extends Controller
 
         return view('events.index', compact(
             'events', 'totalEvents', 'todayEvents',
-            'upcomingCount', 'thisMonthCount', 'upcomingEvents'
+            'upcomingCount', 'completedCount', 'thisMonthCount', 'upcomingEvents'
         ));
     }
 
     public function calendar(Request $request)
     {
+        $user   = Auth::user();
         $month  = (int) ($request->month ?? now()->month);
         $year   = (int) ($request->year  ?? now()->year);
         $start  = Carbon::createFromDate($year, $month, 1);
         $end    = $start->copy()->endOfMonth();
 
-        $events = Event::where('is_published', true)
+        $events = Event::forUser($user)
+            ->where('is_published', true)
             ->whereBetween('event_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('event_date')
             ->get()
@@ -60,7 +66,8 @@ class EventController extends Controller
 
         // For FullCalendar JSON
         if ($request->wantsJson()) {
-            $allEvents = Event::where('is_published', true)
+            $allEvents = Event::forUser($user)
+                ->where('is_published', true)
                 ->whereBetween('event_date', [
                     Carbon::createFromDate($year, $month, 1)->subMonth()->toDateString(),
                     Carbon::createFromDate($year, $month, 1)->addMonths(2)->toDateString(),
@@ -107,12 +114,23 @@ class EventController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->filled('start_time')) {
+            try {
+                $request->merge(['start_time' => Carbon::parse($request->start_time)->format('H:i')]);
+            } catch (\Exception $e) {}
+        }
+        if ($request->filled('end_time')) {
+            try {
+                $request->merge(['end_time' => Carbon::parse($request->end_time)->format('H:i')]);
+            } catch (\Exception $e) {}
+        }
+
         $data = $request->validate([
             'name'        => 'required|string|max:200',
             'event_type'  => 'required|in:academic,cultural,sports,holiday,meeting,other',
             'event_date'  => 'required|date',
-            'start_time'  => 'nullable|date_format:H:i',
-            'end_time'    => 'nullable|date_format:H:i|after:start_time',
+            'start_time'  => 'nullable|string',
+            'end_time'    => 'nullable|string',
             'venue'       => 'nullable|string|max:200',
             'description' => 'nullable|string',
             'audience'    => 'required|in:all,students,staff,parents',
@@ -121,6 +139,12 @@ class EventController extends Controller
             'is_published'=> 'boolean',
             'banner_image'=> 'nullable|image|max:2048',
         ]);
+
+        if (!empty($data['start_time']) && !empty($data['end_time'])) {
+            if ($data['start_time'] >= $data['end_time']) {
+                return back()->withInput()->withErrors(['end_time' => 'The end time field must be after start time.']);
+            }
+        }
 
         if ($request->hasFile('banner_image')) {
             $data['banner_image'] = $request->file('banner_image')->store('events/banners', 'public');
@@ -145,12 +169,24 @@ class EventController extends Controller
     public function update(Request $request, int $id)
     {
         $event = Event::findOrFail($id);
+
+        if ($request->filled('start_time')) {
+            try {
+                $request->merge(['start_time' => Carbon::parse($request->start_time)->format('H:i')]);
+            } catch (\Exception $e) {}
+        }
+        if ($request->filled('end_time')) {
+            try {
+                $request->merge(['end_time' => Carbon::parse($request->end_time)->format('H:i')]);
+            } catch (\Exception $e) {}
+        }
+
         $data  = $request->validate([
             'name'        => 'required|string|max:200',
             'event_type'  => 'required|in:academic,cultural,sports,holiday,meeting,other',
             'event_date'  => 'required|date',
-            'start_time'  => 'nullable|date_format:H:i',
-            'end_time'    => 'nullable|date_format:H:i|after:start_time',
+            'start_time'  => 'nullable|string',
+            'end_time'    => 'nullable|string',
             'venue'       => 'nullable|string|max:200',
             'description' => 'nullable|string',
             'audience'    => 'required|in:all,students,staff,parents',
@@ -159,6 +195,12 @@ class EventController extends Controller
             'is_published'=> 'boolean',
             'banner_image'=> 'nullable|image|max:2048',
         ]);
+
+        if (!empty($data['start_time']) && !empty($data['end_time'])) {
+            if ($data['start_time'] >= $data['end_time']) {
+                return back()->withInput()->withErrors(['end_time' => 'The end time field must be after start time.']);
+            }
+        }
 
         if ($request->hasFile('banner_image')) {
             if ($event->banner_image) Storage::disk('public')->delete($event->banner_image);
@@ -177,11 +219,17 @@ class EventController extends Controller
 
     public function destroy(int $id)
     {
-        abort_unless(auth()->user()->can("delete events"), 403);
+        $user = auth()->user();
         $event = Event::findOrFail($id);
+
+        $canDelete = $user && $user->hasAnyRole(['super_admin', 'admin', 'principal', 'correspondent', 'correspondant']);
+
+        abort_unless($canDelete, 403, 'Unauthorized: Only administrator, principal, and correspondent can delete events.');
+
         if ($event->banner_image) Storage::disk('public')->delete($event->banner_image);
         $event->delete();
-        return redirect()->route('events.index')->with('success', 'Event deleted.');
+        
+        return redirect()->route('events.index')->with('success', "Event '{$event->name}' deleted successfully.");
     }
 
     public function rsvp(Request $request, int $id)
