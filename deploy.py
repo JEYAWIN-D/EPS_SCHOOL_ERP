@@ -11,7 +11,7 @@ VPS_HOST = "187.127.150.113"
 VPS_PORT = 22
 VPS_USER = "root"
 VPS_PASS = "Kauq0E;v9h;K3TYZ"
-REMOTE_PATH = "/var/www/school_erp"
+REMOTE_PATH = "/var/www/dasa-eps-school"
 LOCAL_PATH = os.path.dirname(os.path.abspath(__file__))
 
 IGNORED_PATHS = {
