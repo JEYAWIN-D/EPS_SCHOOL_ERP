@@ -211,12 +211,12 @@
         <h2 class="text-xs font-bold uppercase tracking-wider text-amber-900">Vendor &amp; Maintenance Details</h2>
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
-            <span class="text-amber-700 block">Agency Name:</span>
+            <span class="text-amber-700 block">Vendor / Agency Name:</span>
             <p class="font-bold text-amber-950">{{ $visitor->company_name ?? '—' }}</p>
           </div>
           <div>
-            <span class="text-amber-700 block">Work Order Number:</span>
-            <p class="font-mono font-bold text-amber-950">{{ $visitor->work_order_number ?? '—' }}</p>
+            <span class="text-amber-700 block">Maintenance Details / Work Order:</span>
+            <p class="font-bold text-amber-950">{{ $visitor->work_order_number ?? '—' }}</p>
           </div>
         </div>
       </div>
@@ -279,11 +279,6 @@
           <div class="flex justify-between border-b border-slate-100 pb-2">
             <span class="text-slate-500">Check-In Time:</span>
             <span class="font-mono font-bold text-indigo-600">{{ $visitor->in_time ? $visitor->in_time->format('h:i A') : 'Pending' }}</span>
-          </div>
-
-          <div class="flex justify-between border-b border-slate-100 pb-2">
-            <span class="text-slate-500">Expected Exit:</span>
-            <span class="font-mono font-semibold text-slate-700">{{ $visitor->expected_exit_time ? $visitor->expected_exit_time->format('h:i A') : 'Not specified' }}</span>
           </div>
 
           <div class="flex justify-between border-b border-slate-100 pb-2">

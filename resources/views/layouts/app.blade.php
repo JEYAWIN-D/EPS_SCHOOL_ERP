@@ -19,6 +19,7 @@
   {!! \App\Models\SchoolSetting::getThemeCssVariables() !!}
 
   @stack('head')
+  @stack('styles')
 </head>
 <body class="bg-slate-50 font-sans">
 
