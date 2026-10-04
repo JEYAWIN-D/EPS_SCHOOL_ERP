@@ -1423,5 +1423,4 @@ class DashboardController extends Controller
             'classes', 'students', 'days', 'records', 'month', 'year', 'classId'
         ));
     }
-
 }

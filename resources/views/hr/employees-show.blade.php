@@ -3,7 +3,7 @@
 @section('title', $employee->full_name)
 
 @section('content')
-<div class="max-w-5xl mx-auto space-y-6">
+<div class="w-full max-w-7xl mx-auto space-y-6">
   <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
@@ -211,21 +211,515 @@
     </div>
   @endif
 
+  {{-- ── Staff Attendance & Monthly Summary (Full Landscape Layout) ── --}}
+  <div class="card p-5 sm:p-6 lg:p-7 space-y-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+
+    {{-- 1. Section Header --}}
+    <div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+      <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <div>
+        <h2 class="text-lg sm:text-xl font-black text-slate-900 tracking-tight" style="font-family:'Plus Jakarta Sans',sans-serif;">
+          Staff Attendance &amp; Monthly Summary
+        </h2>
+        <p class="text-xs sm:text-sm font-medium text-slate-500 mt-0.5">
+          Monthly attendance rates and recent biometric/RFID punch logs
+        </p>
+      </div>
+    </div>
+
+    {{-- 2. Attendance Summary / KPI Cards (Horizontal Landscape Grid) --}}
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        {{-- Card 1: Working Days --}}
+        <div class="bg-slate-50/80 p-3 sm:p-3.5 rounded-xl border border-slate-200 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Working Days</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-slate-800">
+              {{ $currentMonthWorkingDays ?? $attTotalDays }}
+            </p>
+            <span class="text-[10px] text-slate-500 font-medium">Current Month</span>
+          </div>
+        </div>
+
+        {{-- Card 2: Present --}}
+        <div class="bg-emerald-50/60 p-3 sm:p-3.5 rounded-xl border border-emerald-200/80 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Present</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-emerald-600">
+              {{ $cmPresent ?? $attPresent }} <span class="text-xs font-semibold text-emerald-700">d</span>
+            </p>
+            <span class="text-[10px] text-emerald-700 font-medium">Attended full</span>
+          </div>
+        </div>
+
+        {{-- Card 3: Absent --}}
+        <div class="bg-rose-50/60 p-3 sm:p-3.5 rounded-xl border border-rose-200/80 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-rose-800">Absent</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-rose-600">
+              {{ $attAbsent }} <span class="text-xs font-semibold text-rose-700">d</span>
+            </p>
+            <span class="text-[10px] text-rose-700 font-medium">Unexcused</span>
+          </div>
+        </div>
+
+        {{-- Card 4: Half Day --}}
+        <div class="bg-orange-50/60 p-3 sm:p-3.5 rounded-xl border border-orange-200/80 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-orange-800">Half Day</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-orange-600">
+              {{ $attHalfDay }} <span class="text-xs font-semibold text-orange-700">d</span>
+            </p>
+            <span class="text-[10px] text-orange-700 font-medium">0.5 Day credit</span>
+          </div>
+        </div>
+
+        {{-- Card 5: Late --}}
+        <div class="bg-amber-50/60 p-3 sm:p-3.5 rounded-xl border border-amber-200/80 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800">Late Check-in</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-amber-700">
+              {{ $attLate }} <span class="text-xs font-semibold text-amber-800">d</span>
+            </p>
+            <span class="text-[10px] text-amber-700 font-medium">Delayed punch</span>
+          </div>
+        </div>
+
+        {{-- Card 6: Permission --}}
+        <div class="bg-purple-50/60 p-3 sm:p-3.5 rounded-xl border border-purple-200/80 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-purple-800">Permission</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-purple-700">
+              {{ $attPermission ?? 0 }} <span class="text-xs font-semibold text-purple-800">d</span>
+            </p>
+            <span class="text-[10px] text-purple-700 font-medium">Official pass</span>
+          </div>
+        </div>
+
+        {{-- Card 7: Overtime --}}
+        <div class="bg-amber-50/60 p-3 sm:p-3.5 rounded-xl border border-amber-300 flex flex-col justify-between min-h-[96px] shadow-2xs">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-900">Overtime</span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono text-amber-800">
+              {{ $attOvertime }} <span class="text-xs font-semibold text-amber-900">d</span>
+            </p>
+            <span class="text-[10px] font-mono font-bold text-amber-900 truncate" title="{{ $attOvertimeDuration ?? '0m' }}">
+              {{ $attOvertimeDuration ?? '0m' }} extra
+            </span>
+          </div>
+        </div>
+
+        {{-- Card 8: Attendance Rate % --}}
+        <div class="p-3 sm:p-3.5 rounded-xl border flex flex-col justify-between min-h-[96px] shadow-2xs {{ ($attendancePercentage ?? 0) >= 80 ? 'bg-emerald-50/80 border-emerald-300 text-emerald-900' : 'bg-rose-50/80 border-rose-300 text-rose-900' }}">
+          <span class="text-[10px] font-bold uppercase tracking-wider {{ ($attendancePercentage ?? 0) >= 80 ? 'text-emerald-800' : 'text-rose-800' }}">
+            Attendance %
+          </span>
+          <div class="mt-1">
+            <p class="text-xl sm:text-2xl font-black font-mono {{ ($attendancePercentage ?? 0) >= 80 ? 'text-emerald-600' : 'text-rose-600' }}">
+              {{ $attendancePercentage ?? '0.00' }}%
+            </p>
+            <span class="text-[10px] font-semibold {{ ($attendancePercentage ?? 0) >= 80 ? 'text-emerald-700' : 'text-rose-700' }}">
+              {{ ($attendancePercentage ?? 0) >= 80 ? 'Target met' : 'Below target' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {{-- Progress bar & summary text --}}
+      @if(($attTotalDays ?? 0) > 0)
+      <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-700">Cumulative Recorded Progress:</span>
+          <span class="text-slate-600 font-mono">
+            <strong class="text-slate-900">{{ $cmEffectivePresent ?? $effectivePresent }}</strong> effective days present out of
+            <strong class="text-slate-900">{{ $currentMonthWorkingDays ?? $attTotalDays }}</strong> working days
+          </span>
+        </div>
+        <div class="flex items-center gap-3 sm:w-64">
+          <div class="flex-1 bg-slate-200 rounded-full h-2 overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500 {{ ($attendancePercentage ?? 0) >= 80 ? 'bg-emerald-500' : 'bg-rose-500' }}"
+                 style="width: {{ min(100, (float)($attendancePercentage ?? 0)) }}%"></div>
+          </div>
+          <span class="font-mono font-bold text-xs {{ ($attendancePercentage ?? 0) >= 80 ? 'text-emerald-700' : 'text-rose-700' }} shrink-0">
+            {{ $attendancePercentage }}%
+          </span>
+        </div>
+      </div>
+      @endif
+    </div>
+
+    {{-- 3. Monthly Breakdown Table (Full Width) --}}
+    <div class="space-y-3 pt-2 border-t border-slate-100">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+          Monthly Breakdown (Month-Wise Attendance &amp; Overtime)
+        </h3>
+        @if(isset($monthlyAttendance) && $monthlyAttendance->count())
+          <span class="text-[11px] font-semibold text-slate-400">
+            Showing last {{ $monthlyAttendance->count() }} calendar months
+          </span>
+        @endif
+      </div>
+
+      @if(isset($monthlyAttendance) && $monthlyAttendance->count())
+        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <table class="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/90 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4 whitespace-nowrap">Month</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Working Days</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Present / Attended</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Half-Day</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Sunday / Holiday Overtime</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Absent</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">On Leave</th>
+                <th class="py-3 px-4 text-right whitespace-nowrap">Attendance Rate</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-xs">
+              @foreach($monthlyAttendance as $m)
+              <tr class="hover:bg-slate-50/75 transition-colors">
+                <td class="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    {{ $m->month_name }}
+                  </span>
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-medium text-slate-700 whitespace-nowrap">
+                  {{ $m->working_days }}
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-bold text-emerald-600 whitespace-nowrap">
+                  {{ $m->present_count }} d
+                </td>
+                <td class="py-3 px-4 text-center font-mono text-orange-600 whitespace-nowrap">
+                  {{ $m->half_day_count }} d
+                </td>
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                  @if($m->overtime_count > 0)
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold font-mono text-[11px]">
+                      <span>{{ $m->overtime_count }} d</span>
+                      <span class="text-amber-700">({{ $m->overtime_duration }})</span>
+                    </span>
+                  @else
+                    <span class="text-slate-400 font-mono">—</span>
+                  @endif
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-bold text-rose-600 whitespace-nowrap">
+                  {{ $m->absent_count }} d
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-medium text-blue-600 whitespace-nowrap">
+                  {{ $m->leave_count }} d
+                </td>
+                <td class="py-3 px-4 text-right whitespace-nowrap font-mono font-bold">
+                  <span class="inline-block px-2.5 py-1 rounded-full text-xs font-extrabold {{ $m->percentage >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200' }}">
+                    {{ $m->percentage }}%
+                  </span>
+                </td>
+              </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
+      @else
+        <div class="p-6 text-center rounded-xl bg-slate-50 border border-slate-200 text-slate-400">
+          <p class="text-xs font-semibold">No monthly attendance records archived yet for this employee.</p>
+        </div>
+      @endif
+    </div>
+
+    {{-- 4. Recent Card Punch Logs (Last 30 Days) (Full Width) --}}
+    <div class="space-y-3 pt-2 border-t border-slate-100">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-600"></span>
+          Recent Card Punch Logs (Last 30 Days)
+        </h3>
+        @if(isset($recentAttendance) && $recentAttendance->count())
+          <span class="text-[11px] font-semibold text-slate-400">
+            {{ $recentAttendance->count() }} punches recorded
+          </span>
+        @endif
+      </div>
+
+      @if(isset($recentAttendance) && $recentAttendance->count())
+        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white max-h-96 overflow-y-auto">
+          <table class="w-full text-xs text-left border-collapse">
+            <thead class="sticky top-0 bg-slate-50/95 backdrop-blur-xs z-10 shadow-2xs">
+              <tr class="border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4 whitespace-nowrap">Date</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Status</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">In-Time</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Out-Time</th>
+                <th class="py-3 px-4 text-center whitespace-nowrap">Duration</th>
+                <th class="py-3 px-4 whitespace-nowrap">Remarks / Notes</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-xs">
+              @foreach($recentAttendance as $rec)
+              @php
+                $inT = $rec->check_in ? \Carbon\Carbon::parse($rec->check_in)->format('h:i A') : '—';
+                $outT = $rec->check_out ? \Carbon\Carbon::parse($rec->check_out)->format('h:i A') : '—';
+                $dur = ($rec->check_in && $rec->check_out) ? round(\Carbon\Carbon::parse($rec->check_out)->diffInMinutes(\Carbon\Carbon::parse($rec->check_in)) / 60, 1) . 'h' : '—';
+              @endphp
+              <tr class="hover:bg-slate-50/75 transition-colors">
+                <td class="py-3 px-4 font-mono font-medium text-slate-900 whitespace-nowrap">
+                  {{ $rec->date->format('d M Y (D)') }}
+                </td>
+                <td class="py-3 px-4 text-center whitespace-nowrap">
+                  @if($rec->status === 'present')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Present
+                    </span>
+                  @elseif($rec->status === 'permission')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                      Permission
+                    </span>
+                  @elseif($rec->status === 'late')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                      Late
+                    </span>
+                  @elseif($rec->status === 'half_day')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                      Half-Day
+                    </span>
+                  @elseif($rec->status === 'overtime')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      Overtime
+                    </span>
+                  @elseif($rec->status === 'absent')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                      Absent
+                    </span>
+                  @elseif($rec->status === 'holiday')
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                      Holiday
+                    </span>
+                  @else
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                      {{ ucfirst($rec->status) }}
+                    </span>
+                  @endif
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-semibold text-slate-700 whitespace-nowrap">
+                  {{ $inT }}
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-semibold text-slate-700 whitespace-nowrap">
+                  {{ $outT }}
+                </td>
+                <td class="py-3 px-4 text-center font-mono font-bold text-slate-800 whitespace-nowrap">
+                  {{ $dur }}
+                </td>
+                <td class="py-3 px-4 text-slate-600 text-[11px]">
+                  {{ $rec->remarks ?? '—' }}
+                </td>
+              </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
+      @else
+        <div class="p-6 text-center rounded-xl bg-slate-50 border border-slate-200 text-slate-400">
+          <p class="text-xs font-semibold">No biometric/card punch logs recorded in the last 30 days.</p>
+        </div>
+      @endif
+    </div>
+
+  </div>
+
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
-      <div class="card">
-        <h3 class="font-semibold text-slate-700 mb-4 pb-2 border-b border-slate-100">Employee Profile Information</h3>
-        <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Category</dt><dd class="mt-0.5 font-bold text-slate-800">{{ $employee->category_label }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Designation</dt><dd class="mt-0.5 font-medium">{{ $employee->designation }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Department</dt><dd class="mt-0.5 font-medium">{{ $employee->department ?? '—' }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Mobile Number</dt><dd class="mt-0.5 font-mono text-indigo-600 font-bold">{{ $employee->mobile }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Email</dt><dd class="mt-0.5 text-slate-700">{{ $employee->official_email ?? $employee->email ?? '—' }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Joining Date</dt><dd class="mt-0.5 font-medium">{{ \Carbon\Carbon::parse($employee->joining_date)->format('d M Y') }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Qualification</dt><dd class="mt-0.5 text-slate-700">{{ $employee->qualification ?? '—' }}</dd></div>
-          <div><dt class="text-slate-400 text-xs uppercase tracking-wide">Basic Monthly Salary</dt><dd class="mt-0.5 font-mono font-bold text-emerald-600">₹{{ number_format($employee->basic_salary ?? 0, 2) }}</dd></div>
-          <div class="col-span-2"><dt class="text-slate-400 text-xs uppercase tracking-wide">Residential Address</dt><dd class="mt-0.5 text-slate-700">{{ $employee->address ?? $employee->residential_address ?? '—' }}</dd></div>
-        </dl>
+      <div class="card space-y-6">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 class="font-bold text-slate-800 text-base">Staff Master Record (Excel Reference)</h3>
+            <p class="text-xs text-slate-400">Complete school HR master-data across all standardized sections</p>
+          </div>
+          <a href="{{ route('hr.employees.edit', $employee->id) }}" class="btn btn-secondary btn-xs font-semibold">
+            Edit Details
+          </a>
+        </div>
+
+        {{-- SECTION A: PERSONAL DETAILS --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Section A — Personal Details
+          </h4>
+          <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Name</dt><dd class="mt-0.5 font-bold text-slate-800 text-sm">{{ $employee->full_name }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Date of Birth (DOB)</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->dob ? \Carbon\Carbon::parse($employee->dob)->format('d M Y') : '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Gender (M/F)</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ ucfirst($employee->gender ?? '—') }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Mother Tongue</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->mother_tongue ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Nationality</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->nationality ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Religion</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->religion ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Caste</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->caste ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Marital Status</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ ucfirst($employee->marital_status ?? '—') }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Highest Qualification</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->qualification ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Number of Children</dt><dd class="mt-0.5 font-bold font-mono text-slate-800">{{ $employee->number_of_children ?? 0 }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Male Children</dt><dd class="mt-0.5 font-mono text-slate-700">{{ $employee->children_male ?? 0 }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Female Children</dt><dd class="mt-0.5 font-mono text-slate-700">{{ $employee->children_female ?? 0 }}</dd></div>
+            <div class="col-span-2 sm:col-span-3 pt-1 border-t border-slate-200/60"><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Address</dt><dd class="mt-0.5 text-slate-800 font-medium">{{ $employee->address ?? $employee->residential_address ?? '—' }}</dd></div>
+          </dl>
+        </div>
+
+        {{-- SECTION B: EMPLOYMENT DETAILS --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Section B — Employment Details
+          </h4>
+          <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Employee ID</dt><dd class="mt-0.5 font-mono font-bold text-indigo-600">{{ $employee->employee_code }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Designation</dt><dd class="mt-0.5 font-bold text-slate-800">{{ $employee->designation }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Department</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->department ?? 'General' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Date of Joining (DOJ)</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->joining_date ? \Carbon\Carbon::parse($employee->joining_date)->format('d M Y') : '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">1st Teacher Appointment</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->first_appointment_date ? \Carbon\Carbon::parse($employee->first_appointment_date)->format('d M Y') : '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Employment Status</dt><dd class="mt-0.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">{{ $employee->current_employment_status ?? ($employee->is_active ? 'Active' : 'Inactive') }}</span></dd></div>
+          </dl>
+        </div>
+
+        {{-- SECTION C: IDENTITY / GOVERNMENT DETAILS --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Section C — Identity / Government Details
+          </h4>
+          <dl class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">
+            <div>
+              <dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Aadhaar No</dt>
+              <dd class="mt-0.5 font-mono font-bold text-slate-800">
+                @if($employee->aadhaar_no)
+                  {{ strlen($employee->aadhaar_no) === 12 ? 'XXXX-XXXX-' . substr($employee->aadhaar_no, -4) : $employee->aadhaar_no }}
+                @else
+                  —
+                @endif
+              </dd>
+            </div>
+            <div>
+              <dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">PAN No.</dt>
+              <dd class="mt-0.5 font-mono font-bold text-slate-800 uppercase">{{ $employee->pan_no ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">EPF No.</dt>
+              <dd class="mt-0.5 font-mono font-bold text-slate-800">{{ $employee->epf_no ?? $employee->pf_account_no ?? '—' }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {{-- SECTION D: CONTACT DETAILS --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Section D — Contact Details
+          </h4>
+          <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3 text-xs bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Email ID</dt><dd class="mt-0.5 font-medium text-indigo-600 break-all">{{ $employee->official_email ?? $employee->email ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Contact No.</dt><dd class="mt-0.5 font-mono font-bold text-slate-800">{{ $employee->mobile }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Contact Person</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->contact_person ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Name of the Contact Person</dt><dd class="mt-0.5 font-bold text-slate-800">{{ $employee->name_of_contact_person ?? $employee->emergency_contact_name ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Relationship</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->contact_relationship ?? $employee->emergency_contact_relation ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Contact Person Mobile</dt><dd class="mt-0.5 font-mono font-bold text-slate-800">{{ $employee->contact_no ?? $employee->emergency_contact_mobile ?? '—' }}</dd></div>
+            <div class="col-span-2 sm:col-span-3 pt-1 border-t border-slate-200/60"><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Contact Address</dt><dd class="mt-0.5 text-slate-800 font-medium">{{ $employee->contact_address ?? '—' }}</dd></div>
+          </dl>
+        </div>
+
+        {{-- SECTION E: PREVIOUS EMPLOYMENT DETAILS --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Section E — Previous Employment Details
+          </h4>
+          <dl class="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 text-xs bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Previous Post Held</dt><dd class="mt-0.5 font-bold text-slate-800">{{ $employee->previous_designation ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Institution Name &amp; Address</dt><dd class="mt-0.5 font-medium text-slate-800">{{ $employee->previous_school ?? '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">From Date</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->previous_from_date ? \Carbon\Carbon::parse($employee->previous_from_date)->format('d M Y') : '—' }}</dd></div>
+            <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">To Date</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->previous_to_date ? \Carbon\Carbon::parse($employee->previous_to_date)->format('d M Y') : '—' }}</dd></div>
+          </dl>
+        </div>
+
+        {{-- SECTIONS F, G, H, I: QUALIFICATION MASTER SECTIONS --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Sections F, G, H, I — Qualification Master Headings
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            {{-- Academic --}}
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 mb-1.5">Section F: Academic Qualification</span>
+              <p class="font-bold text-slate-800 text-sm">{{ $employee->academic_qualification ?? '—' }}</p>
+              <div class="grid grid-cols-2 gap-1.5 mt-2 text-[11px] text-slate-600">
+                <p><span class="text-slate-400">University:</span> <strong class="text-slate-700">{{ $employee->academic_university ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">Medium:</span> <strong class="text-slate-700">{{ $employee->academic_medium ?? '—' }}</strong></p>
+                <p class="col-span-2"><span class="text-slate-400">Institution:</span> <strong class="text-slate-700">{{ $employee->academic_institution ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">% Marks:</span> <strong class="text-emerald-700 font-mono">{{ $employee->academic_percentage !== null ? $employee->academic_percentage.'%' : '—' }}</strong></p>
+                <p><span class="text-slate-400">Year of Passing:</span> <strong class="text-slate-700 font-mono">{{ $employee->academic_year_of_passing ?? '—' }}</strong></p>
+              </div>
+            </div>
+
+            {{-- Professional --}}
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 mb-1.5">Section G: Professional Qualification</span>
+              <p class="font-bold text-slate-800 text-sm">{{ $employee->professional_qualification ?? '—' }}</p>
+              <div class="grid grid-cols-2 gap-1.5 mt-2 text-[11px] text-slate-600">
+                <p><span class="text-slate-400">University:</span> <strong class="text-slate-700">{{ $employee->professional_university ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">Medium:</span> <strong class="text-slate-700">{{ $employee->professional_medium ?? '—' }}</strong></p>
+                <p class="col-span-2"><span class="text-slate-400">Institution:</span> <strong class="text-slate-700">{{ $employee->professional_institution ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">% Marks:</span> <strong class="text-emerald-700 font-mono">{{ $employee->professional_percentage !== null ? $employee->professional_percentage.'%' : '—' }}</strong></p>
+                <p><span class="text-slate-400">Year of Passing:</span> <strong class="text-slate-700 font-mono">{{ $employee->professional_year_of_passing ?? '—' }}</strong></p>
+              </div>
+            </div>
+
+            {{-- Other 1 --}}
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 mb-1.5">Section H: Other Qualification 1</span>
+              <p class="font-bold text-slate-800 text-sm">{{ $employee->other_qual_1_name ?? '—' }}</p>
+              <div class="grid grid-cols-2 gap-1.5 mt-2 text-[11px] text-slate-600">
+                <p><span class="text-slate-400">University:</span> <strong class="text-slate-700">{{ $employee->other_qual_1_university ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">Medium:</span> <strong class="text-slate-700">{{ $employee->other_qual_1_medium ?? '—' }}</strong></p>
+                <p class="col-span-2"><span class="text-slate-400">Institution:</span> <strong class="text-slate-700">{{ $employee->other_qual_1_institution ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">% Marks:</span> <strong class="text-emerald-700 font-mono">{{ $employee->other_qual_1_percentage !== null ? $employee->other_qual_1_percentage.'%' : '—' }}</strong></p>
+                <p><span class="text-slate-400">Year of Passing:</span> <strong class="text-slate-700 font-mono">{{ $employee->other_qual_1_year_of_passing ?? '—' }}</strong></p>
+              </div>
+            </div>
+
+            {{-- Other 2 --}}
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-800 mb-1.5">Section I: Other Qualification 2</span>
+              <p class="font-bold text-slate-800 text-sm">{{ $employee->other_qual_2_name ?? '—' }}</p>
+              <div class="grid grid-cols-2 gap-1.5 mt-2 text-[11px] text-slate-600">
+                <p><span class="text-slate-400">University:</span> <strong class="text-slate-700">{{ $employee->other_qual_2_university ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">Medium:</span> <strong class="text-slate-700">{{ $employee->other_qual_2_medium ?? '—' }}</strong></p>
+                <p class="col-span-2"><span class="text-slate-400">Institution:</span> <strong class="text-slate-700">{{ $employee->other_qual_2_institution ?? '—' }}</strong></p>
+                <p><span class="text-slate-400">% Marks:</span> <strong class="text-emerald-700 font-mono">{{ $employee->other_qual_2_percentage !== null ? $employee->other_qual_2_percentage.'%' : '—' }}</strong></p>
+                <p><span class="text-slate-400">Year of Passing:</span> <strong class="text-slate-700 font-mono">{{ $employee->other_qual_2_year_of_passing ?? '—' }}</strong></p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {{-- SECTION J: ADDITIONAL QUALIFICATION / TRAINING --}}
+        <div>
+          <h4 class="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+            Section J — Additional Qualification / Training
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <p class="text-slate-400 font-semibold uppercase text-[10px]">Additional Qualification Obtained After Recruitment</p>
+              <p class="mt-1 font-medium text-slate-800 whitespace-pre-line">{{ $employee->additional_qual_after_recruitment ?? '—' }}</p>
+            </div>
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200">
+              <p class="text-slate-400 font-semibold uppercase text-[10px]">Training Programme Attended Before Recruitment</p>
+              <p class="mt-1 font-medium text-slate-800 whitespace-pre-line">{{ $employee->training_attended_before_recruitment ?? '—' }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {{-- Qualifications --}}
@@ -544,121 +1038,7 @@
         @endif
       </div>
 
-      {{-- ── Staff Attendance History & Monthly Breakdown Card ── --}}
-      <div class="card mt-6 space-y-5">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div class="flex items-center gap-2.5">
-            <div>
-              <h3 class="font-bold text-slate-900 text-sm">Staff Attendance &amp; Monthly Summary</h3>
-              <p class="text-xs text-slate-400">Monthly attendance rates and recent biometric/RFID punch logs</p>
-            </div>
-          </div>
-          <a href="{{ route('attendance.staff') }}" class="btn btn-secondary btn-xs font-bold text-indigo-600">
-            Card Tap Terminal &rarr;
-          </a>
-        </div>
 
-        {{-- 6-Month Breakdown Table --}}
-        @if(isset($monthlyAttendance) && $monthlyAttendance->count())
-        <div class="space-y-2">
-          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Monthly Breakdown (Month-Wise Attendance &amp; Overtime)</h4>
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
-                  <th class="py-2.5 px-3">Month</th>
-                  <th class="py-2.5 px-3 text-center">Working Days</th>
-                  <th class="py-2.5 px-3 text-center">Present / Attended</th>
-                  <th class="py-2.5 px-3 text-center">Sunday/Holiday Overtime</th>
-                  <th class="py-2.5 px-3 text-center">Absent</th>
-                  <th class="py-2.5 px-3 text-right">Monthly Attendance Rate</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100">
-                @foreach($monthlyAttendance as $m)
-                <tr class="hover:bg-slate-50/50">
-                  <td class="py-2 px-3 font-bold text-slate-800">{{ $m->month_name }}</td>
-                  <td class="py-2 px-3 text-center font-mono font-medium text-slate-700">{{ $m->working_days }}</td>
-                  <td class="py-2 px-3 text-center font-mono font-bold text-emerald-600">{{ $m->present_count }} d</td>
-                  <td class="py-2 px-3 text-center font-mono font-bold text-amber-700">
-                    @if($m->overtime_count > 0)
-                      <span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200 font-bold">
-                        {{ $m->overtime_count }} d ({{ $m->overtime_duration }})
-                      </span>
-                    @else
-                      <span class="text-slate-400">—</span>
-                    @endif
-                  </td>
-                  <td class="py-2 px-3 text-center font-mono font-bold text-rose-600">{{ $m->absent_count }} d</td>
-                  <td class="py-2 px-3 text-right font-mono font-bold">
-                    <span class="inline-block px-2 py-0.5 rounded-full text-[10px] {{ $m->percentage >= 80 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200' }}">
-                      {{ $m->percentage }}%
-                    </span>
-                  </td>
-                </tr>
-                @endforeach
-              </tbody>
-            </table>
-          </div>
-        </div>
-        @endif
-
-        {{-- Recent Attendance Punches Log --}}
-        @if(isset($recentAttendance) && $recentAttendance->count())
-        <div class="space-y-2 pt-2 border-t border-slate-100">
-          <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Recent Card Punch Logs (Last 30 Days)</h4>
-          <div class="overflow-x-auto max-h-56 overflow-y-auto pr-1">
-            <table class="w-full text-xs text-left border-collapse">
-              <thead>
-                <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
-                  <th class="py-2 px-3">Date</th>
-                  <th class="py-2 px-3 text-center">Status</th>
-                  <th class="py-2 px-3 text-center">In-Time</th>
-                  <th class="py-2 px-3 text-center">Out-Time</th>
-                  <th class="py-2 px-3 text-center">Duration</th>
-                  <th class="py-2 px-3">Remarks</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100">
-                @foreach($recentAttendance as $rec)
-                @php
-                  $inT = $rec->check_in ? \Carbon\Carbon::parse($rec->check_in)->format('h:i A') : '—';
-                  $outT = $rec->check_out ? \Carbon\Carbon::parse($rec->check_out)->format('h:i A') : '—';
-                  $dur = ($rec->check_in && $rec->check_out) ? round(\Carbon\Carbon::parse($rec->check_out)->diffInMinutes(\Carbon\Carbon::parse($rec->check_in)) / 60, 1) . 'h' : '—';
-                @endphp
-                <tr class="hover:bg-slate-50/50">
-                  <td class="py-2 px-3 font-mono font-medium text-slate-800">{{ $rec->date->format('d M Y (D)') }}</td>
-                  <td class="py-2 px-3 text-center">
-                    @if($rec->status === 'present')
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Present</span>
-                    @elseif($rec->status === 'late')
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">Late</span>
-                    @elseif($rec->status === 'half_day')
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800">Half-Day</span>
-                    @elseif($rec->status === 'overtime')
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">Overtime</span>
-                    @elseif($rec->status === 'absent')
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">Absent</span>
-                    @elseif($rec->status === 'holiday')
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">Holiday</span>
-                    @else
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">{{ ucfirst($rec->status) }}</span>
-                    @endif
-                  </td>
-                  <td class="py-2 px-3 text-center font-mono font-medium text-slate-700">{{ $inT }}</td>
-                  <td class="py-2 px-3 text-center font-mono font-medium text-slate-700">{{ $outT }}</td>
-                  <td class="py-2 px-3 text-center font-mono font-bold text-slate-700">{{ $dur }}</td>
-                  <td class="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[120px]">{{ $rec->remarks ?? '—' }}</td>
-                </tr>
-                @endforeach
-              </tbody>
-            </table>
-          </div>
-        </div>
-        @else
-          <p class="text-xs text-slate-400 italic py-2">No attendance records logged yet for this employee.</p>
-        @endif
-      </div>
 
       {{-- ── Staff Leave History & Applications Tracker Card ──── --}}
       <div class="card mt-6 space-y-4">
@@ -737,64 +1117,7 @@
       </div>
     </div>
 
-    <div>
-      {{-- ── Staff Attendance Summary Widget ───────────────────── --}}
-      <div class="card mb-6 space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-            <h3 class="font-bold text-slate-900 text-sm">Attendance Summary</h3>
-          </div>
-          <a href="{{ route('attendance.staff') }}" class="text-xs font-semibold text-indigo-600 hover:underline">Mark / Tap →</a>
-        </div>
-
-        @if($attTotalDays > 0)
-          <div class="text-center py-1">
-            <p class="text-4xl font-black tracking-tight {{ ($attendancePercentage ?? 0) >= 80 ? 'text-emerald-600' : 'text-rose-600' }}">
-              {{ $attendancePercentage }}%
-            </p>
-            <p class="text-xs font-semibold text-slate-600 mt-1">
-              <span class="font-mono font-bold text-slate-900">{{ $effectivePresent }}</span> days present out of <span class="font-mono font-bold text-slate-900">{{ $attTotalDays }}</span> recorded days
-            </p>
-          </div>
-          <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-            <div class="h-full rounded-full transition-all duration-500 {{ ($attendancePercentage ?? 0) >= 80 ? 'bg-emerald-500' : 'bg-rose-500' }}"
-                 style="width: {{ min(100, $attendancePercentage ?? 0) }}%"></div>
-          </div>
-
-          {{-- Quick Breakdown Pills --}}
-          <div class="grid grid-cols-3 gap-1.5 text-xs pt-1">
-            <div class="bg-emerald-50 p-2 rounded-xl border border-emerald-100 text-center">
-              <span class="text-[10px] text-emerald-700 font-bold uppercase">Present</span>
-              <p class="font-bold text-emerald-900 font-mono">{{ $attPresent }} d</p>
-            </div>
-            <div class="bg-rose-50 p-2 rounded-xl border border-rose-100 text-center">
-              <span class="text-[10px] text-rose-700 font-bold uppercase">Absent</span>
-              <p class="font-bold text-rose-900 font-mono">{{ $attAbsent }} d</p>
-            </div>
-            <div class="bg-amber-50 p-2 rounded-xl border border-amber-100 text-center">
-              <span class="text-[10px] text-amber-700 font-bold uppercase">Late</span>
-              <p class="font-bold text-amber-900 font-mono">{{ $attLate }} d</p>
-            </div>
-            <div class="bg-orange-50 p-2 rounded-xl border border-orange-100 text-center">
-              <span class="text-[10px] text-orange-700 font-bold uppercase">Half-Day</span>
-              <p class="font-bold text-orange-900 font-mono">{{ $attHalfDay }} d</p>
-            </div>
-            <div class="bg-amber-50 p-2 rounded-xl border border-amber-200 text-center">
-              <span class="text-[10px] text-amber-800 font-bold uppercase">Overtime</span>
-              <p class="font-bold text-amber-950 font-mono">{{ $attOvertime }} d</p>
-            </div>
-            <div class="bg-blue-50 p-2 rounded-xl border border-blue-100 text-center">
-              <span class="text-[10px] text-blue-700 font-bold uppercase">On Leave</span>
-              <p class="font-bold text-blue-900 font-mono">{{ $attLeave }} d</p>
-            </div>
-          </div>
-        @else
-          <div class="py-5 text-center text-slate-400">
-            <p class="text-xs font-semibold">No attendance records logged yet.</p>
-          </div>
-        @endif
-      </div>
+    <div class="space-y-6">
 
       {{-- Portal Login & Role --}}
       <div class="card mb-6" x-data="{ createLogin: false, changeRole: false }">

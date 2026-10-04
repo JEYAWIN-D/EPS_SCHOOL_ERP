@@ -538,7 +538,8 @@ class AttendanceController extends Controller
         $isHoliday   = $isSunday || !is_null($holiday);
         $holidayName = $isSunday ? 'Sunday Weekly Off' : ($holiday?->name ?? 'School Holiday');
 
-        $empQuery = Employee::with('department')->where('is_active', true);
+        $approvedFilter = fn($q) => $q->where('is_active', true)->where(fn($sq) => $sq->where('approval_status', 'approved')->orWhereNull('approval_status'));
+        $empQuery = Employee::with('department')->where('is_active', true)->where(fn($q) => $q->where('approval_status', 'approved')->orWhereNull('approval_status'));
         if ($deptId) {
             $empQuery->where('department_id', $deptId);
         }
@@ -548,12 +549,12 @@ class AttendanceController extends Controller
         $employees = $empQuery->orderBy('first_name')->get();
 
         $categories = [
-            ['key' => 'all',          'label' => 'All Staff',          'count' => Employee::where('is_active', true)->count()],
-            ['key' => 'teaching',     'label' => 'Teaching Staff',     'count' => Employee::where('is_active', true)->where('employee_type', 'teaching')->count()],
-            ['key' => 'non_teaching', 'label' => 'Non-Teaching',       'count' => Employee::where('is_active', true)->where('employee_type', 'non_teaching')->count()],
-            ['key' => 'driver',       'label' => 'Drivers',            'count' => Employee::where('is_active', true)->where('employee_type', 'driver')->count()],
-            ['key' => 'nanny',        'label' => 'Nannies (Naani)',    'count' => Employee::where('is_active', true)->where('employee_type', 'nanny')->count()],
-            ['key' => 'cleaner',      'label' => 'Cleaners / Support', 'count' => Employee::where('is_active', true)->where('employee_type', 'cleaner')->count()],
+            ['key' => 'all',          'label' => 'All Staff',          'count' => $approvedFilter(Employee::query())->count()],
+            ['key' => 'teaching',     'label' => 'Teaching Staff',     'count' => $approvedFilter(Employee::where('employee_type', 'teaching'))->count()],
+            ['key' => 'non_teaching', 'label' => 'Non-Teaching',       'count' => $approvedFilter(Employee::where('employee_type', 'non_teaching'))->count()],
+            ['key' => 'driver',       'label' => 'Drivers',            'count' => $approvedFilter(Employee::where('employee_type', 'driver'))->count()],
+            ['key' => 'nanny',        'label' => 'Nannies (Naani)',    'count' => $approvedFilter(Employee::where('employee_type', 'nanny'))->count()],
+            ['key' => 'cleaner',      'label' => 'Cleaners / Support', 'count' => $approvedFilter(Employee::where('employee_type', 'cleaner'))->count()],
         ];
 
         $attendances = StaffAttendance::where('date', $date)
@@ -631,6 +632,7 @@ class AttendanceController extends Controller
         // Find employee by ID, employee_code, mobile, email, or name
         $employee = Employee::with('department')
             ->where('is_active', true)
+            ->where(fn($q) => $q->where('approval_status', 'approved')->orWhereNull('approval_status'))
             ->where(function($q) use ($query) {
                 if (is_numeric($query)) {
                     $q->where('id', (int)$query)
