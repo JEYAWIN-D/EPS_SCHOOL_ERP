@@ -342,6 +342,13 @@
                   @endif
                 @endif
 
+                @if($emp->joining_date)
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400 font-medium">Experience:</span>
+                    <span class="font-bold text-indigo-700 truncate max-w-[170px]" title="{{ $emp->experience_formatted }}">{{ $emp->experience_duration }}</span>
+                  </div>
+                @endif
+
                 <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60">
                   <span class="text-slate-400">Mobile:</span>
                   <a href="tel:{{ $emp->mobile }}" class="font-mono text-indigo-600 font-semibold hover:underline">{{ $emp->mobile }}</a>
@@ -395,6 +402,7 @@
             <th class="py-3.5 px-4">Category</th>
             <th class="py-3.5 px-4">Designation</th>
             <th class="py-3.5 px-4">Department / Zone</th>
+            <th class="py-3.5 px-4">Experience</th>
             <th class="py-3.5 px-4">Mobile</th>
             <th class="py-3.5 px-4">Status</th>
             <th class="py-3.5 px-4 text-right">Actions</th>
@@ -422,6 +430,7 @@
               </td>
               <td class="py-3 px-4 text-slate-700 font-medium">{{ $emp->designation }}</td>
               <td class="py-3 px-4 text-slate-600">{{ $emp->department ?? $emp->assigned_block ?? '—' }}</td>
+              <td class="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">{{ $emp->experience_duration }}</td>
               <td class="py-3 px-4 font-mono text-slate-700">{{ $emp->mobile }}</td>
               <td class="py-3 px-4">
                 <span class="{{ $emp->is_active ? 'badge-green' : 'badge-red' }}">
@@ -439,7 +448,7 @@
             </tr>
           @empty
             <tr>
-              <td colspan="8" class="text-center py-8 text-slate-400">No employees found.</td>
+              <td colspan="9" class="text-center py-8 text-slate-400">No employees found.</td>
             </tr>
           @endforelse
         </tbody>

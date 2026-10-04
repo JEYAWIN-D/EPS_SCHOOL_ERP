@@ -390,12 +390,32 @@
           @error('department')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
+        <div x-data="{
+          doj: '{{ old('joining_date', $employee->joining_date?->format('Y-m-d')) }}',
+          get calculatedExp() {
+            if (!this.doj) return '';
+            const start = new Date(this.doj);
+            const now = new Date();
+            if (isNaN(start.getTime()) || start > now) return '0 Years 0 Months';
+            let years = now.getFullYear() - start.getFullYear();
+            let months = now.getMonth() - start.getMonth();
+            if (now.getDate() < start.getDate()) months--;
+            if (months < 0) { years--; months += 12; }
+            if (years < 0) { years = 0; months = 0; }
+            const yText = years === 1 ? 'Year' : 'Years';
+            const mText = months === 1 ? 'Month' : 'Months';
+            return `${years} ${yText} ${months} ${mText}`;
+          }
+        }">
           <label class="label text-xs font-semibold" for="joining_date">
             DOJ (Date of Joining) <span class="text-rose-500 font-bold">*</span>
           </label>
-          <input type="date" id="joining_date" name="joining_date" value="{{ old('joining_date', $employee->joining_date?->format('Y-m-d')) }}" required
+          <input type="date" id="joining_date" name="joining_date" x-model="doj" required
                  class="input @error('joining_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+          <p class="text-[11px] font-semibold text-indigo-600 mt-1 flex items-center gap-1" x-show="calculatedExp">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Experience: <strong x-text="calculatedExp"></strong> (auto-calculated from DOJ)</span>
+          </p>
           @error('joining_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 

@@ -121,6 +121,78 @@ class Employee extends Model
         return $this->designation?->name ?? 'Staff';
     }
 
+    /**
+     * Calculate duration of experience from joining date to current date.
+     * Returns an array with ['years' => int, 'months' => int, 'days' => int] or null.
+     */
+    public function getExperienceBreakdownAttribute(): ?array
+    {
+        if (!$this->joining_date) {
+            return null;
+        }
+
+        $joiningDate = \Carbon\Carbon::parse($this->joining_date)->startOfDay();
+        $currentDate = \Carbon\Carbon::now()->startOfDay();
+
+        if ($joiningDate->greaterThan($currentDate)) {
+            return ['years' => 0, 'months' => 0, 'days' => 0];
+        }
+
+        $diff = $joiningDate->diff($currentDate);
+
+        return [
+            'years'  => (int) $diff->y,
+            'months' => (int) $diff->m,
+            'days'   => (int) $diff->d,
+        ];
+    }
+
+    /**
+     * Get the experience years (derived automatically from joining date, or fallback to column).
+     */
+    public function getExperienceYearsAttribute(): ?int
+    {
+        $breakdown = $this->experience_breakdown;
+        if ($breakdown !== null) {
+            return $breakdown['years'];
+        }
+
+        return isset($this->attributes['experience_years']) ? (int) $this->attributes['experience_years'] : null;
+    }
+
+    /**
+     * Get experience string formatted as "X Years Y Months".
+     * Example: "4 Years 7 Months"
+     */
+    public function getExperienceDurationAttribute(): string
+    {
+        $breakdown = $this->experience_breakdown;
+        if ($breakdown === null) {
+            return '—';
+        }
+
+        $years = $breakdown['years'];
+        $months = $breakdown['months'];
+
+        $yearLabel = $years === 1 ? 'Year' : 'Years';
+        $monthLabel = $months === 1 ? 'Month' : 'Months';
+
+        return "{$years} {$yearLabel} {$months} {$monthLabel}";
+    }
+
+    /**
+     * Get full formatted experience string, e.g. "Experience: 4 Years 7 Months".
+     */
+    public function getExperienceFormattedAttribute(): string
+    {
+        $duration = $this->experience_duration;
+        if ($duration === '—') {
+            return 'Experience: —';
+        }
+
+        return "Experience: {$duration}";
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);

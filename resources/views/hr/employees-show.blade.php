@@ -25,9 +25,17 @@
               {{ $employee->is_active ? 'Active' : 'Inactive' }}
             </span>
           </div>
-          <p class="text-xs text-slate-500 font-mono mt-1">
-            Emp Code: <span class="font-bold text-indigo-600">{{ $employee->employee_code }}</span> &bull; {{ $employee->designation }} &bull; {{ $employee->department ?? 'General' }}
-          </p>
+          <div class="flex items-center gap-2 flex-wrap mt-1 text-xs text-slate-500 font-mono">
+            <span>Emp Code: <span class="font-bold text-indigo-600">{{ $employee->employee_code }}</span></span>
+            <span>&bull; {{ $employee->designation }}</span>
+            <span>&bull; {{ $employee->department ?? 'General' }}</span>
+            @if($employee->joining_date)
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs font-sans">
+                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {{ $employee->experience_formatted }}
+              </span>
+            @endif
+          </div>
         </div>
       </div>
 
@@ -116,12 +124,18 @@
       </p>
     </div>
 
-    {{-- Date of Joining --}}
-    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Joining Date</span>
-      <p class="text-lg font-bold text-slate-800 mt-1">
-        {{ \Carbon\Carbon::parse($employee->joining_date)->format('d M Y') }}
-      </p>
+    {{-- Total Experience & Date of Joining --}}
+    <div class="bg-white p-4 rounded-2xl border border-indigo-100 bg-indigo-50/20 shadow-2xs flex flex-col justify-between">
+      <div>
+        <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Total Experience</span>
+        <p class="text-base sm:text-lg font-black font-mono text-indigo-950 mt-1">
+          {{ $employee->experience_duration }}
+        </p>
+      </div>
+      <div class="mt-1 pt-1 border-t border-indigo-100/60 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+        <span>Joined:</span>
+        <span class="font-bold text-slate-700">{{ $employee->joining_date ? \Carbon\Carbon::parse($employee->joining_date)->format('d M Y') : '—' }}</span>
+      </div>
     </div>
   </div>
 
@@ -578,6 +592,15 @@
             <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Designation</dt><dd class="mt-0.5 font-bold text-slate-800">{{ $employee->designation }}</dd></div>
             <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Department</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->department ?? 'General' }}</dd></div>
             <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Date of Joining (DOJ)</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->joining_date ? \Carbon\Carbon::parse($employee->joining_date)->format('d M Y') : '—' }}</dd></div>
+            <div class="col-span-2 sm:col-span-2 bg-indigo-50/80 p-2 rounded-lg border border-indigo-100 flex items-center justify-between">
+              <div>
+                <dt class="text-indigo-600 font-bold uppercase tracking-wide text-[10px]">Calculated Experience</dt>
+                <dd class="mt-0.5 font-bold text-indigo-900 text-sm">{{ $employee->experience_formatted }}</dd>
+              </div>
+              <span class="text-[10px] font-semibold text-indigo-600 bg-white px-2 py-0.5 rounded border border-indigo-200">
+                Auto-calculated from DOJ
+              </span>
+            </div>
             <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">1st Teacher Appointment</dt><dd class="mt-0.5 font-semibold text-slate-700">{{ $employee->first_appointment_date ? \Carbon\Carbon::parse($employee->first_appointment_date)->format('d M Y') : '—' }}</dd></div>
             <div><dt class="text-slate-400 font-medium uppercase tracking-wide text-[10px]">Employment Status</dt><dd class="mt-0.5"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">{{ $employee->current_employment_status ?? ($employee->is_active ? 'Active' : 'Inactive') }}</span></dd></div>
           </dl>
