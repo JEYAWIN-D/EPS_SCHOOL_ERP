@@ -16,28 +16,32 @@
     </a>
   </div>
 
-  {{-- Header --}}
+  {{-- Page Header --}}
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-maroon-800 to-amber-600 flex items-center justify-center text-white shadow-md shadow-maroon-900/10">
+    <div class="flex items-center gap-3.5">
+      <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-maroon-800 to-amber-600 flex items-center justify-center text-white shadow-md shadow-maroon-900/10 flex-shrink-0">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
       </div>
       <div>
-        <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight">Circulars &amp; Official Orders</h1>
-        <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
-          Official directives, administrative orders, government orders (G.O.), and compliance circulars.
+        <h1 class="page-title text-2xl font-extrabold text-slate-900 tracking-tight">Circulars &amp; Official Orders</h1>
+        <p class="page-subtitle text-xs sm:text-sm text-slate-500 mt-0.5">
+          Official school directives, executive orders, government orders (G.O.), and regulatory compliance notices.
         </p>
       </div>
     </div>
 
-    @if(auth()->user()->hasAnyRole(['super_admin', 'admin', 'principal', 'correspondent', 'correspondant']))
-    <div class="flex items-center gap-2">
-      <a href="{{ route('circulars.create') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-maroon-800 to-maroon-900 hover:from-maroon-900 hover:to-black text-white text-xs font-bold shadow-md shadow-maroon-900/20 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Issue Circular / Order
+    <div class="flex items-center gap-2 flex-wrap">
+      <a href="{{ route('events.calendar') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1.5 shadow-xs">
+        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        Calendar View
       </a>
+      @if(auth()->user()->hasAnyRole(['super_admin', 'admin', 'principal', 'correspondent', 'correspondant']))
+        <a href="{{ route('circulars.create') }}" class="btn btn-primary inline-flex items-center gap-1.5 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Issue Circular / Order
+        </a>
+      @endif
     </div>
-    @endif
   </div>
 
   @if(session('success'))
@@ -49,9 +53,9 @@
     </div>
   @endif
 
-  {{-- KPI Cards --}}
+  {{-- KPI Metrics Cards --}}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-    <a href="{{ route('circulars.index') }}" class="card hover:border-slate-300 transition group">
+    <a href="{{ route('circulars.index') }}" class="card hover:border-slate-300 transition group {{ !request('category') ? 'ring-2 ring-slate-400' : '' }}">
       <div class="stat-icon bg-gradient-to-br from-blue-500 to-indigo-600 mb-3 group-hover:scale-105 transition-transform">
         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
       </div>
@@ -59,11 +63,11 @@
       <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Total Records</p>
     </a>
 
-    <a href="{{ route('circulars.index', ['category' => 'order']) }}" class="card hover:border-amber-300 transition group {{ request('category') === 'order' ? 'ring-2 ring-amber-500' : '' }}">
-      <div class="stat-icon bg-gradient-to-br from-amber-500 to-orange-500 mb-3 group-hover:scale-105 transition-transform">
+    <a href="{{ route('circulars.index', ['category' => 'order']) }}" class="card hover:border-purple-300 transition group {{ request('category') === 'order' ? 'ring-2 ring-purple-500' : '' }}">
+      <div class="stat-icon bg-gradient-to-br from-purple-500 to-indigo-600 mb-3 group-hover:scale-105 transition-transform">
         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
       </div>
-      <p class="stat-number text-2xl font-black text-amber-600">{{ $ordersCount }}</p>
+      <p class="stat-number text-2xl font-black text-purple-700">{{ $ordersCount }}</p>
       <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Official Orders</p>
     </a>
 
@@ -75,11 +79,11 @@
       <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Urgent Directives</p>
     </a>
 
-    <a href="{{ route('circulars.index', ['category' => 'pinned']) }}" class="card hover:border-purple-300 transition group {{ request('category') === 'pinned' ? 'ring-2 ring-purple-500' : '' }}">
-      <div class="stat-icon bg-gradient-to-br from-violet-500 to-purple-600 mb-3 group-hover:scale-105 transition-transform">
+    <a href="{{ route('circulars.index', ['category' => 'pinned']) }}" class="card hover:border-amber-300 transition group {{ request('category') === 'pinned' ? 'ring-2 ring-amber-500' : '' }}">
+      <div class="stat-icon bg-gradient-to-br from-amber-500 to-orange-600 mb-3 group-hover:scale-105 transition-transform">
         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
       </div>
-      <p class="stat-number text-2xl font-black text-purple-700">{{ $pinnedCount }}</p>
+      <p class="stat-number text-2xl font-black text-amber-600">{{ $pinnedCount }}</p>
       <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Pinned to Top</p>
     </a>
   </div>
@@ -149,34 +153,46 @@
     </div>
   </form>
 
-  {{-- Circulars & Orders Grid --}}
+  {{-- Circulars & Orders Listing Grid --}}
   <div class="space-y-4">
     @forelse($circulars as $c)
       @php
         $user = auth()->user();
         $canDelete = $user && $user->hasAnyRole(['super_admin', 'admin', 'principal', 'correspondent', 'correspondant']);
         $myAck = $c->acknowledgements->where('user_id', $user?->id)->first();
+        $isOrder = in_array($c->notice_type, ['order', 'directive', 'memo']) || !empty($c->order_category);
       @endphp
 
-      <div class="card hover:shadow-md transition border {{ $c->is_pinned ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200/90 bg-white' }} rounded-2xl p-5 space-y-3.5">
+      <div class="card hover:shadow-md transition bg-white border {{ $c->is_pinned ? 'border-amber-300 ring-1 ring-amber-200 bg-amber-50/15' : 'border-slate-200/90' }} {{ $isOrder ? 'border-l-4 border-l-purple-600' : 'border-l-4 border-l-sky-600' }} rounded-2xl p-5 space-y-4">
+        
+        {{-- Card Header: Metadata Pills & Action Buttons --}}
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           
-          <div class="space-y-1.5 flex-1">
+          <div class="space-y-2 flex-1">
             <div class="flex items-center gap-2 flex-wrap text-xs">
-              {{-- Reference No --}}
+              {{-- Reference Number in Monospace Badge --}}
               <span class="px-2.5 py-0.5 rounded-lg font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs">
                 {{ $c->reference_no ?? 'EPS/CIR/' . $c->id }}
               </span>
 
               {{-- Type badge --}}
-              <span class="px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] tracking-wide {{ in_array($c->notice_type, ['order','directive']) ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-blue-100 text-blue-800 border border-blue-200' }}">
-                {{ $c->notice_type === 'order' ? 'Official Order' : ucfirst($c->notice_type) }}
-              </span>
+              @if($isOrder)
+                <span class="px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] tracking-wide bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
+                  <span>⚖️</span>
+                  <span>{{ $c->notice_type === 'order' ? 'Official Order' : ucfirst($c->notice_type) }}</span>
+                </span>
+              @else
+                <span class="px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] tracking-wide bg-sky-100 text-sky-800 border border-sky-200 flex items-center gap-1">
+                  <span>📋</span>
+                  <span>Circular</span>
+                </span>
+              @endif
 
               {{-- Priority badge --}}
               @if($c->priority === 'urgent')
-                <span class="px-2 py-0.5 rounded-full font-extrabold text-[10px] uppercase bg-rose-100 text-rose-700 border border-rose-200 animate-pulse">
-                  Urgent
+                <span class="px-2.5 py-0.5 rounded-full font-extrabold text-[10px] uppercase bg-rose-100 text-rose-700 border border-rose-200 animate-pulse flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+                  <span>Urgent</span>
                 </span>
               @elseif($c->priority === 'high')
                 <span class="px-2 py-0.5 rounded-full font-bold text-[10px] uppercase bg-amber-100 text-amber-800 border border-amber-200">
@@ -184,7 +200,7 @@
                 </span>
               @endif
 
-              {{-- Audience badge --}}
+              {{-- Target Audience chip --}}
               <span class="px-2 py-0.5 rounded-md font-semibold text-[11px] bg-slate-50 text-slate-600 border border-slate-200">
                 Audience: {{ ucfirst($c->target_audience) }}
               </span>
@@ -194,51 +210,66 @@
                   ★ Pinned
                 </span>
               @endif
+
+              @if($c->order_category)
+                <span class="px-2 py-0.5 rounded-md font-medium text-[11px] bg-slate-100 text-slate-500">
+                  {{ $c->order_category }}
+                </span>
+              @endif
             </div>
 
+            {{-- Title --}}
             <h3 class="text-base sm:text-lg font-extrabold text-slate-900 leading-snug">
               <a href="{{ route('circulars.show', $c->id) }}" class="hover:text-maroon-700 transition">
                 {{ $c->title }}
               </a>
             </h3>
 
+            {{-- Issuing details --}}
             <p class="text-xs text-slate-500 flex items-center gap-3 flex-wrap">
-              <span><strong>Issued:</strong> {{ $c->publish_date ? $c->publish_date->format('d M Y') : $c->created_at->format('d M Y') }}</span>
+              <span class="inline-flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <strong>Date of Issue:</strong> {{ $c->publish_date ? $c->publish_date->format('d M Y') : $c->created_at->format('d M Y') }}
+              </span>
               @if($c->issuing_authority)
                 <span>&bull;</span>
                 <span><strong>Authority:</strong> {{ $c->issuing_authority }}</span>
               @endif
               @if($c->signed_by_name)
                 <span>&bull;</span>
-                <span><strong>Signatory:</strong> {{ $c->signed_by_name }} ({{ $c->signatory_designation ?? 'Authorized' }})</span>
+                <span><strong>Signatory:</strong> {{ $c->signed_by_name }} ({{ $c->signatory_designation ?? 'Authorized Officer' }})</span>
+              @endif
+              @if($c->expiry_date)
+                <span>&bull;</span>
+                <span class="text-amber-700"><strong>Valid until:</strong> {{ $c->expiry_date->format('d M Y') }}</span>
               @endif
             </p>
           </div>
 
           {{-- Action Buttons --}}
           <div class="flex items-center gap-2 flex-shrink-0">
-            <a href="{{ route('circulars.show', $c->id) }}" class="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition inline-flex items-center gap-1">
+            <a href="{{ route('circulars.show', $c->id) }}" class="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition inline-flex items-center gap-1 shadow-2xs">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
               View
             </a>
 
             <button type="button"
                     onclick="shareCircular('{{ addslashes($c->title) }}', '{{ addslashes($c->reference_no ?? '') }}', '{{ route('circulars.show', $c->id) }}')"
-                    class="px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition inline-flex items-center gap-1"
+                    class="px-2.5 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-semibold transition inline-flex items-center gap-1 shadow-2xs"
                     title="Share via Link / WhatsApp">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
               Share
             </button>
 
             @if($canDelete)
-              <a href="{{ route('circulars.edit', $c->id) }}" class="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition" title="Edit">
+              <a href="{{ route('circulars.edit', $c->id) }}" class="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-semibold transition shadow-2xs" title="Edit">
                 Edit
               </a>
 
               <form method="POST" action="{{ route('circulars.destroy', $c->id) }}" onsubmit="return confirm('Permanently delete circular [{{ addslashes($c->reference_no ?? $c->title) }}]? This cannot be undone.')" class="inline">
                 @csrf
                 @method('DELETE')
-                <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-semibold transition inline-flex items-center gap-1" title="Delete">
+                <button type="submit" class="px-2.5 py-1.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-semibold transition inline-flex items-center gap-1 shadow-2xs" title="Delete">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                   Delete
                 </button>
@@ -248,26 +279,27 @@
 
         </div>
 
-        {{-- Content Snippet --}}
-        <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed pl-1 border-l-2 border-slate-200">
+        {{-- Content Excerpt --}}
+        <div class="text-xs text-slate-600 line-clamp-2 leading-relaxed pl-3 border-l-2 border-slate-200 bg-slate-50/40 py-1.5 rounded-r-lg">
           {{ strip_tags($c->content) }}
         </div>
 
-        {{-- Footer Details: Attachments & Acknowledgement --}}
-        <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <div class="flex items-center gap-3">
+        {{-- Footer Details: Attachment & Acknowledgement --}}
+        <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-3 flex-wrap">
             @if($c->attachment)
-              <a href="{{ Storage::url($c->attachment) }}" target="_blank" class="inline-flex items-center gap-1.5 font-bold text-indigo-600 hover:text-indigo-800 transition">
+              <a href="{{ Storage::url($c->attachment) }}" target="_blank"
+                 class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold hover:bg-indigo-100 transition shadow-2xs">
                 <svg class="w-4 h-4 text-rose-500" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-                <span>Download Attachment (PDF/DOC)</span>
+                <span>Download Attachment</span>
               </a>
             @else
-              <span class="text-slate-400">No external attachment</span>
+              <span class="text-slate-400 text-[11px]">No file attachment</span>
             @endif
 
             @if($c->requires_acknowledgement)
               <span class="text-slate-300">&bull;</span>
-              <span class="text-slate-500">
+              <span class="text-slate-500 text-[11px]">
                 <strong>{{ $c->acknowledgements_count }}</strong> acknowledged
               </span>
             @endif
@@ -291,6 +323,7 @@
             @endif
           @endif
         </div>
+
       </div>
     @empty
       <div class="card text-center py-16 bg-white rounded-2xl border border-slate-200">
@@ -311,7 +344,7 @@
 
 <script>
 function shareCircular(title, ref, url) {
-  const shareText = `*OFFICIAL CIRCULAR - ERODE PUBLIC SCHOOL*\n*Ref*: ${ref}\n*Subject*: ${title}\n\nRead full circular details at:\n${url}`;
+  const shareText = `*OFFICIAL DIRECTIVE - ERODE PUBLIC SCHOOL*\n*Ref*: ${ref}\n*Subject*: ${title}\n\nRead full directive details at:\n${url}`;
   
   if (navigator.share) {
     navigator.share({
@@ -320,7 +353,7 @@ function shareCircular(title, ref, url) {
       url: url,
     }).catch(() => copyToClipboard(url));
   } else {
-    // Open WhatsApp Web share or copy
+    // Open WhatsApp share or copy
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
     window.open(waUrl, '_blank');
   }
