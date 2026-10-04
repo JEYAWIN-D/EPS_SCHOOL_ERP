@@ -1245,31 +1245,47 @@ class BookNoteService
             default => 'Pending Payment'
         };
 
+        $totFee = (float) ($student->total_admission_fee ?? 0);
+        $paidFee = (float) ($student->admission_paid_amount ?? 0);
+        $pendFee = (float) ($student->admission_pending_amount ?? max(0, $totFee - $paidFee));
+        $isFeeCleared = ($paymentStatus === 'paid') || ($totFee > 0 && $pendFee <= 0 && $paidFee >= $totFee);
+
         $distributionStatus = ($totalPrescribed > 0 && $totalRemaining === 0) ? 'Distributed' : ($totalIssued > 0 ? 'Partially Distributed' : 'Pending Distribution');
 
         return [
             'student' => [
-                'id'                   => $student->id,
-                'name'                 => $student->full_name,
-                'gender'               => $student->gender,
-                'admission_no'         => $student->admission_no,
-                'roll_no'              => $student->roll_number,
-                'class_name'           => $className,
-                'section_name'         => $sectionName,
-                'stream_group'         => $student->stream_group,
-                'mobile'               => $student->mobile ?? $student->father_mobile,
-                'payment_status'       => $paymentStatus,
-                'payment_status_label' => $paymentStatusLabel,
-                'dress_size'           => $student->dress_size,
+                'id'                       => $student->id,
+                'name'                     => $student->full_name,
+                'gender'                   => $student->gender,
+                'admission_no'             => $student->admission_no,
+                'roll_no'                  => $student->roll_number,
+                'class_name'               => $className,
+                'section_name'             => $sectionName,
+                'stream_group'             => $student->stream_group,
+                'mobile'                   => $student->mobile ?? $student->father_mobile,
+                'payment_status'           => $paymentStatus,
+                'payment_status_label'     => $paymentStatusLabel,
+                'total_admission_fee'      => $totFee,
+                'admission_paid_amount'    => $paidFee,
+                'admission_pending_amount' => $pendFee,
+                'payment_mode'             => $student->payment_mode,
+                'payment_date'             => $student->payment_date ? \Carbon\Carbon::parse($student->payment_date)->format('d M Y') : null,
+                'payment_account'          => $student->payment_account,
+                'is_fee_cleared'           => $isFeeCleared,
+                'dress_size'               => $student->dress_size,
             ],
             'summary' => [
-                'total_prescribed'     => $totalPrescribed,
-                'total_issued'         => $totalIssued,
-                'total_remaining'      => $totalRemaining,
-                'status'               => ($totalPrescribed > 0 && $totalRemaining === 0) ? 'fully_issued' : ($totalIssued > 0 ? 'partially_issued' : 'pending'),
-                'distribution_status'  => $distributionStatus,
-                'payment_status'       => $paymentStatus,
-                'payment_status_label' => $paymentStatusLabel,
+                'total_prescribed'         => $totalPrescribed,
+                'total_issued'             => $totalIssued,
+                'total_remaining'          => $totalRemaining,
+                'status'                   => ($totalPrescribed > 0 && $totalRemaining === 0) ? 'fully_issued' : ($totalIssued > 0 ? 'partially_issued' : 'pending'),
+                'distribution_status'      => $distributionStatus,
+                'payment_status'           => $paymentStatus,
+                'payment_status_label'     => $paymentStatusLabel,
+                'total_admission_fee'      => $totFee,
+                'admission_paid_amount'    => $paidFee,
+                'admission_pending_amount' => $pendFee,
+                'is_fee_cleared'           => $isFeeCleared,
             ],
             'books'    => $books,
             'notes'    => $notes,
@@ -1301,11 +1317,16 @@ class BookNoteService
     /**
      * One-click action to issue all remaining books & notes for a student.
      */
-    public function issueAllRemainingForStudent(int $studentId, ?int $userId = null): int
+    public function issueAllRemainingForStudent(int $studentId, ?int $userId = null, ?string $itemType = null): int
     {
-        $items = AdmissionBookNoteItem::where('student_id', $studentId)
-            ->whereRaw('issued_quantity < quantity')
-            ->get();
+        $query = AdmissionBookNoteItem::where('student_id', $studentId)
+            ->whereRaw('issued_quantity < quantity');
+
+        if ($itemType && in_array(strtoupper($itemType), ['NOTE', 'BOOK', 'UNIFORM'])) {
+            $query->where('item_type', strtoupper($itemType));
+        }
+
+        $items = $query->get();
 
         $count = 0;
         foreach ($items as $item) {

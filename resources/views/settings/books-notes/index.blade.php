@@ -5,62 +5,84 @@
 <div x-data="booksNotesPage()" x-init="init()" class="space-y-6">
 
   {{-- ── Page Title & Action Bar ───────────────────────────────────────────── --}}
-  <div class="flex items-center justify-between flex-wrap gap-4 bg-white border border-slate-200/90 rounded-2xl p-6 shadow-xs">
-    <div class="flex items-center gap-4">
-      <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#8C2826] to-[#681917] flex items-center justify-center text-white shadow-md shadow-[#8C2826]/20 shrink-0">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <div class="flex items-center justify-between flex-wrap gap-4 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs">
+    <div class="flex items-center gap-3.5 sm:gap-4">
+      <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-[#8C2826] to-[#681917] flex items-center justify-center text-white shadow-md shadow-[#8C2826]/20 shrink-0">
+        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
         </svg>
       </div>
       <div>
         <div class="flex items-center gap-2.5 flex-wrap">
-          <h1 class="text-xl font-black text-slate-900 tracking-tight" style="font-family:'Plus Jakarta Sans',sans-serif;">Book, Note &amp; Uniform Distribution</h1>
-          <span class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-[#FFF5F5] text-[#8C2826] border border-[#FECACA]">
+          <h1 class="text-lg sm:text-xl font-black text-slate-900 tracking-tight" style="font-family:'Plus Jakarta Sans',sans-serif;">Book, Note &amp; Uniform Distribution</h1>
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FFF5F5] text-[#8C2826] border border-[#FECACA]">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#8C2826]"></span>
             Session 2026–27
           </span>
         </div>
-        <p class="text-xs text-slate-500 mt-1 font-medium">Standard-wise prescribed textbooks, notebooks, school uniforms, SKUs, and Senior Secondary stream group checklists</p>
+        <p class="text-xs text-slate-500 mt-0.5 font-medium">Standard-wise prescribed textbooks, notebooks, school uniforms, SKUs, and Senior Secondary stream group checklists</p>
       </div>
     </div>
 
-    <div class="flex items-center gap-3">
-      <a href="{{ route('settings.index') }}" class="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs inline-flex items-center gap-2 transition cursor-pointer">
-        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+    <div class="flex items-center gap-2.5 flex-wrap">
+      <a href="{{ route('settings.index') }}" class="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-bold text-xs inline-flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
         <span>Back to Settings</span>
       </a>
-      <button type="button" @click="openCreateModal()" class="px-5 py-2.5 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-black text-xs flex items-center gap-2 shadow-sm shadow-[#8C2826]/20 transition cursor-pointer">
+      <button type="button" @click="openCreateModal()" class="px-4 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm shadow-[#8C2826]/20 transition cursor-pointer">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
         <span>Add Book, Note &amp; Uniform</span>
       </button>
     </div>
   </div>
 
-  {{-- ── Main Navigation Tabs (Master Checklists vs Distribution Tracker) ───── --}}
-  <div class="flex items-center justify-between flex-wrap gap-4 border-b border-slate-200/80 pb-2">
-    <div class="flex items-center gap-2">
+  {{-- ── Main Navigation Tabs (Master Checklists vs Distribution Tracker vs Fee & Issuance Desk) ───── --}}
+  <div class="flex items-center justify-between flex-wrap gap-3">
+    <div class="bg-slate-100/90 p-1 rounded-2xl inline-flex items-center gap-1 border border-slate-200/80 shadow-2xs">
+      {{-- Tab 1: Standard Master Checklists --}}
       <button type="button" @click="switchMainTab('checklists')"
-              :class="activeMainTab === 'checklists' ? 'border-[#8C2826] text-[#8C2826] bg-[#FFF5F5] shadow-xs' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/70'"
-              class="px-5 py-3 rounded-2xl border font-black text-xs sm:text-sm flex items-center gap-2.5 transition cursor-pointer">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+              :class="activeMainTab === 'checklists' ? 'bg-white text-[#8C2826] shadow-xs font-black border border-slate-200/60' : 'text-slate-600 hover:text-slate-900 font-bold border border-transparent hover:bg-white/50'"
+              class="px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer">
+        <svg class="w-4 h-4" :class="activeMainTab === 'checklists' ? 'text-[#8C2826]' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+        </svg>
         <span>Standard Master Checklists</span>
-        <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700" x-text="cards.length + ' Classes'"></span>
+        <span :class="activeMainTab === 'checklists' ? 'bg-[#FFF5F5] text-[#8C2826] border border-[#FECACA]' : 'bg-slate-200/80 text-slate-600'"
+              class="px-2 py-0.5 rounded-full text-[10px] font-extrabold"
+              x-text="cards.length + ' Classes'"></span>
       </button>
 
+      {{-- Tab 2: Student Distribution & Remaining Tracker --}}
       <button type="button" @click="switchMainTab('distribution')"
-              :class="activeMainTab === 'distribution' ? 'border-[#8C2826] text-[#8C2826] bg-[#FFF5F5] shadow-xs' : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/70'"
-              class="px-5 py-3 rounded-2xl border font-black text-xs sm:text-sm flex items-center gap-2.5 transition cursor-pointer relative">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-        <span>Student Distribution &amp; Remaining Tracker</span>
+              :class="activeMainTab === 'distribution' ? 'bg-white text-[#8C2826] shadow-xs font-black border border-slate-200/60' : 'text-slate-600 hover:text-slate-900 font-bold border border-transparent hover:bg-white/50'"
+              class="px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer relative">
+        <svg class="w-4 h-4" :class="activeMainTab === 'distribution' ? 'text-[#8C2826]' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        <span>Student Distribution &amp; Tracker</span>
         <span x-show="distSummary.students_with_remaining > 0"
-              class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-xs"
+              class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white shadow-2xs"
               x-text="distSummary.students_with_remaining + ' Pending'">
+        </span>
+      </button>
+
+      {{-- Tab 3: Quick Fee Check & Student Issuance Desk --}}
+      <button type="button" @click="switchMainTab('desk')"
+              :class="activeMainTab === 'desk' ? 'bg-white text-[#8C2826] shadow-xs font-black border border-slate-200/60' : 'text-slate-600 hover:text-slate-900 font-bold border border-transparent hover:bg-white/50'"
+              class="px-4 py-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all cursor-pointer relative">
+        <svg class="w-4 h-4" :class="activeMainTab === 'desk' ? 'text-[#8C2826]' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <span>Fee Check &amp; Issuance Desk</span>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-2xs">
+          ⚡ Quick Desk
         </span>
       </button>
     </div>
 
     {{-- Live status indicator --}}
-    <div class="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-500">
-      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs text-xs font-semibold text-slate-600">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
       <span>Physical Issuance &amp; Delivery Tracking</span>
     </div>
   </div>
@@ -81,81 +103,97 @@
   <div x-show="activeMainTab === 'checklists'" class="space-y-6">
 
   {{-- ── Filter & Search Toolbar ──────────────────────────────────────────── --}}
-  <div class="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs space-y-4">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div class="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+    
+    {{-- Top Row: Academic Year on Left & Global Inventory Badges on Right --}}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       
       {{-- Academic Year Selector --}}
-      <div class="flex items-center gap-3">
-        <label class="text-xs font-bold text-slate-700 whitespace-nowrap uppercase tracking-wider flex items-center gap-1.5">
+      <div class="flex items-center gap-2.5">
+        <label class="text-xs font-bold text-slate-500 whitespace-nowrap uppercase tracking-wider flex items-center gap-1.5">
           <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
           <span>Academic Year:</span>
         </label>
-        <select x-model="selectedYearId" @change="loadCards()"
-                class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/70 focus:border-[#8C2826] focus:ring-[#8C2826]">
-          @foreach($academicYears as $year)
-            <option value="{{ $year->id }}" {{ $year->id == $currentYear?->id ? 'selected' : '' }}>
-              {{ $year->name }} {{ $year->is_current ? '— (Current Active)' : '' }}
-            </option>
-          @endforeach
-        </select>
+        <div class="relative">
+          <select x-model="selectedYearId" @change="loadCards()"
+                  class="pl-3.5 pr-8 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/70 hover:bg-slate-100/70 focus:border-[#8C2826] focus:ring-1 focus:ring-[#8C2826] transition cursor-pointer appearance-none">
+            @foreach($academicYears as $year)
+              <option value="{{ $year->id }}" {{ $year->id == $currentYear?->id ? 'selected' : '' }}>
+                {{ $year->name }} {{ $year->is_current ? '— (Current Active)' : '' }}
+              </option>
+            @endforeach
+          </select>
+          <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </div>
       </div>
 
-      {{-- Search bar --}}
-      <div class="relative flex-1 max-w-md">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      {{-- Global Counters (Right Aligned on Top Row) --}}
+      <div class="flex items-center gap-2 flex-wrap text-xs self-start sm:self-auto">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/80 font-bold">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+          <span>Books:</span>
+          <span class="font-extrabold tabular-nums" x-text="summary.totalBooks"></span>
         </div>
-        <input type="text" x-model="searchQuery" @input.debounce.300ms="loadCards()"
-               placeholder="Search by standard, book title, notebook, or SKU..."
-               class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:border-[#8C2826] focus:ring-[#8C2826] bg-slate-50/50">
-        <button x-show="searchQuery" @click="searchQuery = ''; loadCards()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 text-xs font-bold">
-          &times;
-        </button>
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 text-indigo-900 border border-indigo-200/80 font-bold">
+          <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+          <span>Notes:</span>
+          <span class="font-extrabold tabular-nums" x-text="summary.totalNotes"></span>
+        </div>
+        <div class="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-black">
+          <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          <span class="tabular-nums" x-text="summary.totalUnits + ' Total Units'"></span>
+        </div>
       </div>
+
     </div>
 
-    {{-- Category Filters & Overall Summary Metrics --}}
-    <div class="flex items-center justify-between flex-wrap gap-3 pt-3 border-t border-slate-100">
-      <div class="flex items-center gap-1.5 flex-wrap">
+    {{-- Bottom Row: Category Stage Filters on Left & Search Input on Right --}}
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+      
+      {{-- Stage Filter Pills --}}
+      <div class="flex items-center gap-1.5 flex-wrap overflow-x-auto pb-0.5">
         <button type="button" @click="selectedCategory = 'ALL'"
-                :class="selectedCategory === 'ALL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer">
+                :class="selectedCategory === 'ALL' ? 'bg-[#8C2826] text-white shadow-xs font-bold' : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 font-semibold'"
+                class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer whitespace-nowrap">
           All Classes (<span x-text="cards.length"></span>)
         </button>
         <button type="button" @click="selectedCategory = 'KINDERGARTEN'"
-                :class="selectedCategory === 'KINDERGARTEN' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer">
-          Kindergarten (Pre-KG, LKG, UKG)
+                :class="selectedCategory === 'KINDERGARTEN' ? 'bg-[#8C2826] text-white shadow-xs font-bold' : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 font-semibold'"
+                class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer whitespace-nowrap">
+          Kindergarten (Pre-KG – UKG)
         </button>
         <button type="button" @click="selectedCategory = 'PRIMARY'"
-                :class="selectedCategory === 'PRIMARY' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer">
+                :class="selectedCategory === 'PRIMARY' ? 'bg-[#8C2826] text-white shadow-xs font-bold' : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 font-semibold'"
+                class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer whitespace-nowrap">
           Primary (Class I – V)
         </button>
         <button type="button" @click="selectedCategory = 'MIDDLE_HIGH'"
-                :class="selectedCategory === 'MIDDLE_HIGH' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer">
+                :class="selectedCategory === 'MIDDLE_HIGH' ? 'bg-[#8C2826] text-white shadow-xs font-bold' : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 font-semibold'"
+                class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer whitespace-nowrap">
           Middle &amp; High (Class VI – X)
         </button>
         <button type="button" @click="selectedCategory = 'SENIOR_SEC'"
-                :class="selectedCategory === 'SENIOR_SEC' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                class="px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer">
+                :class="selectedCategory === 'SENIOR_SEC' ? 'bg-[#8C2826] text-white shadow-xs font-bold' : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900 font-semibold'"
+                class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer whitespace-nowrap">
           Senior Secondary (XI – XII)
         </button>
       </div>
 
-      {{-- Global Counters --}}
-      <div class="flex items-center gap-2 flex-wrap text-xs font-bold">
-        <span class="px-3 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
-          Books: <span class="tabular-nums" x-text="summary.totalBooks"></span>
-        </span>
-        <span class="px-3 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200">
-          Notes: <span class="tabular-nums" x-text="summary.totalNotes"></span>
-        </span>
-        <span class="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
-          Total Units: <span class="tabular-nums" x-text="summary.totalUnits"></span>
-        </span>
+      {{-- Search bar --}}
+      <div class="relative w-full lg:w-72 shrink-0">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </div>
+        <input type="text" x-model="searchQuery" @input.debounce.300ms="loadCards()"
+               placeholder="Search standard, title, SKU..."
+               class="w-full pl-9 pr-7 py-1.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 focus:border-[#8C2826] focus:ring-1 focus:ring-[#8C2826] bg-slate-50/50">
+        <button x-show="searchQuery" @click="searchQuery = ''; loadCards()" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs font-bold">
+          &times;
+        </button>
       </div>
+
     </div>
   </div>
 
@@ -403,31 +441,41 @@
           
           {{-- Academic Year Selector --}}
           <div class="flex items-center gap-2">
-            <label class="text-xs font-bold text-slate-700 whitespace-nowrap uppercase tracking-wider flex items-center gap-1.5">
+            <label class="text-xs font-bold text-slate-500 whitespace-nowrap uppercase tracking-wider flex items-center gap-1.5">
               <span>Year:</span>
             </label>
-            <select x-model="selectedYearId" @change="loadDistribution(1)"
-                    class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/70 focus:border-[#8C2826] focus:ring-[#8C2826]">
-              @foreach($academicYears as $year)
-                <option value="{{ $year->id }}">
-                  {{ $year->name }} {{ $year->is_current ? '— (Active)' : '' }}
-                </option>
-              @endforeach
-            </select>
+            <div class="relative">
+              <select x-model="selectedYearId" @change="loadDistribution(1)"
+                      class="pl-3 pr-8 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/70 hover:bg-slate-100/70 focus:border-[#8C2826] focus:ring-1 focus:ring-[#8C2826] transition cursor-pointer appearance-none">
+                @foreach($academicYears as $year)
+                  <option value="{{ $year->id }}">
+                    {{ $year->name }} {{ $year->is_current ? '— (Active)' : '' }}
+                  </option>
+                @endforeach
+              </select>
+              <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
           </div>
 
           {{-- Class Selector --}}
           <div class="flex items-center gap-2">
-            <label class="text-xs font-bold text-slate-700 whitespace-nowrap uppercase tracking-wider">
+            <label class="text-xs font-bold text-slate-500 whitespace-nowrap uppercase tracking-wider">
               <span>Standard:</span>
             </label>
-            <select x-model="distClassId" @change="onDistFilterChange()"
-                    class="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/70 focus:border-[#8C2826] focus:ring-[#8C2826]">
-              <option value="">All Standards / Classes</option>
-              @foreach($classes as $c)
-                <option value="{{ $c->id }}">{{ $c->name }}</option>
-              @endforeach
-            </select>
+            <div class="relative">
+              <select x-model="distClassId" @change="onDistFilterChange()"
+                      class="pl-3 pr-8 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 bg-slate-50/70 hover:bg-slate-100/70 focus:border-[#8C2826] focus:ring-1 focus:ring-[#8C2826] transition cursor-pointer appearance-none">
+                <option value="">All Standards / Classes</option>
+                @foreach($classes as $c)
+                  <option value="{{ $c->id }}">{{ $c->name }}</option>
+                @endforeach
+              </select>
+              <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none text-slate-400">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
           </div>
 
           {{-- Quick Status Filter Segmented Switcher --}}
@@ -728,6 +776,382 @@
     </div>
 
   </div>{{-- Close Tab 2: Student Distribution Tracker --}}
+
+  {{-- ── TAB 3: QUICK FEE CHECK & STUDENT BOOK ISSUANCE DESK ────────────────── --}}
+  <div x-show="activeMainTab === 'desk'" x-cloak class="space-y-4">
+
+    {{-- Sleek Search & Quick Student Selector Bar --}}
+    <div class="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
+      <div class="flex flex-col md:flex-row md:items-center gap-3">
+        
+        {{-- Search Input with Autocomplete --}}
+        <div class="relative flex-1">
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+            </div>
+            <input type="text"
+                   x-ref="deskSearchInput"
+                   x-model="deskQuery"
+                   @input.debounce.250ms="searchDeskStudents()"
+                   @focus="if(deskStudents.length === 0) searchDeskStudents(); deskDropdownOpen = true"
+                   placeholder="Search student by name, admission no (e.g. ADM26-0612), or roll no..."
+                   class="w-full pl-10 pr-24 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-900 focus:border-[#8C2826] focus:ring-1 focus:ring-[#8C2826] bg-slate-50/60 hover:bg-white focus:bg-white transition-all">
+
+            <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1.5">
+              <div x-show="deskLoading" class="w-4 h-4 border-2 border-[#8C2826] border-t-transparent rounded-full animate-spin"></div>
+              <button x-show="deskQuery" @click="deskQuery = ''; searchDeskStudents()" type="button" class="text-slate-400 hover:text-slate-700 font-black text-sm p-1 rounded-lg">
+                &times;
+              </button>
+              <button type="button" @click="searchDeskStudents()" class="px-3 py-1 rounded-lg bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition cursor-pointer">
+                Search
+              </button>
+            </div>
+          </div>
+
+          {{-- Autocomplete Dropdown --}}
+          <div x-show="deskDropdownOpen && deskStudents.length > 0"
+               @click.outside="deskDropdownOpen = false"
+               x-transition:enter="ease-out duration-150"
+               x-transition:enter-start="opacity-0 translate-y-1"
+               x-transition:enter-end="opacity-100 translate-y-0"
+               class="absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-72 overflow-y-auto divide-y divide-slate-100">
+            <div class="px-3 py-2 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+              <span>Matching Students (<span x-text="deskStudents.length"></span>)</span>
+              <span class="text-[10px]">Select student to view fee &amp; books</span>
+            </div>
+            <template x-for="st in deskStudents" :key="st.id">
+              <div @click="selectDeskStudent(st)"
+                   class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer transition flex items-center justify-between gap-3 group">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-7 h-7 rounded-lg flex items-center justify-center font-black text-[10px] shrink-0"
+                       :class="st.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-800' : (st.payment_status === 'partially_paid' || st.payment_status === 'partial' ? 'bg-indigo-100 text-indigo-800' : 'bg-rose-100 text-rose-800')"
+                       x-text="(st.name || 'S').slice(0, 2).toUpperCase()">
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-bold text-xs text-slate-900 group-hover:text-[#8C2826] truncate" x-text="st.name"></div>
+                    <div class="flex items-center gap-1.5 text-[10px] text-slate-400">
+                      <span class="font-mono text-slate-600" x-text="st.admission_no"></span>
+                      <span>&bull;</span>
+                      <span class="text-slate-600" x-text="st.class_name + (st.section_name ? '-' + st.section_name : '')"></span>
+                      <template x-if="st.roll_no">
+                        <span x-text="'&bull; Roll ' + st.roll_no"></span>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+                <div class="shrink-0 text-right">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                        :class="st.payment_status === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : (st.payment_status === 'partially_paid' || st.payment_status === 'partial' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-rose-50 text-rose-700 border border-rose-200')"
+                        x-text="st.payment_status === 'paid' ? 'Paid Full' : (st.payment_status === 'partially_paid' || st.payment_status === 'partial' ? 'Partial Due' : 'Unpaid')">
+                  </span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        {{-- Quick Picks Chips --}}
+        <div class="flex items-center gap-1.5 flex-wrap shrink-0">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">Quick:</span>
+          <button type="button" @click="selectDeskStudentById(627)"
+                  class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer flex items-center gap-1">
+            <span>✓ Aarav Sharma (LKG • Paid)</span>
+          </button>
+          <button type="button" @click="selectDeskStudentById(642)"
+                  class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold transition cursor-pointer flex items-center gap-1">
+            <span>⚠️ Kavin C. (Class II • Due)</span>
+          </button>
+          <button type="button" @click="selectDeskStudentById(522)"
+                  class="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold transition cursor-pointer flex items-center gap-1">
+            <span>🛑 Aarav Dar (Class XI • Unpaid)</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    {{-- State A: Compact Empty Search State --}}
+    <div x-show="!deskActiveStudent && !deskStudentLoading"
+         class="bg-white border border-slate-200/90 rounded-2xl p-8 sm:p-12 text-center shadow-xs">
+      <div class="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto text-slate-400 text-xl font-bold mb-3">
+        🔍
+      </div>
+      <h3 class="text-sm sm:text-base font-bold text-slate-800">Search Student to Verify Fee &amp; Issue Books</h3>
+      <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Type student name or admission number in the search bar above to verify fees and mark class notebooks as issued.</p>
+    </div>
+
+    {{-- State B: Loading Spinner --}}
+    <div x-show="deskStudentLoading" class="py-16 text-center space-y-2 bg-white rounded-2xl border border-slate-200/90 shadow-xs">
+      <div class="w-8 h-8 border-3 border-[#8C2826] border-t-transparent rounded-full animate-spin mx-auto"></div>
+      <p class="text-xs font-bold text-slate-500">Loading student details &amp; checklist...</p>
+    </div>
+
+    {{-- State C: Student Workspace (UNIFIED SINGLE-ROW CONSOLE) --}}
+    <div x-show="deskActiveStudent && !deskStudentLoading" class="space-y-4">
+
+      {{-- 1. UNIFIED STUDENT IDENTITY & FEE BAR --}}
+      <div class="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          {{-- Student Profile --}}
+          <div class="flex items-center gap-3.5 min-w-0">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm text-white shrink-0 shadow-xs"
+                 :class="deskStudentData?.payment_status === 'paid' || deskStudentData?.is_fee_cleared ? 'bg-emerald-600' : ((deskStudentData?.payment_status === 'partially_paid' || deskStudentData?.payment_status === 'partial') ? 'bg-amber-600' : 'bg-rose-600')"
+                 x-text="(deskStudentData?.name || 'S').slice(0, 2).toUpperCase()">
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-base sm:text-lg font-black text-slate-900 tracking-tight" x-text="deskStudentData?.name"></h2>
+                <span class="font-mono text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200" x-text="deskStudentData?.admission_no"></span>
+                <span class="text-[11px] font-black text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded border border-[#FECACA]" x-text="'Class ' + deskStudentData?.class_name + (deskStudentData?.section_name ? ' — ' + deskStudentData?.section_name : '')"></span>
+                <template x-if="deskStudentData?.gender">
+                  <span class="text-[10px] font-bold px-1.5 py-0.2 rounded border uppercase tracking-wider"
+                        :class="(deskStudentData?.gender || '').toLowerCase() === 'male' || deskStudentData?.gender === 'BOYS' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'bg-rose-50 text-rose-700 border-rose-200'"
+                        x-text="(deskStudentData?.gender || '').toLowerCase() === 'male' || deskStudentData?.gender === 'BOYS' ? 'Boy' : 'Girl'"></span>
+                </template>
+              </div>
+              <div class="text-xs text-slate-400 mt-0.5 flex items-center gap-3">
+                <template x-if="deskStudentData?.roll_no">
+                  <span>Roll: <strong class="text-slate-700 font-semibold" x-text="deskStudentData?.roll_no"></strong></span>
+                </template>
+                <template x-if="deskStudentData?.mobile">
+                  <span>Contact: <strong class="text-slate-700 font-semibold" x-text="deskStudentData?.mobile"></strong></span>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          {{-- Fee Clearance Badge & Short Financial Stats --}}
+          <div class="flex items-center gap-3 flex-wrap">
+            
+            {{-- Status: Paid --}}
+            <template x-if="deskStudentData?.payment_status === 'paid' || deskStudentData?.is_fee_cleared">
+              <div class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-300">
+                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-black shrink-0">✓</span>
+                <div>
+                  <div class="text-xs font-black text-emerald-900 leading-tight">Fee Cleared (Paid Full)</div>
+                  <div class="text-[11px] font-semibold text-emerald-700 mt-0.5">
+                    Paid: <strong x-text="formatCurrency(deskStudentData?.admission_paid_amount || deskStudentData?.total_admission_fee)"></strong> • Due: ₹0.00
+                    <template x-if="deskStudentData?.payment_mode">
+                      <span class="text-emerald-600 font-normal"> (<span x-text="deskStudentData?.payment_mode"></span>)</span>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            {{-- Status: Partial --}}
+            <template x-if="(deskStudentData?.payment_status === 'partially_paid' || deskStudentData?.payment_status === 'partial') && !deskStudentData?.is_fee_cleared">
+              <div class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-300">
+                <span class="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-xs font-black shrink-0">⚠️</span>
+                <div>
+                  <div class="text-xs font-black text-amber-900 leading-tight">Fee Partial Payment</div>
+                  <div class="text-[11px] font-semibold text-amber-800 mt-0.5">
+                    Paid: <span x-text="formatCurrency(deskStudentData?.admission_paid_amount)"></span> • Due: <strong class="text-amber-950" x-text="formatCurrency(deskStudentData?.admission_pending_amount)"></strong>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            {{-- Status: Unpaid --}}
+            <template x-if="deskStudentData?.payment_status === 'pending' && !deskStudentData?.is_fee_cleared">
+              <div class="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-300">
+                <span class="w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center text-xs font-black shrink-0">🛑</span>
+                <div>
+                  <div class="text-xs font-black text-rose-900 leading-tight">Fee Payment Pending</div>
+                  <div class="text-[11px] font-semibold text-rose-800 mt-0.5">
+                    Due: <strong class="text-rose-950" x-text="formatCurrency(deskStudentData?.admission_pending_amount || deskStudentData?.total_admission_fee)"></strong>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            {{-- Action buttons --}}
+            <div class="flex items-center gap-2">
+              <button type="button" @click="openPrintSlip(deskStudentData?.id)"
+                      title="Print Delivery Slip"
+                      class="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-bold text-xs text-slate-700 inline-flex items-center gap-1.5 transition cursor-pointer shadow-2xs">
+                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                <span>Slip</span>
+              </button>
+              <button type="button" @click="clearDeskStudent()"
+                      class="px-2.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 font-bold text-xs text-slate-500 hover:text-slate-800 transition cursor-pointer shadow-2xs">
+                &times; Change
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      {{-- 2. CURRICULUM ITEMS & ISSUANCE DESK --}}
+      <div class="bg-white border border-slate-200/90 rounded-2xl shadow-xs overflow-hidden">
+        
+        {{-- Toolbar: Tabs on Left, Fast Actions on Right --}}
+        <div class="p-3 sm:p-4 border-b border-slate-200/80 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          
+          {{-- Category Tabs --}}
+          <div class="inline-flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl">
+            <button type="button" @click="deskCategoryTab = 'NOTE'"
+                    :class="deskCategoryTab === 'NOTE' ? 'bg-white text-indigo-700 font-extrabold shadow-2xs' : 'text-slate-600 hover:text-slate-900 font-bold'"
+                    class="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+              <span>📝 Notebooks</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px]"
+                    :class="deskCategoryTab === 'NOTE' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-300 text-slate-700'"
+                    x-text="deskStudentNotes.length"></span>
+            </button>
+            <button type="button" @click="deskCategoryTab = 'BOOK'"
+                    :class="deskCategoryTab === 'BOOK' ? 'bg-white text-amber-700 font-extrabold shadow-2xs' : 'text-slate-600 hover:text-slate-900 font-bold'"
+                    class="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+              <span>📚 Books</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px]"
+                    :class="deskCategoryTab === 'BOOK' ? 'bg-amber-100 text-amber-800' : 'bg-slate-300 text-slate-700'"
+                    x-text="deskStudentBooks.length"></span>
+            </button>
+            <button type="button" @click="deskCategoryTab = 'UNIFORM'"
+                    :class="deskCategoryTab === 'UNIFORM' ? 'bg-teal-700 font-extrabold shadow-2xs text-white' : 'text-slate-600 hover:text-slate-900 font-bold'"
+                    class="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+              <span>👔 Uniforms</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px]"
+                    :class="deskCategoryTab === 'UNIFORM' ? 'bg-teal-900/30 text-white' : 'bg-slate-300 text-slate-700'"
+                    x-text="deskStudentUniforms.length"></span>
+            </button>
+            <button type="button" @click="deskCategoryTab = 'ALL'"
+                    :class="deskCategoryTab === 'ALL' ? 'bg-white text-slate-900 font-extrabold shadow-2xs' : 'text-slate-600 hover:text-slate-900 font-bold'"
+                    class="px-3 py-1.5 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5">
+              <span>All</span>
+              <span class="px-1.5 py-0.2 rounded-full text-[10px]"
+                    :class="deskCategoryTab === 'ALL' ? 'bg-slate-200 text-slate-800' : 'bg-slate-300 text-slate-700'"
+                    x-text="deskStudentBooks.length + deskStudentNotes.length + deskStudentUniforms.length"></span>
+            </button>
+          </div>
+
+          {{-- Quick Stats & Batch Issue Buttons --}}
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <div class="text-xs text-slate-500 font-semibold mr-1">
+              Issued: <strong class="text-emerald-700" x-text="deskStudentStats?.totalIssued || 0"></strong> / <span x-text="deskStudentStats?.totalPrescribed || 0"></span>
+              &bull; Pending: <strong class="text-amber-700" x-text="deskStudentStats?.totalRemaining || 0"></strong>
+            </div>
+
+            <button type="button" @click="issueDeskRemaining('NOTE')"
+                    :disabled="(deskStudentStats?.notesRemaining || 0) === 0"
+                    class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs inline-flex items-center gap-1 shadow-2xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+              <span>⚡ Issue All Notes (<span x-text="deskStudentStats?.notesRemaining || 0"></span>)</span>
+            </button>
+
+            <button type="button" @click="issueDeskRemaining()"
+                    :disabled="(deskStudentStats?.totalRemaining || 0) === 0"
+                    class="px-3 py-1.5 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-bold text-xs inline-flex items-center gap-1 shadow-2xs transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+              <span>⚡ Issue All (<span x-text="deskStudentStats?.totalRemaining || 0"></span>)</span>
+            </button>
+          </div>
+
+        </div>
+
+        {{-- Clean Checklist Items Table / List --}}
+        <div class="divide-y divide-slate-100">
+          
+          {{-- Computed Current Display List --}}
+          <template x-for="item in (deskCategoryTab === 'NOTE' ? deskStudentNotes : (deskCategoryTab === 'BOOK' ? deskStudentBooks : (deskCategoryTab === 'UNIFORM' ? deskStudentUniforms : [...deskStudentNotes, ...deskStudentBooks, ...deskStudentUniforms])))" :key="item.id">
+            <div class="p-3.5 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition"
+                 :class="item.is_issued ? 'bg-emerald-50/20' : ''">
+              
+              {{-- Left: Item Type Icon, Title & SKU --}}
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
+                     :class="item.item_type === 'NOTE' ? 'bg-indigo-100 text-indigo-700' : (item.item_type === 'BOOK' ? 'bg-amber-100 text-amber-800' : 'bg-teal-100 text-teal-800')">
+                  <span x-text="item.item_type === 'NOTE' ? '📝' : (item.item_type === 'BOOK' ? '📚' : '👔')"></span>
+                </div>
+                <div class="min-w-0">
+                  <div class="font-bold text-xs sm:text-sm text-slate-900 truncate" x-text="item.item_name"></div>
+                  <div class="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                    <template x-if="item.sku">
+                      <span class="font-mono text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded" x-text="item.sku"></span>
+                    </template>
+                    <span class="capitalize" x-text="item.item_type === 'NOTE' ? 'Notebook' : (item.item_type === 'BOOK' ? 'Textbook' : 'Uniform')"></span>
+                    <span>&bull;</span>
+                    <span>Prescribed: <strong class="text-slate-700 font-semibold" x-text="item.quantity + ' Unit' + (item.quantity > 1 ? 's' : '')"></strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {{-- Right: Stepper, Status & One-Click Mark Button --}}
+              <div class="flex items-center gap-3 self-end sm:self-center shrink-0">
+                
+                {{-- Compact Stepper --}}
+                <div class="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white shadow-2xs">
+                  <button type="button" @click="changeDeskItemQty(item, -1)"
+                          :disabled="item.issued_quantity <= 0"
+                          class="w-6 h-6 bg-slate-50 hover:bg-slate-200 font-black text-slate-700 text-xs flex items-center justify-center transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                    -
+                  </button>
+                  <input type="number" min="0" :max="item.quantity"
+                         x-model.number="item.issued_quantity"
+                         @change="saveDeskItemIssuance(item, item.issued_quantity)"
+                         class="w-8 text-center py-0.5 text-xs font-bold text-slate-900 border-0 focus:ring-0">
+                  <button type="button" @click="changeDeskItemQty(item, 1)"
+                          :disabled="item.issued_quantity >= item.quantity"
+                          class="w-6 h-6 bg-slate-50 hover:bg-slate-200 font-black text-slate-700 text-xs flex items-center justify-center transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
+                    +
+                  </button>
+                </div>
+
+                {{-- Status Tag --}}
+                <div class="w-16 text-center">
+                  <template x-if="item.is_issued">
+                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <span>✓ Issued</span>
+                    </span>
+                  </template>
+                  <template x-if="!item.is_issued">
+                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      <span>Pending</span>
+                    </span>
+                  </template>
+                </div>
+
+                {{-- Manual Action Button --}}
+                <div>
+                  <template x-if="!item.is_issued">
+                    <button type="button" @click="saveDeskItemIssuance(item, item.quantity)"
+                            class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-2xs transition cursor-pointer">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                      <span>Mark Issued</span>
+                    </button>
+                  </template>
+                  <template x-if="item.is_issued">
+                    <button type="button" @click="saveDeskItemIssuance(item, 0)"
+                            title="Click to unmark"
+                            class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-300 font-bold text-xs inline-flex items-center gap-1 transition cursor-pointer group">
+                      <span class="group-hover:hidden text-emerald-700">✓ Done</span>
+                      <span class="hidden group-hover:inline">↩ Unmark</span>
+                    </button>
+                  </template>
+                </div>
+
+              </div>
+
+            </div>
+          </template>
+
+          {{-- Empty list message if no items in category --}}
+          <div x-show="(deskCategoryTab === 'NOTE' ? deskStudentNotes : (deskCategoryTab === 'BOOK' ? deskStudentBooks : (deskCategoryTab === 'UNIFORM' ? deskStudentUniforms : [...deskStudentNotes, ...deskStudentBooks, ...deskStudentUniforms]))).length === 0"
+               class="p-8 text-center text-xs font-semibold text-slate-400">
+            No items in this category for this standard.
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>{{-- Close Tab 3: Quick Fee Check & Student Issuance Desk --}}
 
   {{-- ── Standard Detailed View Modal (When touching a Class Card) ──────────── --}}
   <div x-show="isDetailModalOpen" x-cloak
@@ -1524,6 +1948,35 @@
         </div>
       </div>
 
+      {{-- Fee Verification Banner inside Modal --}}
+      <template x-if="activeStudentData?.payment_status === 'paid' || activeStudentData?.is_fee_cleared">
+        <div class="px-6 py-2.5 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900 flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black">✓</span>
+            <span>Fee Status: <strong>Fully Paid</strong> (<span x-text="formatCurrency(activeStudentData?.admission_paid_amount || activeStudentData?.total_admission_fee)"></span>) — Authorized for Book &amp; Uniform Delivery</span>
+          </div>
+          <span class="text-[11px] font-extrabold text-emerald-700 bg-white/80 px-2 py-0.5 rounded border border-emerald-300" x-text="'Mode: ' + (activeStudentData?.payment_mode || 'Cash')"></span>
+        </div>
+      </template>
+      <template x-if="activeStudentData?.payment_status === 'partially_paid' || activeStudentData?.payment_status === 'partial'">
+        <div class="px-6 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center justify-between text-xs font-bold text-amber-900 flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-black">⚠️</span>
+            <span>Fee Status: <strong>Partially Paid</strong> — Paid: <span x-text="formatCurrency(activeStudentData?.admission_paid_amount)"></span> • <strong class="text-amber-950">Pending Due: <span x-text="formatCurrency(activeStudentData?.admission_pending_amount)"></span></strong></span>
+          </div>
+          <span class="text-[11px] font-extrabold text-amber-800 bg-white/80 px-2 py-0.5 rounded border border-amber-300">Partial Balance</span>
+        </div>
+      </template>
+      <template x-if="activeStudentData?.payment_status === 'pending' && !activeStudentData?.is_fee_cleared">
+        <div class="px-6 py-2.5 bg-rose-50 border-b border-rose-200 flex items-center justify-between text-xs font-bold text-rose-900 flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-black">🛑</span>
+            <span>Fee Status: <strong>Unpaid / Pending</strong> — Clearance Required (Total Due: <span x-text="formatCurrency(activeStudentData?.total_admission_fee)"></span>)</span>
+          </div>
+          <span class="text-[11px] font-extrabold text-rose-800 bg-white/80 px-2 py-0.5 rounded border border-rose-300">Fees Due</span>
+        </div>
+      </template>
+
       {{-- Modal KPI Ribbon --}}
       <div class="px-6 py-3 bg-slate-50/80 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-4 text-xs font-bold">
         <div class="flex items-center gap-3">
@@ -1850,6 +2303,21 @@ function booksNotesPage() {
       current_page: 1,
       last_page: 1,
     },
+
+    // Quick Fee Check & Issuance Desk State
+    deskQuery: '',
+    deskStudents: [],
+    deskLoading: false,
+    deskDropdownOpen: false,
+    deskActiveStudent: null,
+    deskStudentData: null,
+    deskStudentBooks: [],
+    deskStudentNotes: [],
+    deskStudentUniforms: [],
+    deskStudentStats: null,
+    deskStudentLoading: false,
+    deskFeeOverride: false,
+    deskCategoryTab: 'NOTE',
 
     // Student Checklist Modal State
     isStudentModalOpen: false,
@@ -2265,6 +2733,14 @@ function booksNotesPage() {
       if (tab === 'distribution' && this.distStudents.length === 0) {
         this.loadDistribution(1);
       }
+      if (tab === 'desk') {
+        if (this.deskStudents.length === 0) {
+          this.searchDeskStudents();
+        }
+        this.$nextTick(() => {
+          this.$refs.deskSearchInput?.focus();
+        });
+      }
     },
 
     onDistFilterChange() {
@@ -2514,6 +2990,205 @@ function booksNotesPage() {
       setTimeout(() => {
         this.alert.show = false;
       }, 4500);
+    },
+
+    // ── Quick Fee Check & Issuance Desk Methods ──────────────────────
+    async searchDeskStudents() {
+      this.deskLoading = true;
+      try {
+        const q = encodeURIComponent(this.deskQuery || '');
+        const res = await fetch(`/api/books-notes/distribution/search-students?query=${q}&academic_year_id=${this.selectedYearId}`);
+        const data = await res.json();
+        if (data.success) {
+          this.deskStudents = data.students || [];
+          this.deskDropdownOpen = true;
+        }
+      } catch (e) {
+        console.error('Error searching students:', e);
+      } finally {
+        this.deskLoading = false;
+      }
+    },
+
+    async selectDeskStudent(student) {
+      if (!student) return;
+      this.deskActiveStudent = student;
+      this.deskDropdownOpen = false;
+      this.deskQuery = student.name;
+      this.deskStudentLoading = true;
+      this.deskFeeOverride = false;
+
+      try {
+        const res = await fetch(`/api/books-notes/distribution/student/${student.id}?academic_year_id=${this.selectedYearId}`);
+        const data = await res.json();
+        if (data.success) {
+          this.deskStudentData = data.data.student;
+          this.deskStudentBooks = data.data.books || [];
+          this.deskStudentNotes = data.data.notes || [];
+          this.deskStudentUniforms = data.data.uniforms || [];
+
+          this.recalculateDeskStats(data.data.summary);
+        } else {
+          this.showAlert(data.message || 'Failed to load student checklist', 'error');
+        }
+      } catch (e) {
+        this.showAlert('Error loading student checklist: ' + e.message, 'error');
+      } finally {
+        this.deskStudentLoading = false;
+      }
+    },
+
+    async selectDeskStudentById(studentId) {
+      this.deskStudentLoading = true;
+      this.deskDropdownOpen = false;
+      this.deskFeeOverride = false;
+      try {
+        const res = await fetch(`/api/books-notes/distribution/student/${studentId}?academic_year_id=${this.selectedYearId}`);
+        const data = await res.json();
+        if (data.success) {
+          this.deskActiveStudent = data.data.student;
+          this.deskStudentData = data.data.student;
+          this.deskStudentBooks = data.data.books || [];
+          this.deskStudentNotes = data.data.notes || [];
+          this.deskStudentUniforms = data.data.uniforms || [];
+          this.deskQuery = data.data.student.name;
+          this.recalculateDeskStats(data.data.summary);
+        } else {
+          this.showAlert(data.message || 'Failed to load student checklist', 'error');
+        }
+      } catch (e) {
+        this.showAlert('Error loading student: ' + e.message, 'error');
+      } finally {
+        this.deskStudentLoading = false;
+      }
+    },
+
+    clearDeskStudent() {
+      this.deskActiveStudent = null;
+      this.deskStudentData = null;
+      this.deskStudentBooks = [];
+      this.deskStudentNotes = [];
+      this.deskStudentUniforms = [];
+      this.deskStudentStats = null;
+      this.deskQuery = '';
+      this.deskFeeOverride = false;
+      this.searchDeskStudents();
+      this.$nextTick(() => {
+        this.$refs.deskSearchInput?.focus();
+      });
+    },
+
+    recalculateDeskStats(fallbackSummary = null) {
+      const bRem = this.deskStudentBooks.reduce((acc, b) => acc + Math.max(0, Number(b.quantity || 0) - Number(b.issued_quantity || 0)), 0);
+      const nRem = this.deskStudentNotes.reduce((acc, n) => acc + Math.max(0, Number(n.quantity || 0) - Number(n.issued_quantity || 0)), 0);
+      const uRem = this.deskStudentUniforms.reduce((acc, u) => acc + Math.max(0, Number(u.quantity || 0) - Number(u.issued_quantity || 0)), 0);
+
+      const totPres = fallbackSummary?.total_prescribed ?? (
+        this.deskStudentBooks.reduce((a, b) => a + Number(b.quantity || 0), 0) +
+        this.deskStudentNotes.reduce((a, n) => a + Number(n.quantity || 0), 0) +
+        this.deskStudentUniforms.reduce((a, u) => a + Number(u.quantity || 0), 0)
+      );
+      const totIssued = fallbackSummary?.total_issued ?? (
+        this.deskStudentBooks.reduce((a, b) => a + Number(b.issued_quantity || 0), 0) +
+        this.deskStudentNotes.reduce((a, n) => a + Number(n.issued_quantity || 0), 0) +
+        this.deskStudentUniforms.reduce((a, u) => a + Number(u.issued_quantity || 0), 0)
+      );
+
+      this.deskStudentStats = {
+        totalPrescribed: totPres,
+        totalIssued: totIssued,
+        totalRemaining: bRem + nRem + uRem,
+        booksRemaining: bRem,
+        notesRemaining: nRem,
+        uniformsRemaining: uRem,
+      };
+    },
+
+    changeDeskItemQty(item, delta) {
+      const cur = Number(item.issued_quantity || 0);
+      const target = Math.max(0, Math.min(Number(item.quantity || 1), cur + delta));
+      this.saveDeskItemIssuance(item, target);
+    },
+
+    async saveDeskItemIssuance(item, newQty, remarks = null) {
+      const prevQty = item.issued_quantity;
+      item.issued_quantity = Number(newQty);
+      item.is_issued = (item.issued_quantity >= item.quantity);
+      item.remaining_quantity = Math.max(0, item.quantity - item.issued_quantity);
+
+      this.recalculateDeskStats();
+
+      try {
+        const res = await fetch('/api/books-notes/distribution/issue-item', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+          body: JSON.stringify({
+            item_id: item.id,
+            issued_quantity: newQty,
+            remarks: remarks,
+          }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          item.issued_quantity = prevQty;
+          item.is_issued = (item.issued_quantity >= item.quantity);
+          item.remaining_quantity = Math.max(0, item.quantity - item.issued_quantity);
+          this.recalculateDeskStats();
+          this.showAlert(data.message || 'Failed to update item issuance', 'error');
+        } else {
+          this.showAlert('Issuance status updated.', 'success');
+          this.loadDistributionSummary();
+        }
+      } catch (e) {
+        item.issued_quantity = prevQty;
+        item.is_issued = (item.issued_quantity >= item.quantity);
+        item.remaining_quantity = Math.max(0, item.quantity - item.issued_quantity);
+        this.recalculateDeskStats();
+        this.showAlert('Error saving issuance: ' + e.message, 'error');
+      }
+    },
+
+    async issueDeskRemaining(itemType = null) {
+      if (!this.deskActiveStudent?.id) return;
+      const label = itemType ? (itemType.toLowerCase() === 'note' ? 'notebooks' : itemType.toLowerCase() + 's') : 'all remaining prescribed items';
+      if (!confirm(`Are you sure you want to mark ${label} as issued for ${this.deskActiveStudent.name}?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/books-notes/distribution/issue-all/${this.deskActiveStudent.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+          },
+          body: JSON.stringify({
+            item_type: itemType,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          this.showAlert(data.message, 'success');
+          // Reload student details
+          await this.selectDeskStudent(this.deskActiveStudent);
+          this.loadDistributionSummary();
+          await this.loadDistribution(this.distPage);
+        } else {
+          this.showAlert(data.message || 'Failed to issue items', 'error');
+        }
+      } catch (e) {
+        this.showAlert('Error: ' + e.message, 'error');
+      }
+    },
+
+    formatCurrency(val) {
+      const num = Number(val || 0);
+      return '₹' + num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
   };
 }

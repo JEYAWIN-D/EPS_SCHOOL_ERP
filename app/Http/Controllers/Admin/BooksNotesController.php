@@ -7,6 +7,7 @@ use App\Models\AcademicGroup;
 use App\Models\AcademicYear;
 use App\Models\BookNoteChecklist;
 use App\Models\Classes;
+use App\Models\Student;
 use App\Services\BookNoteService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -381,6 +382,73 @@ class BooksNotesController extends Controller
     }
 
     /**
+     * API: Fast student search with fee verification summary
+     */
+    public function apiSearchStudents(Request $request): JsonResponse
+    {
+        $search = trim($request->query('query', $request->query('search', '')));
+        $limit  = min(30, max(1, (int) $request->query('limit', 15)));
+
+        if (strlen($search) < 1) {
+            // Return top 15 students, prioritizing paid & partially paid students first
+            $students = Student::with(['currentEnrollment.class', 'currentEnrollment.section'])
+                ->orderByRaw("CASE WHEN payment_status = 'paid' THEN 1 WHEN payment_status = 'partially_paid' THEN 2 ELSE 3 END")
+                ->orderBy('first_name')
+                ->limit($limit)
+                ->get();
+        } else {
+            $students = Student::with(['currentEnrollment.class', 'currentEnrollment.section'])
+                ->where(function ($q) use ($search) {
+                    $q->where('first_name', 'ilike', "%{$search}%")
+                      ->orWhere('last_name', 'ilike', "%{$search}%")
+                      ->orWhere('admission_no', 'ilike', "%{$search}%")
+                      ->orWhere('roll_number', 'ilike', "%{$search}%");
+                })
+                ->limit($limit)
+                ->get();
+        }
+
+        $formatted = $students->map(function ($st) {
+            $status = strtolower($st->payment_status ?? 'pending');
+            $statusLabel = match($status) {
+                'paid' => 'Paid',
+                'partially_paid', 'partial' => 'Partially Paid',
+                default => 'Pending Payment'
+            };
+            $totFee = (float) ($st->total_admission_fee ?? 0);
+            $paidFee = (float) ($st->admission_paid_amount ?? 0);
+            $pendFee = (float) ($st->admission_pending_amount ?? max(0, $totFee - $paidFee));
+            $isCleared = ($status === 'paid') || ($totFee > 0 && $pendFee <= 0 && $paidFee >= $totFee);
+
+            return [
+                'id'                   => $st->id,
+                'name'                 => $st->full_name,
+                'admission_no'         => $st->admission_no,
+                'roll_no'              => $st->currentEnrollment?->roll_number ?: $st->roll_number,
+                'gender'               => $st->gender,
+                'class_id'             => $st->currentEnrollment?->class_id,
+                'class_name'           => $st->currentEnrollment?->class?->name ?? 'Standard',
+                'section_name'         => $st->currentEnrollment?->section?->name ?? '',
+                'stream_group'         => $st->stream_group,
+                'payment_status'       => $status,
+                'payment_status_label' => $statusLabel,
+                'total_fee'            => $totFee,
+                'paid_fee'             => $paidFee,
+                'pending_fee'          => $pendFee,
+                'payment_mode'         => $st->payment_mode,
+                'payment_date'         => $st->payment_date ? \Carbon\Carbon::parse($st->payment_date)->format('d M Y') : null,
+                'is_fee_cleared'       => $isCleared,
+            ];
+        });
+
+        return response()->json([
+            'success'  => true,
+            'count'    => $formatted->count(),
+            'students' => $formatted,
+        ]);
+    }
+
+    /**
      * API: Get student itemized checklist details
      */
     public function apiStudentChecklist(int $studentId, Request $request): JsonResponse
@@ -424,11 +492,13 @@ class BooksNotesController extends Controller
      */
     public function apiIssueAll(int $studentId, Request $request): JsonResponse
     {
-        $count = $this->bookNoteService->issueAllRemainingForStudent($studentId, Auth::id());
+        $itemType = $request->input('item_type');
+        $count = $this->bookNoteService->issueAllRemainingForStudent($studentId, Auth::id(), $itemType);
 
+        $label = $itemType ? strtolower($itemType) . 's' : 'items';
         return response()->json([
             'success' => true,
-            'message' => "Successfully issued all remaining items ({$count} updated).",
+            'message' => "Successfully issued all remaining {$label} ({$count} updated).",
             'count'   => $count,
         ]);
     }

@@ -1251,6 +1251,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/checklist',                       [App\Http\Controllers\Admin\BooksNotesController::class, 'apiChecklist'])->name('checklist');
         Route::get('/distribution/summary',            [App\Http\Controllers\Admin\BooksNotesController::class, 'apiDistributionSummary'])->name('distribution.summary');
         Route::get('/distribution/students',           [App\Http\Controllers\Admin\BooksNotesController::class, 'apiDistributionStudents'])->name('distribution.students');
+        Route::get('/distribution/search-students',    [App\Http\Controllers\Admin\BooksNotesController::class, 'apiSearchStudents'])->name('distribution.search-students');
         Route::get('/distribution/student/{studentId}',[App\Http\Controllers\Admin\BooksNotesController::class, 'apiStudentChecklist'])->name('distribution.student');
         Route::post('/distribution/issue-item',        [App\Http\Controllers\Admin\BooksNotesController::class, 'apiIssueItem'])->name('distribution.issue-item');
         Route::post('/distribution/issue-all/{studentId}', [App\Http\Controllers\Admin\BooksNotesController::class, 'apiIssueAll'])->name('distribution.issue-all');
