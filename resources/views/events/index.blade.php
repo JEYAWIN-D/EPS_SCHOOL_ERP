@@ -24,18 +24,16 @@
       </p>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-      <a href="{{ route('circulars.index') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1.5 shadow-xs">
-        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        Circulars &amp; Orders
-      </a>
       <a href="{{ route('events.calendar') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1.5 shadow-xs">
         <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Calendar View
       </a>
-      <a href="{{ route('events.create') }}" class="btn btn-primary inline-flex items-center gap-1.5 shadow-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        New Event
-      </a>
+      @if($canCreate)
+        <a href="{{ route('events.create') }}" class="btn btn-primary inline-flex items-center gap-1.5 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          New Event
+        </a>
+      @endif
     </div>
   </div>
 
@@ -123,13 +121,22 @@
       <input type="text" name="search" value="{{ request('search') }}" class="input w-full" placeholder="Search by name, description, venue…">
     </div>
 
-    <div class="w-44">
+    <div class="w-40">
       <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Event Type</label>
       <select name="type" class="select w-full">
         <option value="">All Types</option>
         @foreach(['academic'=>'Academic','cultural'=>'Cultural','sports'=>'Sports','holiday'=>'Holiday','meeting'=>'Meeting','other'=>'Other'] as $t => $label)
           <option value="{{ $t }}" @selected(request('type') === $t)>{{ $label }}</option>
         @endforeach
+      </select>
+    </div>
+
+    <div class="w-40">
+      <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assignment</label>
+      <select name="assignment" class="select w-full">
+        <option value="">All Assignments</option>
+        <option value="assigned" @selected(request('assignment') === 'assigned')>Assigned</option>
+        <option value="pending" @selected(request('assignment') === 'pending')>Pending Assignment</option>
       </select>
     </div>
 
@@ -165,6 +172,7 @@
         $isPast = $event->event_date->isPast() && !$isToday;
         $user = auth()->user();
         $canDelete = $user && $user->hasAnyRole(['super_admin', 'admin', 'principal', 'correspondent', 'correspondant']);
+        $canEditThis = $canCreate || ($user && ($event->created_by === $user->id || $event->organizer_id === $user->id || (!empty($user->employee_id) && $event->staff->contains('employee_id', $user->employee_id))));
       @endphp
 
       <div class="card hover:shadow-md transition flex flex-col justify-between border {{ $isToday ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200/90' }} rounded-2xl p-5 bg-white space-y-4">
@@ -212,9 +220,40 @@
               {{ strip_tags($event->description) }}
             </p>
           @endif
+
+          {{-- Assignment Status Information --}}
+          @if($event->is_assigned)
+            <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-slate-400 font-medium">In-Charge:</span>
+                <span class="font-semibold text-slate-700 truncate" title="{{ $event->staff->map(fn($s) => $s->employee?->full_name)->filter()->implode(', ') }}">
+                  {{ $event->staff->first()?->employee?->full_name ?? 'Assigned' }}
+                  @if($event->staff->count() > 1)
+                    <span class="text-[11px] text-slate-500 font-normal">(+{{ $event->staff->count() - 1 }})</span>
+                  @endif
+                </span>
+              </div>
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                Assigned
+              </span>
+            </div>
+          @else
+            <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 text-xs">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Pending Assignment
+              </span>
+              @if($canEditThis)
+                <a href="{{ route('events.edit', $event->id) }}#assignment-section" class="text-[11px] text-maroon-700 hover:text-maroon-900 font-bold hover:underline inline-flex items-center gap-0.5">
+                  Assign Staff &rarr;
+                </a>
+              @endif
+            </div>
+          @endif
         </div>
 
-        <div class="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
           {{-- Status / RSVP Badges --}}
           <div class="flex items-center gap-1.5 flex-wrap">
             @if($event->is_published)
@@ -235,10 +274,12 @@
               View
             </a>
             
-            <a href="{{ route('events.edit', $event->id) }}"
-               class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition shadow-2xs">
-              Edit
-            </a>
+            @if($canEditThis)
+              <a href="{{ route('events.edit', $event->id) }}"
+                 class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition shadow-2xs">
+                Edit
+              </a>
+            @endif
 
             @if($canDelete)
               <form method="POST"
@@ -265,11 +306,13 @@
         </div>
         <p class="font-bold text-slate-700">No events found in this category.</p>
         <p class="text-xs text-slate-400 mt-1">Try switching tabs or schedule a new event.</p>
-        <div class="mt-4">
-          <a href="{{ route('events.create') }}" class="btn-primary btn-sm inline-flex items-center gap-1.5">
-            + Schedule Event
-          </a>
-        </div>
+        @if($canCreate)
+          <div class="mt-4">
+            <a href="{{ route('events.create') }}" class="btn-primary btn-sm inline-flex items-center gap-1.5">
+              + Schedule Event
+            </a>
+          </div>
+        @endif
       </div>
     @endforelse
   </div>

@@ -357,4 +357,403 @@ class VisitorManagementModuleTest extends TestCase
         $response->assertStatus(200);
         $this->assertTrue(str_contains(strtolower($response->headers->get('content-type')), 'text/csv'));
     }
+
+    public function test_registration_form_empty_submission_validation_errors()
+    {
+        $response = $this->actingAs($this->admin)->post(route('gate.store'), []);
+        $response->assertSessionHasErrors(['visitor_name', 'category', 'purpose']);
+    }
+
+    public function test_registration_form_invalid_phone_format_validation()
+    {
+        $response = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name'  => 'John Invalid',
+            'category'      => 'other',
+            'purpose'       => 'Test Meeting',
+            'visitor_phone' => 'not-a-phone-number',
+        ]);
+        $response->assertSessionHasErrors(['visitor_phone']);
+    }
+
+    public function test_registration_form_invalid_visitor_count()
+    {
+        $response = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name'  => 'Count Tester',
+            'category'      => 'other',
+            'purpose'       => 'Test Meeting',
+            'visitor_count' => 999,
+        ]);
+        $response->assertSessionHasErrors(['visitor_count']);
+    }
+
+    public function test_registration_form_expected_exit_time_cannot_be_earlier_than_entry_time()
+    {
+        $earlierTime = now()->subHours(2)->format('H:i');
+        $response = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name'       => 'Time Tester',
+            'category'           => 'other',
+            'purpose'            => 'Test Meeting',
+            'expected_exit_time' => $earlierTime,
+        ]);
+        $response->assertSessionHasErrors(['expected_exit_time']);
+    }
+
+    public function test_send_for_host_approval_action_is_disabled_for_testing()
+    {
+        $response = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name' => 'Approval Attempt',
+            'category'     => 'other',
+            'purpose'      => 'Test Meeting',
+            'action_type'  => 'request_approval',
+        ]);
+        $response->assertSessionHasErrors(['action_type']);
+    }
+
+    public function test_visitor_history_filters_work_individually_and_together()
+    {
+        $v1 = Visitor::create([
+            'visitor_name'     => 'Filter Alpha',
+            'category'         => 'parent',
+            'visitor_phone'    => '9876599001',
+            'purpose'          => 'Fee verification discussion',
+            'department'       => 'Accounts',
+            'whom_to_meet'     => 'Mr. Ramanan',
+            'status'           => Visitor::STATUS_CHECKED_IN,
+            'visit_date'       => today(),
+            'in_time'          => now(),
+            'logged_by'        => $this->admin->id,
+        ]);
+
+        $v2 = Visitor::create([
+            'visitor_name'     => 'Filter Beta',
+            'category'         => 'vendor',
+            'visitor_phone'    => '9876599002',
+            'purpose'          => 'Hardware repair',
+            'department'       => 'IT Lab',
+            'whom_to_meet'     => 'Ms. Shanthi',
+            'status'           => Visitor::STATUS_CHECKED_OUT,
+            'visit_date'       => today(),
+            'in_time'          => now()->subHours(2),
+            'out_time'         => now()->subHour(),
+            'logged_by'        => $this->admin->id,
+        ]);
+
+        // 1. Filter by Department
+        $resDept = $this->actingAs($this->admin)->get(route('gate.index', ['department' => 'Accounts', 'tab' => 'all']));
+        $resDept->assertStatus(200);
+        $resDept->assertSee('Filter Alpha');
+        $resDept->assertDontSee('Filter Beta');
+
+        // 2. Filter by Category
+        $resCat = $this->actingAs($this->admin)->get(route('gate.index', ['category' => 'vendor', 'tab' => 'all']));
+        $resCat->assertStatus(200);
+        $resCat->assertSee('Filter Beta');
+        $resCat->assertDontSee('Filter Alpha');
+
+        // 3. Filter by Purpose
+        $resPurp = $this->actingAs($this->admin)->get(route('gate.index', ['purpose' => 'Hardware repair', 'tab' => 'all']));
+        $resPurp->assertStatus(200);
+        $resPurp->assertSee('Filter Beta');
+        $resPurp->assertDontSee('Filter Alpha');
+
+        // 4. Combined Filter
+        $resComb = $this->actingAs($this->admin)->get(route('gate.index', [
+            'department' => 'Accounts',
+            'category'   => 'parent',
+            'date'       => today()->toDateString(),
+            'tab'        => 'all',
+        ]));
+        $resComb->assertStatus(200);
+        $resComb->assertSee('Filter Alpha');
+    }
+
+    public function test_unauthorized_user_cannot_approve_or_reject_other_hosts_visitor()
+    {
+        $otherUser = User::create([
+            'name'     => 'Regular Staff User',
+            'email'    => 'staff_' . uniqid() . '@schoolerp.in',
+            'password' => bcrypt('Secret@123'),
+        ]);
+
+        $visitor = Visitor::create([
+            'visitor_name'     => 'Guarded Visitor',
+            'category'         => 'interview',
+            'visitor_phone'    => '9876599999',
+            'purpose'          => 'Confidential interview',
+            'host_employee_id' => $this->employee->id,
+            'status'           => Visitor::STATUS_PENDING,
+            'visit_date'       => today(),
+            'logged_by'        => $this->admin->id,
+        ]);
+
+        // Attempt approve by unauthorized user without admin role and not host
+        $res = $this->actingAs($otherUser)->post(route('gate.approve', $visitor->id));
+        $res->assertStatus(403);
+
+        // Attempt reject by unauthorized user
+        $resRej = $this->actingAs($otherUser)->post(route('gate.reject', $visitor->id), [
+            'rejection_reason' => 'Unauthorized rejection attempt',
+        ]);
+        $resRej->assertStatus(403);
+    }
+
+    public function test_automated_shift_end_bulk_checkout_for_overstayed_visitors()
+    {
+        // Create 2 overstayed visitors
+        $v1 = Visitor::create([
+            'visitor_name'       => 'Auto Overstay One',
+            'category'           => 'other',
+            'visitor_phone'      => '9123456781',
+            'purpose'            => 'Official Inspection',
+            'status'             => Visitor::STATUS_CHECKED_IN,
+            'visit_date'         => today(),
+            'in_time'            => now()->subHours(3),
+            'expected_exit_time' => now()->subHours(1),
+            'logged_by'          => $this->admin->id,
+        ]);
+
+        $v2 = Visitor::create([
+            'visitor_name'       => 'Auto Overstay Two',
+            'category'           => 'vendor',
+            'visitor_phone'      => '9123456782',
+            'purpose'            => 'AC Servicing',
+            'status'             => Visitor::STATUS_CHECKED_IN,
+            'visit_date'         => today(),
+            'in_time'            => now()->subHours(4),
+            'expected_exit_time' => now()->subHours(2),
+            'logged_by'          => $this->admin->id,
+        ]);
+
+        $this->assertNull($v1->out_time);
+        $this->assertNull($v2->out_time);
+
+        // Run automated bulk checkout endpoint
+        $res = $this->actingAs($this->admin)->post(route('gate.auto-checkout-overstayed'));
+        $res->assertRedirect(route('gate.index', ['tab' => 'today']));
+        $res->assertSessionHas('success');
+
+        $v1->refresh();
+        $v2->refresh();
+
+        $this->assertNotNull($v1->out_time);
+        $this->assertEquals(Visitor::STATUS_CHECKED_OUT, $v1->status);
+        $this->assertStringContainsString('Auto-checked out at shift-end', $v1->remarks);
+
+        $this->assertNotNull($v2->out_time);
+        $this->assertEquals(Visitor::STATUS_CHECKED_OUT, $v2->status);
+    }
+
+    public function test_automated_expected_exit_time_default_and_autoprint_flow()
+    {
+        // When expected exit time is omitted, system should automatically default to +1 hour
+        // and redirect to gate.pass with autoprint=1
+        $res = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name'       => 'Automated Exit Timing Visitor',
+            'category'           => 'parent',
+            'visitor_phone'      => '9988776655',
+            'purpose'            => 'Fee payment enquiry',
+            'action_type'        => 'direct_checkin',
+            'auto_print'         => '1',
+            // expected_exit_time omitted intentionally
+        ]);
+
+        $visitor = Visitor::where('visitor_name', 'Automated Exit Timing Visitor')->first();
+        $this->assertNotNull($visitor);
+        $this->assertNotNull($visitor->expected_exit_time);
+        $this->assertTrue($visitor->expected_exit_time->gt(now()->subMinute()));
+
+        $res->assertRedirect(route('gate.pass', ['id' => $visitor->id, 'autoprint' => 1]));
+    }
+
+    public function test_automated_id_proof_normalization_and_phone_trimming()
+    {
+        $res = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name'      => 'Normalized Visitor',
+            'category'          => 'other',
+            'visitor_phone'     => '  9876543210  ',
+            'visitor_id_type'   => 'PAN Card',
+            'visitor_id_number' => '  abcde1234f  ',
+            'purpose'           => 'General meeting',
+            'action_type'       => 'direct_checkin',
+        ]);
+
+        $visitor = Visitor::where('visitor_name', 'Normalized Visitor')->first();
+        $this->assertNotNull($visitor);
+        $this->assertEquals('9876543210', $visitor->visitor_phone);
+        $this->assertEquals('ABCDE1234F', $visitor->visitor_id_number);
+    }
+
+    public function test_thermal_roll_pass_renders_with_80mm_layout_and_student_details_for_parent()
+    {
+        $student = Student::first() ?? Student::create([
+            'first_name' => 'Rahul',
+            'last_name' => 'Sharma',
+            'admission_no' => 'ADM-TEST-2026',
+            'status' => 'active',
+        ]);
+
+        $visitor = Visitor::create([
+            'visitor_name' => 'Suresh Sharma',
+            'category' => Visitor::CATEGORY_PARENT,
+            'visitor_phone' => '9840112233',
+            'student_id' => $student->id,
+            'relationship_to_student' => 'Father',
+            'purpose' => 'Parent Teacher Consultation',
+            'whom_to_meet' => 'Mrs. Sundaram',
+            'department' => 'Science',
+            'visitor_count' => 1,
+            'status' => Visitor::STATUS_CHECKED_IN,
+            'in_time' => now(),
+            'visitor_id_type' => 'aadhaar',
+            'visitor_id_number' => '1234 5678 9012',
+        ]);
+
+        $res = $this->actingAs($this->admin)->get(route('gate.pass', $visitor->id));
+        $res->assertStatus(200);
+
+        // Verify dedicated 80mm roll printer elements
+        $res->assertSee('id="thermal-roll-pass"', false);
+        $res->assertSee('72mm', false);
+        $res->assertSee('80mm', false);
+        $res->assertSee('@media print', false);
+        $res->assertSee('#sidebar', false);
+        $res->assertSee('VISITOR GATE PASS', false);
+        $res->assertSee($visitor->pass_number);
+        $res->assertSee('Suresh Sharma');
+        $res->assertSee('9840112233');
+        $res->assertSee('Parent Teacher Consultation');
+        $res->assertSee('Mrs. Sundaram');
+        $res->assertSee('Science');
+
+        // Linked student details present
+        $res->assertSee('Linked Student:');
+        $res->assertSee($student->first_name);
+        $res->assertSee($student->admission_no);
+        $res->assertSee('Father');
+
+        // Masked ID proof (privacy protected)
+        $res->assertSee('•••• 9012');
+        $res->assertDontSee('1234 5678 9012');
+
+        // Verify non-applicable category sections are NOT rendered
+        $res->assertDontSee('Admission Candidate:');
+        $res->assertDontSee('Vendor / Agency:');
+        $res->assertDontSee('Interview Role:');
+    }
+
+    public function test_thermal_roll_pass_for_non_parent_meeting_teacher_omits_student_fields()
+    {
+        $visitor = Visitor::create([
+            'visitor_name' => 'Dr. A. P. Ramanathan',
+            'category' => Visitor::CATEGORY_OTHER,
+            'visitor_phone' => '9123456780',
+            'purpose' => 'Guest Lecture on Astronomy',
+            'whom_to_meet' => 'Principal Office',
+            'department' => 'Administration',
+            'visitor_count' => 2,
+            'vehicle_number' => 'TN-33-AX-9999',
+            'status' => Visitor::STATUS_CHECKED_IN,
+            'in_time' => now(),
+        ]);
+
+        $res = $this->actingAs($this->admin)->get(route('gate.pass', $visitor->id));
+        $res->assertStatus(200);
+
+        // Core visitor and host details
+        $res->assertSee('Dr. A. P. Ramanathan');
+        $res->assertSee('Guest Lecture on Astronomy');
+        $res->assertSee('Principal Office');
+        $res->assertSee('Administration');
+        $res->assertSee('TN-33-AX-9999');
+
+        // No student fields displayed
+        $res->assertDontSee('Linked Student:');
+        $res->assertDontSee('Admission Candidate:');
+        $res->assertDontSee('Vendor / Agency:');
+    }
+
+    public function test_thermal_roll_pass_for_vendor_scenario()
+    {
+        $visitor = Visitor::create([
+            'visitor_name' => 'Karthik Hardware Supplier',
+            'category' => Visitor::CATEGORY_VENDOR,
+            'company_name' => 'Apex Network Solutions',
+            'work_order_number' => 'WO-2026-088',
+            'visitor_phone' => '9876500000',
+            'purpose' => 'Fiber Optic Cable Maintenance',
+            'whom_to_meet' => 'IT Department Incharge',
+            'visitor_count' => 3,
+            'status' => Visitor::STATUS_CHECKED_IN,
+            'in_time' => now(),
+        ]);
+
+        $res = $this->actingAs($this->admin)->get(route('gate.pass', $visitor->id));
+        $res->assertStatus(200);
+
+        $res->assertSee('Vendor / Agency:');
+        $res->assertSee('Apex Network Solutions');
+        $res->assertSee('WO-2026-088');
+        $res->assertDontSee('Linked Student:');
+        $res->assertDontSee('Admission Candidate:');
+
+        // Confirm Expected Exit Time is NOT on the printed pass
+        $res->assertDontSee('Exp. Exit:');
+        $res->assertDontSee('Expected Exit');
+    }
+
+    public function test_log_new_visitor_form_has_manual_text_inputs_and_no_webcam()
+    {
+        $res = $this->actingAs($this->admin)->get(route('gate.create'));
+        $res->assertStatus(200);
+
+        // Confirm Vendor & Maintenance fields are normal text inputs, NOT select dropdowns
+        $res->assertSee('name="company_name"', false);
+        $res->assertSee('name="maintenance_details"', false);
+        $res->assertDontSee('name="vendor_id"', false);
+        $res->assertDontSee('Choose Existing Registered Vendor', false);
+
+        // Confirm live webcam photo capture is completely disabled and removed
+        $res->assertDontSee('Live Webcam Visitor Photo Capture');
+        $res->assertDontSee('Start Live Camera');
+        $res->assertDontSee('📸 Snap Photo');
+        $res->assertDontSee('startCamera');
+        $res->assertDontSee('getUserMedia');
+    }
+
+    public function test_manual_vendor_and_maintenance_inputs_save_and_display_in_details_and_pass()
+    {
+        $res = $this->actingAs($this->admin)->post(route('gate.store'), [
+            'visitor_name'        => 'Ramesh Electrician',
+            'category'            => 'vendor',
+            'company_name'        => 'Bright Light Services',
+            'maintenance_details' => 'Auditorium Projector & Sound Maintenance',
+            'work_order_number'   => 'WO-2026-909',
+            'items_carried'       => 'Toolbox and Cable Tester',
+            'visitor_phone'       => '9888877777',
+            'purpose'             => 'Audio Visual System Setup',
+            'action_type'         => 'direct_checkin',
+        ]);
+
+        $visitor = Visitor::where('visitor_name', 'Ramesh Electrician')->first();
+        $this->assertNotNull($visitor);
+        $this->assertEquals('Bright Light Services', $visitor->company_name);
+        $this->assertStringContainsString('Auditorium Projector & Sound Maintenance', $visitor->work_order_number);
+        $this->assertEquals('Toolbox and Cable Tester', $visitor->items_carried);
+
+        // Check details page shows saved manual values and does NOT show expected exit
+        $showRes = $this->actingAs($this->admin)->get(route('gate.show', $visitor->id));
+        $showRes->assertStatus(200);
+        $showRes->assertSee('Bright Light Services');
+        $showRes->assertSee('Auditorium Projector & Sound Maintenance');
+        $showRes->assertDontSee('Expected Exit:');
+
+        // Check pass page does NOT show expected exit time
+        $passRes = $this->actingAs($this->admin)->get(route('gate.pass', $visitor->id));
+        $passRes->assertStatus(200);
+        $passRes->assertSee('Bright Light Services');
+        $passRes->assertDontSee('Exp. Exit:');
+        $passRes->assertDontSee('Expected Exit');
+    }
 }
+
+

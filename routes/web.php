@@ -88,10 +88,14 @@ Route::middleware(['auth'])->group(function () {
         // Pipeline & seats
         Route::get('/pipeline',    [AdmissionController::class, 'pipeline'])->name('pipeline');
         Route::post('/pipeline/{id}/advance', [AdmissionController::class, 'advanceStage'])->name('pipeline.advance');
+        Route::post('/{id}/advance-stage',    [AdmissionController::class, 'advanceStage'])->name('advance-stage');
         Route::get('/seats',       [AdmissionController::class, 'seats'])->name('seats');
         Route::post('/seats',      [AdmissionController::class, 'saveSeats'])->name('seats.save');
         Route::get('/bulk-import', [AdmissionController::class, 'bulkImport'])->name('bulk-import');
+        Route::get('/bulk-import/template', [AdmissionController::class, 'importTemplate'])->name('import-template');
         Route::post('/bulk-import',[AdmissionController::class, 'processBulkImport'])->name('bulk-import.process');
+        Route::post('/import',     [AdmissionController::class, 'processBulkImport'])->name('import');
+        Route::post('/import-confirm', [AdmissionController::class, 'processBulkImport'])->name('import-confirm');
         Route::get('/analytics',          [AdmissionController::class, 'analytics'])->name('analytics');
         Route::get('/analytics/pdf',      [AdmissionController::class, 'analyticsReportPdf'])->name('analytics.pdf');
         Route::get('/analytics/excel',    [AdmissionController::class, 'analyticsReportExcel'])->name('analytics.excel');
@@ -120,6 +124,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/entrance-test-hallticket', [AdmissionController::class, 'entranceTestHallTicket'])->name('entrance-test.hallticket');
         Route::post('/{id}/interview',         [AdmissionController::class, 'saveInterview'])->name('interview.save');
         Route::post('/{id}/doc-checklist',     [AdmissionController::class, 'saveDocChecklist'])->name('doc-checklist.save');
+        Route::post('/{id}/flag-missing-docs', [AdmissionController::class, 'flagMissingDocs'])->name('flag-missing-docs');
         // Admissions 2-Tier Approvals & Submission Summary
         Route::get('/approvals',                [AdmissionController::class, 'approvals'])->name('approvals');
         Route::get('/{id}/submission-summary',  [AdmissionController::class, 'submissionSummary'])->name('submission-summary')->where('id', '[0-9]+');
@@ -1018,8 +1023,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/rooms/{id}',   [HostelController::class, 'destroyRoom'])->name('rooms.destroy');
     });
 
-    // Visitors stub (no module built yet)
-    Route::get('/visitors',  fn() => view('coming-soon', ['module' => 'Visitors']))->name('visitors.index');
+    // Visitors redirect to Gate & Visitor module
+    Route::get('/visitors',  fn() => redirect()->route('gate.index'))->name('visitors.index');
 
     // ── Module 12 — Communication ──────────────────────────────
     Route::middleware('permission:send email')->prefix('communication')->name('communication.')->group(function () {
@@ -1117,6 +1122,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/',             [\App\Http\Controllers\Admin\GateController::class, 'store'])->name('store');
             Route::get('/scanner',       [\App\Http\Controllers\Admin\GateController::class, 'scanner'])->name('scanner');
             Route::post('/scan-checkout',[\App\Http\Controllers\Admin\GateController::class, 'scanCheckout'])->name('scan-checkout');
+            Route::post('/auto-checkout-overstayed', [\App\Http\Controllers\Admin\GateController::class, 'autoCheckoutOverstayed'])->name('auto-checkout-overstayed');
             Route::get('/lookup/students',[\App\Http\Controllers\Admin\GateController::class, 'lookupStudents'])->name('lookup.students');
             Route::get('/lookup/hosts',  [\App\Http\Controllers\Admin\GateController::class, 'lookupHosts'])->name('lookup.hosts');
             Route::get('/report',        [\App\Http\Controllers\Admin\GateController::class, 'report'])->name('report');
@@ -1247,6 +1253,11 @@ Route::middleware(['auth'])->group(function () {
 
     // ── Books & Notes Management (Settings → Books & Notes) ──────
     Route::get('/settings/books-notes', [App\Http\Controllers\Admin\BooksNotesController::class, 'index'])->name('settings.books-notes.index');
+    Route::get('/books-notes', fn() => redirect()->route('settings.books-notes.index'))->name('books-notes.index');
+    Route::get('/uniforms',    fn() => redirect()->route('settings.books-notes.index'))->name('uniforms.index');
+    Route::get('/uniform',     fn() => redirect()->route('settings.books-notes.index'));
+    Route::get('/notes',       fn() => redirect()->route('settings.books-notes.index'));
+    Route::get('/books',       fn() => redirect()->route('library.books'));
     Route::get('/settings/books-notes/slip/{studentId}', [App\Http\Controllers\Admin\BooksNotesController::class, 'slip'])->name('settings.books-notes.slip');
     Route::prefix('api/books-notes')->name('api.books-notes.')->group(function () {
         Route::get('/cards',                           [App\Http\Controllers\Admin\BooksNotesController::class, 'apiCards'])->name('cards');

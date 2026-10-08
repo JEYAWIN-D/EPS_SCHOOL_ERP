@@ -109,8 +109,13 @@ class Visitor extends Model
     public static function generatePassNumber(): string
     {
         $prefix = 'VP-' . now()->format('Ymd') . '-';
-        $todayCount = self::whereDate('created_at', today())->count() + 1;
-        return $prefix . str_pad((string) $todayCount, 4, '0', STR_PAD_LEFT);
+        $todayCount = self::withTrashed()->whereDate('visit_date', today())->count() + 1;
+        $passNum = $prefix . str_pad((string) $todayCount, 4, '0', STR_PAD_LEFT);
+        while (self::withTrashed()->where('pass_number', $passNum)->exists()) {
+            $todayCount++;
+            $passNum = $prefix . str_pad((string) $todayCount, 4, '0', STR_PAD_LEFT);
+        }
+        return $passNum;
     }
 
     public static function getDefaultBadgeColor(?string $category): string

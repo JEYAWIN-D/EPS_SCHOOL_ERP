@@ -1041,6 +1041,7 @@
               <option value="other" {{ old('gender') === 'other' ? 'selected' : '' }}>Other</option>
             </select>
             @error('gender') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
+            <p id="gender_client_err" class="text-xs text-rose-500 mt-1 font-semibold hidden"></p>
           </div>
 
           {{-- Blood Group --}}
@@ -1630,14 +1631,16 @@
             <p id="aadhaar_no_client_err" class="text-xs text-rose-500 mt-1 font-semibold hidden"></p>
           </div>
 
-          {{-- EMIS / PEN Number --}}
+          {{-- EMIS / PEN Number (Explicitly Optional) --}}
           <div>
             <div class="flex items-center justify-between mb-2">
-              <label class="block text-xs font-bold text-slate-700">EMIS / PEN Number</label>
-              <span class="text-[9px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded border border-[#FECACA]">State EMIS</span>
+              <label for="emis_no" class="block text-xs font-bold text-slate-700">EMIS / PEN Number <span class="font-normal text-slate-400 text-[11px]">(Optional)</span></label>
+              <span class="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">Optional</span>
             </div>
-            <input type="text" name="emis_no" value="{{ old('emis_no') }}" placeholder="e.g. 33020100101234"
+            <input type="text" id="emis_no" name="emis_no" value="{{ old('emis_no') }}" maxlength="30"
+                   placeholder="e.g. 33020100101234 (Leave blank if not allocated)"
                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
+            <p class="text-[10.5px] text-slate-400 mt-1">State EMIS / Permanent Education Number (can be updated later)</p>
           </div>
 
           {{-- Student Email Address --}}
@@ -1647,6 +1650,8 @@
               <span class="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">Optional</span>
             </div>
             <input type="email" id="email" name="email" maxlength="100" value="{{ old('email') }}"
+                   oninput="validateEmailLive(this, 'email_client_err', false)"
+                   onblur="validateEmailLive(this, 'email_client_err', false)"
                    placeholder="student@example.com (Class 9+)"
                    class="w-full px-4 py-3 rounded-xl border @error('email') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
             @error('email') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
@@ -1823,7 +1828,8 @@
               <input type="tel" id="parent_mobile" name="parent_mobile" required
                      inputmode="numeric" maxlength="10" minlength="10" pattern="[6-9][0-9]{9}"
                      value="{{ old('parent_mobile') }}"
-                     oninput="this.value=this.value.replace(/\D/g,'').slice(0,10); updatePhoneBadge(this, 'parent_mobile_badge', true)"
+                     oninput="formatPhoneInput(this); updatePhoneBadge(this, 'parent_mobile_badge', true)"
+                     onblur="validatePhoneLive(this, 'parent_mobile_client_err', 'parent_mobile_badge', true)"
                      placeholder="9876543210"
                      class="w-full pl-12 pr-4 py-3 rounded-xl border @error('parent_mobile') border-rose-400 ring-2 ring-rose-100 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-semibold transition text-slate-900 tracking-wider bg-white">
             </div>
@@ -1837,6 +1843,8 @@
           <div>
             <label for="parent_email" class="block text-xs font-bold text-slate-700 mb-2">Father Email Address</label>
             <input type="email" id="parent_email" name="parent_email" maxlength="100" value="{{ old('parent_email') }}"
+                   oninput="validateEmailLive(this, 'parent_email_client_err', false)"
+                   onblur="validateEmailLive(this, 'parent_email_client_err', false)"
                    placeholder="father@example.com"
                    class="w-full px-4 py-3 rounded-xl border @error('parent_email') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
             @error('parent_email') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
@@ -1930,7 +1938,8 @@
               <input type="tel" id="mother_mobile" name="mother_mobile"
                      inputmode="numeric" maxlength="10" pattern="[6-9][0-9]{9}"
                      value="{{ old('mother_mobile') }}"
-                     oninput="this.value=this.value.replace(/\D/g,'').slice(0,10); updatePhoneBadge(this, 'mother_mobile_badge', false)"
+                     oninput="formatPhoneInput(this); updatePhoneBadge(this, 'mother_mobile_badge', false)"
+                     onblur="validatePhoneLive(this, 'mother_mobile_client_err', 'mother_mobile_badge', false)"
                      placeholder="10-digit mobile"
                      class="w-full pl-12 pr-4 py-3 rounded-xl border @error('mother_mobile') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-semibold transition text-slate-900 tracking-wider bg-white">
             </div>
@@ -1943,6 +1952,8 @@
           <div>
             <label for="mother_email" class="block text-xs font-bold text-slate-700 mb-2">Mother Email Address</label>
             <input type="email" id="mother_email" name="mother_email" maxlength="100" value="{{ old('mother_email') }}"
+                   oninput="validateEmailLive(this, 'mother_email_client_err', false)"
+                   onblur="validateEmailLive(this, 'mother_email_client_err', false)"
                    placeholder="mother@example.com"
                    class="w-full px-4 py-3 rounded-xl border @error('mother_email') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
             @error('mother_email') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
@@ -2007,7 +2018,8 @@
               <input type="tel" id="guardian_mobile" name="guardian_mobile"
                      inputmode="numeric" maxlength="10" pattern="[6-9][0-9]{9}"
                      value="{{ old('guardian_mobile') }}"
-                     oninput="this.value=this.value.replace(/\D/g,'').slice(0,10); updatePhoneBadge(this, 'guardian_mobile_badge', false)"
+                     oninput="formatPhoneInput(this); updatePhoneBadge(this, 'guardian_mobile_badge', false)"
+                     onblur="validatePhoneLive(this, 'guardian_mobile_client_err', 'guardian_mobile_badge', false)"
                      placeholder="10-digit mobile"
                      class="w-full pl-12 pr-4 py-3 rounded-xl border @error('guardian_mobile') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-semibold transition text-slate-900 tracking-wider bg-white">
             </div>
@@ -3358,16 +3370,29 @@
 </style>
 
 <script>
+  // Auto-format phone input: handles pasted numbers like +91 98765 43210 or 09876543210
+  function formatPhoneInput(input) {
+    if (!input) return;
+    let clean = input.value.replace(/\D/g, '');
+    if (clean.length === 12 && clean.startsWith('91')) {
+      clean = clean.slice(2);
+    } else if (clean.length === 11 && clean.startsWith('0')) {
+      clean = clean.slice(1);
+    }
+    input.value = clean.slice(0, 10);
+  }
+
   // Real-time phone badge updater
   function updatePhoneBadge(input, badgeId, isRequired = false) {
     const badge = document.getElementById(badgeId);
-    if (!badge) return;
+    if (!badge || !input) return;
+    formatPhoneInput(input);
     const val = input.value.trim();
     const len = val.length;
 
     if (len === 0) {
       if (isRequired) {
-        badge.innerHTML = '<span class="text-amber-600 font-bold">10 digits required</span>';
+        badge.innerHTML = '<span class="text-rose-500 font-bold">10 digits required *</span>';
       } else {
         badge.innerHTML = '<span class="text-slate-400">10 digits (Optional)</span>';
       }
@@ -3376,11 +3401,11 @@
     }
 
     if (len < 10) {
-      badge.innerHTML = `<span class="text-[#8C2826] font-bold">${len}/10 digits</span>`;
+      badge.innerHTML = `<span class="text-amber-600 font-bold">${len}/10 digits</span>`;
       input.classList.remove('border-emerald-500', 'ring-emerald-100');
     } else if (len === 10) {
       if (/^[6-9]\d{9}$/.test(val)) {
-        badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 10-digit number</span>';
+        badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 10-digit Mobile</span>';
         input.classList.remove('border-rose-400', 'ring-rose-100');
         input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
       } else {
@@ -3391,10 +3416,112 @@
     }
   }
 
+  // Live validator for phone inputs on blur
+  function validatePhoneLive(input, errId, badgeId, isRequired = false) {
+    if (!input) return true;
+    formatPhoneInput(input);
+    updatePhoneBadge(input, badgeId, isRequired);
+    const errEl = document.getElementById(errId);
+    const val = input.value.trim();
+
+    if (!val) {
+      if (isRequired) {
+        if (errEl) {
+          errEl.innerText = 'Mobile number is required (10 digits).';
+          errEl.classList.remove('hidden');
+        }
+        input.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+        return false;
+      }
+      if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      input.classList.remove('border-rose-400', 'ring-rose-100');
+      return true;
+    }
+
+    if (!/^[6-9]\d{9}$/.test(val)) {
+      if (errEl) {
+        errEl.innerText = 'Must be a valid 10-digit Indian mobile starting with 6, 7, 8, or 9.';
+        errEl.classList.remove('hidden');
+      }
+      input.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+      return false;
+    }
+
+    if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+    input.classList.remove('border-rose-400', 'ring-rose-100');
+    input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+    return true;
+  }
+
+  // Strict RFC-compliant email regex
+  const RFC_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+  // Live RFC Email Validator
+  function validateEmailLive(input, errId, isRequired = false) {
+    if (!input) return true;
+    const val = input.value.trim();
+    const errEl = document.getElementById(errId);
+
+    if (!val) {
+      if (isRequired) {
+        if (errEl) {
+          errEl.innerText = 'Email address is required.';
+          errEl.classList.remove('hidden');
+        }
+        input.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+        return false;
+      }
+      if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      input.classList.remove('border-rose-400', 'ring-rose-100', 'border-emerald-500', 'ring-emerald-100');
+      return true;
+    }
+
+    if (!RFC_EMAIL_REGEX.test(val)) {
+      if (errEl) {
+        errEl.innerText = 'Please enter a valid email format (e.g. name@example.com).';
+        errEl.classList.remove('hidden');
+      }
+      input.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+      input.classList.remove('border-emerald-500', 'ring-emerald-100');
+      return false;
+    }
+
+    if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+    input.classList.remove('border-rose-400', 'ring-rose-100');
+    input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+    return true;
+  }
+
+  function validateRequiredLive(input, errId, message) {
+    if (!input) return true;
+    const val = input.value.trim();
+    const errEl = document.getElementById(errId);
+    if (!val || val.length < 2) {
+      if (errEl) { errEl.innerText = message; errEl.classList.remove('hidden'); }
+      input.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+      return false;
+    }
+    if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+    input.classList.remove('border-rose-400', 'ring-rose-100');
+    return true;
+  }
+
+  function validateGenderLive(select) {
+    if (!select) return;
+    const errEl = document.getElementById('gender_client_err');
+    if (!select.value) {
+      if (errEl) { errEl.innerText = 'Please select student Gender.'; errEl.classList.remove('hidden'); }
+      select.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+    } else {
+      if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      select.classList.remove('border-rose-400', 'ring-rose-100');
+    }
+  }
+
   // Real-time Aadhaar badge updater
   function updateAadhaarBadge(input, badgeId) {
     const badge = document.getElementById(badgeId);
-    if (!badge) return;
+    if (!badge || !input) return;
     const val = input.value.trim();
     const len = val.length;
 
@@ -3405,7 +3532,7 @@
     }
 
     if (len < 12) {
-      badge.innerHTML = `<span class="text-[#8C2826] font-bold">${len}/12 digits</span>`;
+      badge.innerHTML = `<span class="text-amber-600 font-bold">${len}/12 digits</span>`;
       input.classList.remove('border-emerald-500', 'ring-emerald-100');
     } else if (len === 12) {
       badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 12-digit Aadhaar</span>';
@@ -3417,7 +3544,7 @@
   // Real-time Pincode badge updater
   function updatePincodeBadge(input, badgeId) {
     const badge = document.getElementById(badgeId);
-    if (!badge) return;
+    if (!badge || !input) return;
     const val = input.value.trim();
     const len = val.length;
 
@@ -3428,12 +3555,18 @@
     }
 
     if (len < 6) {
-      badge.innerHTML = `<span class="text-[#8C2826] font-bold">${len}/6 digits</span>`;
+      badge.innerHTML = `<span class="text-amber-600 font-bold">${len}/6 digits</span>`;
       input.classList.remove('border-emerald-500', 'ring-emerald-100');
     } else if (len === 6) {
-      badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 6-digit PIN</span>';
-      input.classList.remove('border-rose-400', 'ring-rose-100');
-      input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+      if (/^[1-9]\d{5}$/.test(val)) {
+        badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 6-digit PIN</span>';
+        input.classList.remove('border-rose-400', 'ring-rose-100');
+        input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+      } else {
+        badge.innerHTML = '<span class="text-rose-500 font-bold">Invalid PIN (cannot start with 0)</span>';
+        input.classList.remove('border-emerald-500', 'ring-emerald-100');
+        input.classList.add('border-rose-400', 'ring-2', 'ring-rose-100');
+      }
     }
   }
 
@@ -3486,21 +3619,23 @@
           }
         }
 
-        // 1. Student First Name
+        // 1. Student First Name (Required, min 2 chars)
         const firstName = document.getElementById('first_name');
-        if (!firstName || !firstName.value.trim()) {
-          markInvalid(firstName, 'first_name_client_err', 'Student First Name is required.');
+        if (!firstName || !firstName.value.trim() || firstName.value.trim().length < 2) {
+          markInvalid(firstName, 'first_name_client_err', 'Student First Name is required (at least 2 characters).');
         }
 
-        // 2. Class
+        // 2. Class (Required)
         const classId = document.getElementById('class_id');
         if (!classId || !classId.value.trim()) {
           markInvalid(classId, 'class_id_client_err', 'Please select the Standard / Class applying for.');
         }
 
-        // 3. Date of Birth (cannot be in the future)
+        // 3. Date of Birth (Required, cannot be future, reasonable student age 2-22)
         const dob = document.getElementById('dob');
-        if (dob && dob.value) {
+        if (!dob || !dob.value.trim()) {
+          markInvalid(dob, 'dob_client_err', 'Student Date of Birth is required.');
+        } else {
           const selectedDate = new Date(dob.value);
           const today = new Date();
           today.setHours(23, 59, 59, 999);
@@ -3509,16 +3644,21 @@
           }
         }
 
-        // 4. Student Email (if filled)
+        // 4. Gender (Required)
+        const gender = document.getElementById('gender');
+        if (!gender || !gender.value.trim()) {
+          markInvalid(gender, 'gender_client_err', 'Student Gender selection is required.');
+        }
+
+        // 5. Student Email (Optional, but if filled must be valid RFC format)
         const email = document.getElementById('email');
         if (email && email.value.trim()) {
-          const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailPattern.test(email.value.trim())) {
-            markInvalid(email, 'email_client_err', 'Please enter a valid student email address.');
+          if (!RFC_EMAIL_REGEX.test(email.value.trim())) {
+            markInvalid(email, 'email_client_err', 'Please enter a valid student email address (e.g. student@example.com).');
           }
         }
 
-        // 5. Student Aadhaar (if filled, must be 12 digits)
+        // 6. Student Aadhaar (Optional, but if filled must be exactly 12 digits)
         const aadhaarNo = document.getElementById('aadhaar_no');
         if (aadhaarNo && aadhaarNo.value.trim()) {
           if (!/^\d{12}$/.test(aadhaarNo.value.trim())) {
@@ -3526,7 +3666,13 @@
           }
         }
 
-        // 6. Pincode (if filled, must be 6 digits)
+        // 7. EMIS / PEN Number (OPTIONAL: Never block if blank)
+        const emisNo = document.getElementById('emis_no');
+        if (emisNo && emisNo.value.trim() && emisNo.value.trim().length > 30) {
+          markInvalid(emisNo, 'emis_no_client_err', 'EMIS / PEN Number cannot exceed 30 characters.');
+        }
+
+        // 8. Pincode (Optional, but if filled must be 6 digits starting with 1-9)
         const pincode = document.getElementById('pincode');
         if (pincode && pincode.value.trim()) {
           if (!/^[1-9]\d{5}$/.test(pincode.value.trim())) {
@@ -3534,33 +3680,33 @@
           }
         }
 
-        // 7. Father / Primary Parent Name
+        // 9. Father / Primary Parent Name (Required, min 2 chars)
         const parentName = document.getElementById('parent_name');
-        if (!parentName || !parentName.value.trim()) {
+        if (!parentName || !parentName.value.trim() || parentName.value.trim().length < 2) {
           markInvalid(parentName, 'parent_name_client_err', 'Father / Primary Parent Name is required.');
         }
 
-        // 8. Father Mobile (REQUIRED: exactly 10 digits starting with 6-9)
+        // 10. Father Mobile (REQUIRED: exactly 10 digits starting with 6-9)
         const parentMobile = document.getElementById('parent_mobile');
         if (!parentMobile || !parentMobile.value.trim()) {
           markInvalid(parentMobile, 'parent_mobile_client_err', 'Father Mobile Number is required (10 digits).');
         } else {
-          const cleanMobile = parentMobile.value.replace(/\D/g, '');
+          formatPhoneInput(parentMobile);
+          const cleanMobile = parentMobile.value.trim();
           if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
             markInvalid(parentMobile, 'parent_mobile_client_err', 'Father Mobile number must be a valid 10-digit Indian mobile starting with 6, 7, 8, or 9.');
           }
         }
 
-        // 9. Father Email (if filled)
+        // 11. Father Email (Optional, but if filled must be valid RFC format)
         const parentEmail = document.getElementById('parent_email');
         if (parentEmail && parentEmail.value.trim()) {
-          const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailPattern.test(parentEmail.value.trim())) {
-            markInvalid(parentEmail, 'parent_email_client_err', 'Please enter a valid Father email address.');
+          if (!RFC_EMAIL_REGEX.test(parentEmail.value.trim())) {
+            markInvalid(parentEmail, 'parent_email_client_err', 'Please enter a valid Father email address (e.g. father@example.com).');
           }
         }
 
-        // 10. Father Aadhaar (if filled, must be 12 digits)
+        // 12. Father Aadhaar (Optional, but if filled must be 12 digits)
         const fatherAadhaar = document.getElementById('father_aadhaar');
         if (fatherAadhaar && fatherAadhaar.value.trim()) {
           if (!/^\d{12}$/.test(fatherAadhaar.value.trim())) {
@@ -3568,40 +3714,50 @@
           }
         }
 
-        // 11. Mother Mobile (if filled, must be 10 digits starting with 6-9)
+        // 13. Mother Mobile (Optional, but if filled must be 10 digits starting with 6-9)
         const motherMobile = document.getElementById('mother_mobile');
         if (motherMobile && motherMobile.value.trim()) {
-          const cleanMother = motherMobile.value.replace(/\D/g, '');
+          formatPhoneInput(motherMobile);
+          const cleanMother = motherMobile.value.trim();
           if (!/^[6-9]\d{9}$/.test(cleanMother)) {
             markInvalid(motherMobile, 'mother_mobile_client_err', 'Mother Mobile number must be a valid 10-digit mobile starting with 6, 7, 8, or 9.');
           }
         }
 
-        // 12. Mother Email (if filled)
+        // 14. Mother Email (Optional, but if filled must be valid RFC format)
         const motherEmail = document.getElementById('mother_email');
         if (motherEmail && motherEmail.value.trim()) {
-          const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailPattern.test(motherEmail.value.trim())) {
-            markInvalid(motherEmail, 'mother_email_client_err', 'Please enter a valid Mother email address.');
+          if (!RFC_EMAIL_REGEX.test(motherEmail.value.trim())) {
+            markInvalid(motherEmail, 'mother_email_client_err', 'Please enter a valid Mother email address (e.g. mother@example.com).');
           }
         }
 
-        // 13. Guardian Mobile (if filled, must be 10 digits starting with 6-9)
+        // 15. Guardian Mobile (Optional, but if filled must be 10 digits starting with 6-9)
         const guardianMobile = document.getElementById('guardian_mobile');
         if (guardianMobile && guardianMobile.value.trim()) {
-          const cleanGuardian = guardianMobile.value.replace(/\D/g, '');
+          formatPhoneInput(guardianMobile);
+          const cleanGuardian = guardianMobile.value.trim();
           if (!/^[6-9]\d{9}$/.test(cleanGuardian)) {
             markInvalid(guardianMobile, 'guardian_mobile_client_err', 'Guardian Mobile number must be a valid 10-digit mobile starting with 6, 7, 8, or 9.');
           }
         }
 
-        // 14. Amount Collected (must be non-negative)
-        const amountCollected = document.getElementById('amount_collected');
-        if (!amountCollected || amountCollected.value === '' || Number(amountCollected.value) < 0) {
-          markInvalid(amountCollected, 'amount_collected_client_err', 'Amount Collected Today is required and cannot be negative (enter 0 if paying later).');
+        // 16. Sibling Roll No (If sibling checkbox is checked)
+        const hasSiblingCheck = document.getElementById('has_sibling');
+        const siblingRoll = document.getElementById('sibling_roll_no');
+        if (hasSiblingCheck && hasSiblingCheck.checked) {
+          if (!siblingRoll || !siblingRoll.value.trim()) {
+            markInvalid(siblingRoll, 'sibling_roll_no_client_err', 'Please enter enrolled Sibling Roll Number (or uncheck sibling option).');
+          }
         }
 
-        // 15. Previous Percentage (if filled, 0 to 100)
+        // 17. Amount Collected (Required and must be non-negative)
+        const amountCollected = document.getElementById('amount_collected');
+        if (!amountCollected || amountCollected.value === '' || Number(amountCollected.value) < 0) {
+          markInvalid(amountCollected, 'amount_collected_client_err', 'Amount Collected Today is required (enter 0 if paying later).');
+        }
+
+        // 18. Previous Percentage (Optional, but if filled must be between 0 and 100)
         const prevPct = document.getElementById('previous_percentage');
         if (prevPct && prevPct.value.trim() !== '') {
           const val = Number(prevPct.value);
