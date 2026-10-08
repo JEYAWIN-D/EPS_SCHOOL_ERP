@@ -103,6 +103,24 @@ class Classes extends Model
         Cache::forget('active_classes_with_sections_list');
     }
 
+    public function classTeacherAssignments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(StaffClassTeacherAssignment::class, 'class_id');
+    }
+
+    public function currentClassTeacherAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(StaffClassTeacherAssignment::class, 'class_id')->where('is_current', true);
+    }
+
+    public function getClassTeacherTitleAttribute(): string
+    {
+        if ($this->numeric_value >= 1 && $this->numeric_value <= 12) {
+            return "Class {$this->numeric_value}";
+        }
+        return $this->name;
+    }
+
     protected static function booted(): void
     {
         static::saved(fn() => static::clearClassCache());

@@ -24,6 +24,12 @@
             <span class="{{ $employee->is_active ? 'badge-green' : 'badge-red' }}">
               {{ $employee->is_active ? 'Active' : 'Inactive' }}
             </span>
+            @if(!empty($currentClassAssignment) && $currentClassAssignment->class)
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-bold rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs font-sans">
+                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                Class Teacher &mdash; {{ $currentClassAssignment->class->class_teacher_title }}
+              </span>
+            @endif
           </div>
           <div class="flex items-center gap-2 flex-wrap mt-1 text-xs text-slate-500 font-mono">
             <span>Emp Code: <span class="font-bold text-indigo-600">{{ $employee->employee_code }}</span></span>
@@ -915,66 +921,6 @@
         <p class="text-sm text-slate-400">No previous experience added yet.</p>
         @endif
       </div>
-    </div>
-      {{-- Certifications & Training --}}
-      <div class="card mt-6" x-data="{addCert:false}">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold text-slate-700">Certifications & Training</h3>
-          <button @click="addCert=!addCert" class="btn btn-secondary btn-xs">+ Add</button>
-        </div>
-        <div x-show="addCert" x-transition class="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-          <form method="POST" action="{{ route('hr.employees.certifications.store', $employee->id) }}" enctype="multipart/form-data" class="grid grid-cols-2 gap-3">
-            @csrf
-            <div class="col-span-2"><label class="label text-xs">Certification / Training Name <span class="text-red-500">*</span></label>
-              <input type="text" name="certification_name" class="input" required placeholder="e.g. TET, CTET, First Aid, Fire Safety..."></div>
-            <div><label class="label text-xs">Issuing Authority</label>
-              <input type="text" name="issuing_authority" class="input" placeholder="CBSE, Government, etc."></div>
-            <div><label class="label text-xs">Certificate Number</label>
-              <input type="text" name="certificate_number" class="input" placeholder="e.g. CERT-98765"></div>
-            <div class="col-span-2"><label class="label text-xs">Issue Date</label>
-              <input type="date" name="issue_date" class="input"></div>
-            <div class="col-span-2"><label class="label text-xs">Upload Certificate File (PDF/image, optional)</label>
-              <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" class="input"></div>
-            <div class="col-span-2 flex justify-end gap-2">
-              <button type="button" @click="addCert=false" class="btn btn-secondary btn-sm">Cancel</button>
-              <button type="submit" class="btn btn-primary btn-sm">Save</button>
-            </div>
-          </form>
-        </div>
-        @if($certifications->count())
-        <div class="space-y-3">
-          @foreach($certifications as $cert)
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50/70 rounded-xl border border-slate-100 gap-3">
-            <div>
-              <p class="font-bold text-slate-800 text-sm">{{ $cert->certification_name }}</p>
-              <p class="text-xs text-slate-500 mt-0.5">
-                {{ $cert->issuing_authority ?? 'Authority N/A' }}
-                @if($cert->issue_date) · Issued: {{ $cert->issue_date->format('d M Y') }}@endif
-                @if($cert->certificate_number) · No: {{ $cert->certificate_number }}@endif
-              </p>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              @if($cert->file_path)
-                <a href="{{ route('hr.employees.certifications.preview', [$employee->id, $cert->id]) }}" target="_blank" class="btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold flex items-center gap-1">
-                  Preview
-                </a>
-                <a href="{{ route('hr.employees.certifications.download', [$employee->id, $cert->id]) }}" class="btn-xs bg-slate-200 text-slate-700 hover:bg-slate-300 font-bold flex items-center gap-1">
-                  Download
-                </a>
-              @endif
-              <form method="POST" action="{{ route('hr.employees.certifications.delete', [$employee->id, $cert->id]) }}" class="inline"
-                onsubmit="return confirm('Delete this certification?')">
-                @csrf @method('DELETE')
-                <button class="btn-xs bg-red-50 text-red-600 hover:bg-red-100 font-semibold">Delete</button>
-              </form>
-            </div>
-          </div>
-          @endforeach
-        </div>
-        @else
-        <p class="text-sm text-slate-400">No certifications added yet.</p>
-        @endif
-      </div>
 
       {{-- Employee Documents --}}
       <div class="card mt-6" x-data="{addDoc:false}">
@@ -1141,6 +1087,218 @@
     </div>
 
     <div class="space-y-6">
+
+      {{-- Class Teacher Assignment --}}
+      <div class="card p-5 bg-white rounded-2xl border border-slate-200 shadow-sm" id="class-teacher-assignment-section">
+        <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-4">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="font-bold text-slate-800 text-sm">Class Teacher Assignment</h3>
+              <p class="text-[11px] text-slate-500 leading-tight">Assign this staff member as the primary Class Teacher and maintain assignment history.</p>
+            </div>
+          </div>
+        </div>
+
+        {{-- Current Assignment Status Card --}}
+        <div class="mb-4 p-3 rounded-xl border {{ $currentClassAssignment ? 'bg-gradient-to-r from-indigo-50/90 to-blue-50/70 border-indigo-200/90' : 'bg-slate-50 border-slate-200' }} flex items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-lg {{ $currentClassAssignment ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-slate-200 text-slate-400' }} flex items-center justify-center flex-shrink-0">
+              @if($currentClassAssignment)
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              @else
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+              @endif
+            </div>
+            <div class="min-w-0">
+              <span class="block text-[10px] font-bold uppercase tracking-wider {{ $currentClassAssignment ? 'text-indigo-600' : 'text-slate-400' }}">Current Assignment</span>
+              <p class="text-sm font-black {{ $currentClassAssignment ? 'text-indigo-950 font-mono' : 'text-slate-500' }} truncate">
+                {{ $currentClassAssignment ? ($currentClassAssignment->class?->class_teacher_title ?? ('Class ' . $currentClassAssignment->class?->name)) : 'Not Assigned' }}
+              </p>
+            </div>
+          </div>
+          @if($currentClassAssignment)
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex-shrink-0">
+              Active
+            </span>
+          @else
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200/70 text-slate-600 flex-shrink-0">
+              Unassigned
+            </span>
+          @endif
+        </div>
+
+        {{-- Assignment Form --}}
+        <form method="POST" action="{{ route('hr.employees.class-teacher-assignment', $employee->id) }}" class="space-y-3 mb-4">
+          @csrf
+          <div>
+            <label for="assigned_class_select" class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+              Assigned Class
+            </label>
+            <select id="assigned_class_select" name="class_id" class="select w-full bg-white text-xs font-semibold border-slate-300 focus:border-indigo-500 focus:ring focus:ring-indigo-100 rounded-xl py-2" required>
+              <option value="">Select a class</option>
+              @foreach($availableClasses as $cls)
+                <option value="{{ $cls->id }}" @selected(old('class_id', $currentClassAssignment?->class_id) == $cls->id)>
+                  {{ $cls->class_teacher_title }}
+                </option>
+              @endforeach
+            </select>
+            @if(isset($errors) && $errors->has('class_id'))
+              <p class="text-xs text-rose-600 font-medium mt-1">{{ $errors->first('class_id') }}</p>
+            @endif
+          </div>
+
+          <button type="submit" class="btn btn-primary w-full btn-sm py-2 font-bold flex items-center justify-center gap-1.5 shadow-2xs hover:shadow transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+            Save Class Assignment
+          </button>
+        </form>
+
+        {{-- Assignment History Log --}}
+        <div class="pt-3.5 border-t border-slate-100">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              Assignment History
+            </h4>
+            <span class="text-[10px] text-slate-400 font-mono font-medium">
+              {{ $classAssignments->count() }} {{ \Illuminate\Support\Str::plural('Record', $classAssignments->count()) }}
+            </span>
+          </div>
+
+          @if($classAssignments->count())
+            <div class="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-2xs">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[9px] tracking-wider font-bold">
+                    <th class="py-2 px-2.5">Class</th>
+                    <th class="py-2 px-2.5">Status</th>
+                    <th class="py-2 px-2 text-center">Assigned</th>
+                    <th class="py-2 px-2 text-center">Ended</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-[11px] font-medium">
+                  @foreach($classAssignments as $assignment)
+                    <tr class="hover:bg-slate-50/70 transition-colors {{ $assignment->is_current ? 'bg-indigo-50/25' : '' }}">
+                      <td class="py-2 px-2.5 font-bold text-slate-800 whitespace-nowrap">
+                        {{ $assignment->class?->class_teacher_title ?? ('Class ' . $assignment->class?->name) }}
+                      </td>
+                      <td class="py-2 px-2.5 whitespace-nowrap">
+                        @if($assignment->is_current)
+                          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            Current
+                          </span>
+                        @else
+                          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            Previous
+                          </span>
+                        @endif
+                      </td>
+                      <td class="py-2 px-2 text-center font-mono text-slate-600 whitespace-nowrap text-[10px]">
+                        {{ $assignment->assigned_at ? $assignment->assigned_at->format('d M Y') : '—' }}
+                      </td>
+                      <td class="py-2 px-2 text-center font-mono text-slate-600 whitespace-nowrap text-[10px]">
+                        {{ $assignment->ended_at ? $assignment->ended_at->format('d M Y') : '—' }}
+                      </td>
+                    </tr>
+                  @endforeach
+                </tbody>
+              </table>
+            </div>
+          @else
+            <div class="text-center py-3.5 px-3 bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
+              <p class="text-[11px] font-medium text-slate-400">No assignment history recorded yet.</p>
+            </div>
+          @endif
+        </div>
+      </div>
+
+      {{-- Certifications & Training --}}
+      <div class="card p-5 bg-white rounded-2xl border border-slate-200 shadow-sm" x-data="{addCert:false}">
+        <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            </div>
+            <div>
+              <h3 class="font-bold text-slate-800 text-sm">Certifications &amp; Training</h3>
+              <p class="text-[11px] text-slate-400">Professional credentials &amp; certificates</p>
+            </div>
+          </div>
+          <button @click="addCert=!addCert" class="btn btn-secondary btn-xs font-semibold">+ Add</button>
+        </div>
+
+        <div x-show="addCert" x-transition class="mb-4 p-3.5 bg-slate-50/90 rounded-xl border border-slate-200">
+          <form method="POST" action="{{ route('hr.employees.certifications.store', $employee->id) }}" enctype="multipart/form-data" class="space-y-2.5">
+            @csrf
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">Certification / Training Name <span class="text-rose-500">*</span></label>
+              <input type="text" name="certification_name" class="input text-xs w-full" required placeholder="e.g. TET, CTET, First Aid, Fire Safety...">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 mb-1">Issuing Authority</label>
+                <input type="text" name="issuing_authority" class="input text-xs w-full" placeholder="CBSE, Govt...">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-500 mb-1">Certificate Number</label>
+                <input type="text" name="certificate_number" class="input text-xs w-full" placeholder="e.g. CERT-98765">
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Issue Date</label>
+              <input type="date" name="issue_date" class="input text-xs w-full">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Upload File (PDF/image, optional)</label>
+              <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" class="input text-xs w-full">
+            </div>
+            <div class="flex justify-end gap-2 pt-1">
+              <button type="button" @click="addCert=false" class="btn btn-secondary btn-xs">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-xs font-bold">Save</button>
+            </div>
+          </form>
+        </div>
+
+        @if($certifications->count())
+          <div class="space-y-2">
+            @foreach($certifications as $cert)
+              <div class="p-2.5 bg-slate-50/70 rounded-xl border border-slate-200/80 hover:border-slate-300 transition">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <p class="font-bold text-slate-800 text-xs truncate">{{ $cert->certification_name }}</p>
+                    <p class="text-[10px] text-slate-500 mt-0.5 truncate">
+                      {{ $cert->issuing_authority ?? 'Authority N/A' }}
+                      @if($cert->issue_date) &bull; {{ $cert->issue_date->format('d M Y') }}@endif
+                      @if($cert->certificate_number) &bull; No: {{ $cert->certificate_number }}@endif
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    @if($cert->file_path)
+                      <a href="{{ route('hr.employees.certifications.preview', [$employee->id, $cert->id]) }}" target="_blank" class="btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold px-2 py-0.5 rounded text-[10px]" title="Preview">
+                        View
+                      </a>
+                    @endif
+                    <form method="POST" action="{{ route('hr.employees.certifications.delete', [$employee->id, $cert->id]) }}" class="inline" onsubmit="return confirm('Delete this certification?')">
+                      @csrf @method('DELETE')
+                      <button class="btn-xs bg-rose-50 text-rose-600 hover:bg-rose-100 font-semibold px-2 py-0.5 rounded text-[10px]">Delete</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            @endforeach
+          </div>
+        @else
+          <div class="text-center py-3.5 px-3 bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
+            <p class="text-xs text-slate-400">No certifications added yet.</p>
+          </div>
+        @endif
+      </div>
 
       {{-- Portal Login & Role --}}
       <div class="card mb-6" x-data="{ createLogin: false, changeRole: false }">

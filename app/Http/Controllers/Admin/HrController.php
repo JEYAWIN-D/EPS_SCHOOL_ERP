@@ -32,6 +32,8 @@ use App\Models\AcademicYear;
 use App\Models\AcademicTerm;
 use App\Models\Holiday;
 use App\Models\SchoolSetting;
+use App\Models\Classes;
+use App\Models\StaffClassTeacherAssignment;
 
 class HrController extends Controller
 {
@@ -2047,6 +2049,15 @@ class HrController extends Controller
         $empDocuments    = EmployeeDocument::where('employee_id', $id)->orderBy('document_type')->get();
         $certifications  = EmployeeCertification::where('employee_id', $id)->orderByDesc('issue_date')->get();
 
+        $classAssignments = StaffClassTeacherAssignment::with(['class', 'assignedBy'])
+            ->where('employee_id', $id)
+            ->orderByDesc('is_current')
+            ->orderByDesc('assigned_at')
+            ->orderByDesc('id')
+            ->get();
+        $currentClassAssignment = $classAssignments->firstWhere('is_current', true);
+        $availableClasses = Classes::where('is_active', true)->orderBy('sort_order')->get();
+
         // ── Staff Attendance Statistics ─────────────────────────────
         $attQuery = \App\Models\StaffAttendance::where('employee_id', $id);
         $allAttRecords = (clone $attQuery)->orderByDesc('date')->get();
@@ -2147,6 +2158,7 @@ class HrController extends Controller
         return view('hr.employees-show', compact(
             'employee', 'linkedUser', 'staffRoles', 'payroll', 'qualifications',
             'experiences', 'empDocuments', 'certifications',
+            'classAssignments', 'currentClassAssignment', 'availableClasses',
             'attPresent', 'attLate', 'attHalfDay', 'attAbsent', 'attLeave', 'attPermission', 'attOvertime', 'attOvertimeDuration', 'attTotalDays',
             'effectivePresent', 'cmEffectivePresent', 'currentMonthWorkingDays', 'attendancePercentage', 'recentAttendance', 'monthlyAttendance',
             'leaveRequests', 'approvedLeaveDays', 'pendingLeaveCount', 'rejectedLeaveCount'
@@ -2545,6 +2557,81 @@ class HrController extends Controller
         if ($cert->file_path) Storage::disk('local')->delete($cert->file_path);
         $cert->delete();
         return back()->with('success', 'Certification deleted.');
+    }
+
+    public function assignClassTeacher(Request $request, int $id)
+    {
+        $employee = Employee::findOrFail($id);
+
+        if (auth()->check() && !auth()->user()->can('edit employees') && !auth()->user()->hasRole('Super Admin') && !auth()->user()->hasRole('Admin')) {
+            abort(403, 'Unauthorized action. Only authorized Admin/HR users can assign Class Teachers.');
+        }
+
+        $validated = $request->validate([
+            'class_id' => 'required|exists:classes,id',
+        ], [
+            'class_id.required' => 'Please select a class to assign.',
+            'class_id.exists'   => 'The selected class is invalid.',
+        ]);
+
+        $class = Classes::findOrFail($validated['class_id']);
+
+        // Check if staff member is already assigned to this exact class as current
+        $currentAssignment = StaffClassTeacherAssignment::where('employee_id', $employee->id)
+            ->where('is_current', true)
+            ->first();
+
+        if ($currentAssignment && (int)$currentAssignment->class_id === (int)$class->id) {
+            return back()->with('info', "This staff member is already assigned as {$class->class_teacher_title} Teacher.");
+        }
+
+        // Conflict check: Check whether another staff member is already the current Class Teacher for this class
+        $conflictAssignment = StaffClassTeacherAssignment::with('employee')
+            ->where('class_id', $class->id)
+            ->where('is_current', true)
+            ->where('employee_id', '!=', $employee->id)
+            ->first();
+
+        if ($conflictAssignment) {
+            $otherTeacherName = $conflictAssignment->employee ? $conflictAssignment->employee->full_name : 'another staff member';
+            return back()
+                ->withErrors(['class_id' => "This class is already assigned to another Class Teacher ({$otherTeacherName})."])
+                ->with('error', "This class is already assigned to another Class Teacher ({$otherTeacherName}).");
+        }
+
+        // Atomically transition assignments within a database transaction
+        DB::transaction(function () use ($employee, $class) {
+            $today = Carbon::today();
+
+            // End/close any existing current assignment for this employee
+            StaffClassTeacherAssignment::where('employee_id', $employee->id)
+                ->where('is_current', true)
+                ->update([
+                    'is_current' => false,
+                    'ended_at'   => $today,
+                ]);
+
+            // Create new current assignment
+            StaffClassTeacherAssignment::create([
+                'employee_id' => $employee->id,
+                'class_id'    => $class->id,
+                'assigned_at' => $today,
+                'ended_at'    => null,
+                'is_current'  => true,
+                'assigned_by' => auth()->id(),
+            ]);
+
+            // Keep assigned_class on employees table in sync
+            $employee->update([
+                'assigned_class' => $class->class_teacher_title,
+            ]);
+        });
+
+        // Clear class & timetable cache
+        Classes::clearClassCache();
+        ClassesController::clearCache();
+
+        return back()->with('success', "Class Teacher assignment for {$class->class_teacher_title} saved successfully.");
     }
 
     public function editEmployee(int $id)

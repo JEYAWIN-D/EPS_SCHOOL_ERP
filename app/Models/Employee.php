@@ -252,4 +252,27 @@ class Employee extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function classTeacherAssignments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(StaffClassTeacherAssignment::class, 'employee_id')
+            ->orderByDesc('is_current')
+            ->orderByDesc('assigned_at')
+            ->orderByDesc('id');
+    }
+
+    public function currentClassTeacherAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(StaffClassTeacherAssignment::class, 'employee_id')
+            ->where('is_current', true);
+    }
+
+    public function getClassTeacherBadgeAttribute(): ?string
+    {
+        $current = $this->currentClassTeacherAssignment;
+        if (!$current || !$current->class) {
+            return null;
+        }
+        return 'Class Teacher — ' . ($current->class->class_teacher_title ?? ('Class ' . $current->class->name));
+    }
 }

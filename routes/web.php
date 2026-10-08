@@ -679,6 +679,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/employees/{id}/documents/{docId}/preview',       [HrController::class, 'previewEmployeeDocument'])->name('employees.documents.preview');
         Route::delete('/employees/{id}/documents/{docId}',            [HrController::class, 'deleteEmployeeDocument'])->name('employees.documents.delete');
         Route::post('/employees/{id}/documents/{docId}/verify',       [HrController::class, 'verifyEmployeeDocument'])->name('employees.documents.verify');
+        // Class teacher assignment
+        Route::post('/employees/{id}/class-teacher-assignment',       [HrController::class, 'assignClassTeacher'])->middleware('permission:edit employees')->name('employees.class-teacher-assignment');
         // Certifications & training
         Route::post('/employees/{id}/certifications',                 [HrController::class, 'storeCertification'])->name('employees.certifications.store');
         Route::get('/employees/{id}/certifications/{certId}/download',[HrController::class, 'downloadCertification'])->name('employees.certifications.download');
