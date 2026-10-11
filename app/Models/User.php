@@ -17,6 +17,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'admin_pin',
         'mobile',
         'employee_id',
         'student_id',
@@ -32,6 +33,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'admin_pin',
         'remember_token',
     ];
 
@@ -46,6 +48,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at'     => 'datetime',
             'password'          => 'hashed',
+            'admin_pin'         => 'hashed',
             'is_active'         => 'boolean',
         ];
     }

@@ -206,14 +206,14 @@
   ];
 
   $periodTimings = [
-    1 => ['09:30 AM', '10:15 AM'],
-    2 => ['10:15 AM', '11:00 AM'],
-    3 => ['11:15 AM', '12:00 PM'],
-    4 => ['12:00 PM', '12:45 PM'],
-    5 => ['01:30 PM', '02:15 PM'],
-    6 => ['02:15 PM', '03:00 PM'],
-    7 => ['03:15 PM', '04:00 PM'],
-    8 => ['04:00 PM', '04:30 PM'],
+    1 => ['09:10 AM', '09:50 AM'],
+    2 => ['09:50 AM', '10:30 AM'],
+    3 => ['10:40 AM', '11:20 AM'],
+    4 => ['11:20 AM', '12:00 PM'],
+    5 => ['12:00 PM', '12:40 PM'],
+    6 => ['01:20 PM', '02:00 PM'],
+    7 => ['02:10 PM', '02:50 PM'],
+    8 => ['02:50 PM', '03:00 PM'],
   ];
 @endphp
 
@@ -223,7 +223,7 @@
       <th class="day-th">Day / Timing</th>
       @for($p = 1; $p <= 8; $p++)
         <th>
-          P{{ $p }}<br>
+          {{ $p === 8 ? 'Diary' : 'P' . $p }}<br>
           <span style="font-size:7px;font-weight:400;opacity:0.85;">{{ $periodTimings[$p][0] }}–{{ $periodTimings[$p][1] }}</span>
         </th>
       @endfor
@@ -269,7 +269,7 @@
 {{-- Timing & Interval Legend --}}
 <table style="width:100%;margin-top:10px;font-size:8px;color:#64748b;">
   <tr>
-    <td><strong>Daily Bell Schedule:</strong> 09:15 AM Assembly | 11:00-11:15 AM Morning Break | 12:45-01:30 PM Lunch Break | 03:00-03:15 PM Afternoon Break | 04:30 PM Dispersal</td>
+    <td><strong>Daily Bell Schedule:</strong> Period I: 09:10–09:50 | Period II: 09:50–10:30 | Interval: 10:30–10:40 | Period III: 10:40–11:20 | Period IV: 11:20–12:00 | Period V: 12:00–12:40 | Lunch: 12:40–01:20 | Period VI: 01:20–02:00 | Interval: 02:00–02:10 | Period VII: 02:10–02:50 | Diary: 02:50–03:00 PM</td>
     <td style="text-align:right;">Generated on: {{ now()->format('d M Y, h:i A') }}</td>
   </tr>
 </table>
