@@ -395,6 +395,46 @@
       transform: none;
     }
 
+    /* ── Step 2: PIN Verification ── */
+    .pin-shield-wrap {
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    .pin-shield-badge {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fdf2f2 0%, #fee2e2 100%);
+      border: 2px solid #fecaca;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.85rem auto;
+      box-shadow: 0 4px 12px rgba(161, 52, 49, 0.12);
+    }
+    .pin-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.2rem;
+    }
+    .pin-subtitle {
+      font-size: 0.8125rem;
+      color: #64748b;
+      font-weight: 500;
+    }
+    .pin-user-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 0.65rem;
+      padding: 0.55rem 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+
     /* ── 3. Simple Centered Footer ── */
     .footer-center {
       text-align: center;
@@ -637,136 +677,214 @@
   <main class="login-main">
     <div class="login-wrapper">
 
-      <div class="login-card">
-        <!-- Title -->
-        <div class="card-title-group">
-          <h2 class="card-title">Portal Sign In</h2>
-          <p class="card-subtitle" id="roleSubtitle">Select your role or enter credentials</p>
-        </div>
+      <div class="login-card" x-data="authLoginForm()">
+        <!-- Title & Role Switcher: Active on Step 1 (Credentials) -->
+        <div x-show="step === 'credentials'">
+          <!-- Title -->
+          <div class="card-title-group">
+            <h2 class="card-title">Portal Sign In</h2>
+            <p class="card-subtitle" id="roleSubtitle">Select your role or enter credentials</p>
+          </div>
 
-      <!-- Quick Role Switcher -->
-      <div class="role-bar">
-        <div class="role-bar-grid">
-          <!-- Admin -->
-          <button type="button" class="role-tab active" id="tab-admin" onclick="switchRole('admin', 'admin@schoolerp.in', 'Admin@1234')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-            <span>Admin</span>
-          </button>
+          <!-- Quick Role Switcher -->
+          <div class="role-bar">
+            <div class="role-bar-grid">
+              <!-- Admin -->
+              <button type="button" class="role-tab active" id="tab-admin" onclick="switchRole('admin', 'admin@schoolerp.in', 'Admin@1234')">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                <span>Admin</span>
+              </button>
 
-          <!-- Student -->
-          <button type="button" class="role-tab" id="tab-student" onclick="switchRole('student', 'student@schoolerp.in', 'Demo@2026')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
-            <span>Student</span>
-          </button>
+              <!-- Student -->
+              <button type="button" class="role-tab" id="tab-student" onclick="switchRole('student', 'student@schoolerp.in', 'Demo@2026')">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                <span>Student</span>
+              </button>
 
-          <!-- Parent -->
-          <button type="button" class="role-tab" id="tab-parent" onclick="switchRole('parent', 'parent@schoolerp.in', 'Demo@2026')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            <span>Parent</span>
-          </button>
+              <!-- Parent -->
+              <button type="button" class="role-tab" id="tab-parent" onclick="switchRole('parent', 'parent@schoolerp.in', 'Demo@2026')">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <span>Parent</span>
+              </button>
 
-          <!-- Teacher -->
-          <button type="button" class="role-tab" id="tab-teacher" onclick="switchRole('teacher', 'teacher@schoolerp.in', 'Demo@2026')">
-            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            <span>Teacher</span>
-          </button>
-        </div>
+              <!-- Teacher -->
+              <button type="button" class="role-tab" id="tab-teacher" onclick="switchRole('teacher', 'teacher@schoolerp.in', 'Demo@2026')">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                <span>Teacher</span>
+              </button>
+            </div>
 
-        <div class="role-bar-foot">
-          <span class="role-bar-hint">1-click demo credentials</span>
-          <button type="button" class="role-bar-link" onclick="openDemoModal()">
-            <span>All 23 roles directory</span>
-            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Flash Error Alert -->
-      @if($errors->any())
-        <div class="error-alert">
-          <svg style="width:1.15rem;height:1.15rem;flex-shrink:0;margin-top:0.05rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span>{{ $errors->first() }}</span>
-        </div>
-      @endif
-
-      <!-- Form -->
-      <form method="POST" action="{{ route('login') }}" x-data="{ loading: false }" @submit="loading = true">
-        @csrf
-
-        <!-- Email or Mobile -->
-        <div class="field-group">
-          <label class="field-label" for="email-field">Email Address or Mobile ID</label>
-          <div class="input-box">
-            <input
-              id="email-field"
-              type="text"
-              name="email"
-              value="{{ old('email', 'admin@schoolerp.in') }}"
-              required
-              autofocus
-              class="field-input"
-              placeholder="name@schoolerp.in or mobile number"
-            >
-            <div class="input-icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/></svg>
+            <div class="role-bar-foot">
+              <span class="role-bar-hint">1-click demo credentials</span>
+              <button type="button" class="role-bar-link" onclick="openDemoModal()">
+                <span>All 23 roles directory</span>
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+              </button>
             </div>
           </div>
-          @error('email')<p class="field-error">{{ $message }}</p>@enderror
         </div>
 
-        <!-- Password -->
-        <div class="field-group" x-data="{ show: false }">
-          <label class="field-label" for="pass-field">Password</label>
-          <div class="input-box">
-            <input
-              id="pass-field"
-              :type="show ? 'text' : 'password'"
-              name="password"
-              value="Admin@1234"
-              required
-              class="field-input"
-              style="padding-right: 2.75rem;"
-              placeholder="••••••••"
-            >
-            <div class="input-icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        <!-- Flash Error Alert -->
+        @if($errors->any())
+          <div class="error-alert">
+            <svg style="width:1.15rem;height:1.15rem;flex-shrink:0;margin-top:0.05rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>{{ $errors->first() }}</span>
+          </div>
+        @endif
+
+        <!-- Form -->
+        <form id="login-form" method="POST" action="{{ route('login') }}" @submit="handleSubmit($event)">
+          @csrf
+
+          <!-- STEP 1: Credentials Section (Email & Password) -->
+          <div x-show="step === 'credentials'">
+            <!-- Email or Mobile -->
+            <div class="field-group">
+              <label class="field-label" for="email-field">Email Address or Mobile ID</label>
+              <div class="input-box">
+                <input
+                  id="email-field"
+                  type="text"
+                  name="email"
+                  x-model="email"
+                  required
+                  autofocus
+                  class="field-input"
+                  placeholder="name@schoolerp.in or mobile number"
+                >
+                <div class="input-icon">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/></svg>
+                </div>
+              </div>
+              @error('email')<p class="field-error">{{ $message }}</p>@enderror
             </div>
-            <button
-              type="button"
-              class="pass-toggle"
-              @click="show = !show"
-              title="Toggle password visibility"
-              aria-label="Toggle password visibility"
-            >
-              <svg x-show="!show" style="width:1.15rem;height:1.15rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-              <svg x-show="show"  style="width:1.15rem;height:1.15rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+
+            <!-- Password -->
+            <div class="field-group" x-data="{ show: false }">
+              <label class="field-label" for="pass-field">Password</label>
+              <div class="input-box">
+                <input
+                  id="pass-field"
+                  :type="show ? 'text' : 'password'"
+                  name="password"
+                  value="Admin@1234"
+                  required
+                  class="field-input"
+                  style="padding-right: 2.75rem;"
+                  placeholder="••••••••"
+                >
+                <div class="input-icon">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                </div>
+                <button
+                  type="button"
+                  class="pass-toggle"
+                  @click="show = !show"
+                  title="Toggle password visibility"
+                  aria-label="Toggle password visibility"
+                >
+                  <svg x-show="!show" style="width:1.15rem;height:1.15rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <svg x-show="show"  style="width:1.15rem;height:1.15rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Remember Me & Forgot Password -->
+            <div class="meta-row">
+              <label class="remember-label">
+                <input type="checkbox" name="remember" class="remember-cb" checked>
+                <span>Keep me signed in</span>
+              </label>
+              <a href="#" class="forgot-link">Forgot password?</a>
+            </div>
+
+            <!-- Submit Button: "Sign In to ERP Portal" -->
+            <button type="submit" class="submit-btn" :disabled="loading">
+              <span x-show="!loading" style="display:flex;align-items:center;gap:0.5rem">
+                <span>Sign In to ERP Portal</span>
+                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+              </span>
+              <span x-show="loading" style="display:flex;align-items:center;gap:0.5rem">
+                <svg class="spinner" style="width:1.15rem;height:1.15rem" fill="none" viewBox="0 0 24 24"><circle style="opacity:.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path style="opacity:.75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                <span>Authenticating…</span>
+              </span>
             </button>
           </div>
-        </div>
 
-        <!-- Remember Me & Forgot Password -->
-        <div class="meta-row">
-          <label class="remember-label">
-            <input type="checkbox" name="remember" class="remember-cb" checked>
-            <span>Keep me signed in</span>
-          </label>
-          <a href="#" class="forgot-link">Forgot password?</a>
-        </div>
+          <!-- STEP 2: Security PIN Verification (Shown after clicking Sign In for Admin) -->
+          <div x-show="step === 'pin'" style="display: none;">
+            <!-- Header with Shield Badge -->
+            <div class="pin-shield-wrap">
+              <div class="pin-shield-badge">
+                <svg width="28" height="28" fill="none" stroke="#8c2826" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                </svg>
+              </div>
+              <h3 class="pin-title">Enter Admin Security PIN</h3>
+              <p class="pin-subtitle">Two-step administrative authentication required</p>
+            </div>
 
-        <!-- Submit Button -->
-        <button type="submit" class="submit-btn" :disabled="loading">
-          <span x-show="!loading" style="display:flex;align-items:center;gap:0.5rem">
-            <span>Sign In to ERP Portal</span>
-            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
-          </span>
-          <span x-show="loading" style="display:flex;align-items:center;gap:0.5rem">
-            <svg class="spinner" style="width:1.15rem;height:1.15rem" fill="none" viewBox="0 0 24 24"><circle style="opacity:.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path style="opacity:.75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-            <span>Authenticating…</span>
-          </span>
-        </button>
-      </form>
+            <!-- Active User Account Pill -->
+            <div class="pin-user-pill">
+              <div style="display: flex; align-items: center; gap: 0.5rem; min-width: 0;">
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: #16a34a; flex-shrink: 0;"></div>
+                <span style="font-size: 0.8125rem; font-weight: 700; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" x-text="email || 'admin@schoolerp.in'"></span>
+              </div>
+              <button type="button" @click="step = 'credentials'" style="font-size: 0.75rem; font-weight: 700; color: #a13431; background: none; border: none; cursor: pointer; text-decoration: underline;">
+                Change
+              </button>
+            </div>
 
-    </div>
+            <!-- PIN Input Field -->
+            <div style="margin-bottom: 1.5rem; text-align: center;">
+              <label class="field-label" for="pin-field" style="margin-bottom: 0.45rem; text-align: center;">
+                Security PIN
+              </label>
+              <div style="position: relative; max-width: 220px; margin: 0 auto;">
+                <input
+                  id="pin-field"
+                  type="password"
+                  inputmode="numeric"
+                  maxlength="6"
+                  name="admin_pin"
+                  x-model="pin"
+                  class="field-input"
+                  placeholder="••••"
+                  autocomplete="one-time-code"
+                  style="text-align: center; font-size: 1.6rem; letter-spacing: 0.45em; font-weight: 800; padding: 0.65rem 0.5rem; border-radius: 0.75rem; border: 2px solid #cbd5e1;"
+                >
+              </div>
+              @error('admin_pin')<p class="field-error" style="text-align: center; margin-top: 0.4rem;">{{ $message }}</p>@enderror
+
+              <div style="margin-top: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
+                <span style="font-size: 0.72rem; color: #64748b;">Dev Default:</span>
+                <button type="button" @click="pin = '1122'" style="font-size: 0.72rem; font-weight: 700; color: #8c2826; background: #fdf5f6; border: 1px solid #f5ccd0; border-radius: 0.4rem; padding: 0.15rem 0.45rem; cursor: pointer;">
+                  1122 (Click to auto-fill)
+                </button>
+              </div>
+            </div>
+
+            <!-- Verify PIN & Access Portal Button -->
+            <button type="submit" class="submit-btn" :disabled="loading" style="margin-bottom: 0.75rem;">
+              <span x-show="!loading" style="display:flex;align-items:center;gap:0.5rem">
+                <span>Verify PIN & Access Portal</span>
+                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+              </span>
+              <span x-show="loading" style="display:flex;align-items:center;gap:0.5rem">
+                <svg class="spinner" style="width:1.15rem;height:1.15rem" fill="none" viewBox="0 0 24 24"><circle style="opacity:.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path style="opacity:.75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                <span>Authorizing…</span>
+              </span>
+            </button>
+
+            <!-- Back to Credentials Button -->
+            <button type="button" @click="step = 'credentials'" style="width: 100%; background: none; border: none; font-size: 0.8125rem; font-weight: 600; color: #64748b; padding: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.35rem; font-family: 'Plus Jakarta Sans', sans-serif;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+              <span>Back to credentials</span>
+            </button>
+          </div>
+        </form>
+
+      </div>
 
     <!-- 3. Simple Centered Footer -->
     <footer class="footer-center">
@@ -939,6 +1057,38 @@
   </div>
 
 <script>
+function authLoginForm() {
+  return {
+    step: '{{ $errors->has('admin_pin') ? 'pin' : 'credentials' }}',
+    loading: false,
+    role: 'admin',
+    email: '{{ old('email', 'admin@schoolerp.in') }}',
+    pin: '{{ old('admin_pin', '1122') }}',
+    isEmailAdmin() {
+      const e = (this.email || '').trim().toLowerCase();
+      return e === 'admin@schoolerp.in' || e.startsWith('admin@') || e.startsWith('owner@') || e.startsWith('schooladmin@');
+    },
+    handleSubmit(e) {
+      if (this.step === 'credentials') {
+        const isAdmin = this.role === 'admin' || this.isEmailAdmin();
+        if (isAdmin) {
+          e.preventDefault();
+          this.step = 'pin';
+          this.$nextTick(() => {
+            const p = document.getElementById('pin-field');
+            if (p) {
+              p.focus();
+              p.select();
+            }
+          });
+          return;
+        }
+      }
+      this.loading = true;
+    }
+  };
+}
+
 function switchRole(roleKey, email, password) {
   const pillIds = ['tab-admin', 'tab-student', 'tab-parent', 'tab-teacher'];
   pillIds.forEach(id => {
@@ -960,6 +1110,13 @@ function switchRole(roleKey, email, password) {
     sub.textContent = roleLabels[roleKey] || 'Select your role or enter credentials';
   }
 
+  const formEl = document.getElementById('login-form');
+  if (formEl && formEl._x_dataStack && formEl._x_dataStack[0]) {
+    formEl._x_dataStack[0].role = roleKey;
+    formEl._x_dataStack[0].step = 'credentials';
+    formEl._x_dataStack[0].email = email;
+  }
+
   fillLogin(email, password);
 }
 
@@ -969,6 +1126,9 @@ function fillLogin(email, password) {
   if (!e || !p) return;
   e.value = email;
   p.value = password;
+
+  e.dispatchEvent(new Event('input', { bubbles: true }));
+  p.dispatchEvent(new Event('input', { bubbles: true }));
 
   [e, p].forEach(el => {
     el.style.transition = 'border-color 0.2s, box-shadow 0.2s, background-color 0.2s';
@@ -989,6 +1149,13 @@ function fillFromModal(email, password, roleName) {
   const sub = document.getElementById('roleSubtitle');
   if (sub && roleName) {
     sub.textContent = 'Selected role: ' + roleName;
+  }
+  const formEl = document.getElementById('login-form');
+  if (formEl && formEl._x_dataStack && formEl._x_dataStack[0]) {
+    const isAdm = roleName && (roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('owner'));
+    formEl._x_dataStack[0].role = isAdm ? 'admin' : 'other';
+    formEl._x_dataStack[0].step = 'credentials';
+    formEl._x_dataStack[0].email = email;
   }
 }
 

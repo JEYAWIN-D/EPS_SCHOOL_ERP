@@ -3,6 +3,9 @@
 @section('title', 'Classes & Timetables')
 
 @section('content')
+@php
+  $authTeacherId = $authEmployeeId ?? \App\Http\Controllers\Admin\PeriodReportController::resolveAuthEmployeeId();
+@endphp
 <div class="space-y-6" x-data="classesDashboard()" x-init="init()">
 
   {{-- Page Header --}}
@@ -24,12 +27,23 @@
 
     {{-- Top Right Actions --}}
     <div class="flex items-center gap-2.5 self-end sm:self-auto flex-shrink-0">
+      @can('view academics')
+      <a href="{{ route('academics.sections.manage') }}"
+         class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition cursor-pointer"
+         title="Manage and create class sections">
+        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span>Manage Sections</span>
+      </a>
+      @endcan
+
+      @if(\App\Http\Controllers\Admin\ClassesController::canManageTimetable(auth()->user()))
       <button @click="showHolidayModal = true; loadDeclaredHolidays()"
               class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 shadow-2xs transition cursor-pointer"
               title="Declare a school holiday for a specific date">
         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         <span>Declare Holiday</span>
       </button>
+      @endif
 
       <button @click="showTimeSimulator = !showTimeSimulator"
               class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
@@ -40,11 +54,18 @@
         <span x-text="simulatedTime !== null ? 'Simulating: ' + displayClock : 'Time Simulator'"></span>
       </button>
 
+      @if(\App\Http\Controllers\Admin\ClassesController::canManageTimetable(auth()->user()))
       <button @click="openEditTimetableModal()"
               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition cursor-pointer">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
         <span>Edit Timetable</span>
       </button>
+      @else
+      <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs" title="You have view-only access to timetables">
+        <span>👁️</span>
+        <span>View-Only Timetable</span>
+      </span>
+      @endif
     </div>
   </div>
 
@@ -82,69 +103,69 @@
                 :class="simulatedTime === null ? 'bg-emerald-600 text-white ring-2 ring-emerald-400' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'">
           <span class="inline-block w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span> Live Time
         </button>
-        <button @click="setTime('09:20', 1)"
+        <button @click="setTime('09:30', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '09:20' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          09:20 AM (P1)
+                :class="simulatedTime === '09:30' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          09:30 AM (Period I)
         </button>
-        <button @click="setTime('10:15', 1)"
+        <button @click="setTime('10:10', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '10:15' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          10:15 AM (P2)
+                :class="simulatedTime === '10:10' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          10:10 AM (Period II)
         </button>
-        <button @click="setTime('10:50', 1)"
+        <button @click="setTime('10:35', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '10:50' ? 'bg-amber-600 text-white font-black shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'">
-          10:50 AM (Morning Break)
+                :class="simulatedTime === '10:35' ? 'bg-amber-600 text-white font-black shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'">
+          10:35 AM (Interval)
         </button>
-        <button @click="setTime('11:20', 1)"
+        <button @click="setTime('11:00', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '11:20' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          11:20 AM (P3)
+                :class="simulatedTime === '11:00' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          11:00 AM (Period III)
         </button>
-        <button @click="setTime('12:00', 1)"
+        <button @click="setTime('11:40', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '12:00' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          12:00 PM (P4)
+                :class="simulatedTime === '11:40' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          11:40 AM (Period IV)
         </button>
-        <button @click="setTime('12:45', 1)"
+        <button @click="setTime('12:20', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '12:45' ? 'bg-amber-600 text-white font-black shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'">
-          12:45 PM (Lunch)
+                :class="simulatedTime === '12:20' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          12:20 PM (Period V)
         </button>
-        <button @click="setTime('13:30', 1)"
+        <button @click="setTime('13:00', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '13:30' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          01:30 PM (P5)
+                :class="simulatedTime === '13:00' ? 'bg-amber-600 text-white font-black shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'">
+          01:00 PM (Lunch Break)
         </button>
-        <button @click="setTime('14:15', 1)"
+        <button @click="setTime('13:40', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '14:15' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          02:15 PM (P6)
+                :class="simulatedTime === '13:40' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          01:40 PM (Period VI)
         </button>
-        <button @click="setTime('14:50', 1)"
+        <button @click="setTime('14:05', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '14:50' ? 'bg-amber-600 text-white font-black shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'">
-          02:50 PM (Short Break)
+                :class="simulatedTime === '14:05' ? 'bg-amber-600 text-white font-black shadow-sm' : 'bg-amber-100 text-amber-900 hover:bg-amber-200 border border-amber-300'">
+          02:05 PM (Interval)
         </button>
-        <button @click="setTime('15:20', 1)"
+        <button @click="setTime('14:30', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '15:20' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          03:20 PM (P7)
+                :class="simulatedTime === '14:30' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
+          02:30 PM (Period VII)
         </button>
-        <button @click="setTime('16:00', 1)"
+        <button @click="setTime('14:55', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '16:00' ? 'bg-blue-600 text-white font-black shadow-sm' : 'bg-white text-slate-700 hover:bg-blue-50 border border-slate-200'">
-          04:00 PM (P8)
+                :class="simulatedTime === '14:55' ? 'bg-purple-600 text-white font-black shadow-sm' : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-300'">
+          02:55 PM (Diary)
         </button>
-        <button @click="setTime('16:45', 1)"
+        <button @click="setTime('15:15', 1)"
                 class="px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                :class="simulatedTime === '16:45' ? 'bg-slate-700 text-white font-black shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'">
-          04:45 PM (After School)
+                :class="simulatedTime === '15:15' ? 'bg-slate-700 text-white font-black shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'">
+          03:15 PM (Dispersed)
         </button>
-        <button @click="setTime('11:30', 6)"
+        <button @click="setTime('10:00', 6)"
                 class="px-3 py-1.5 rounded-xl text-xs font-extrabold transition shadow-sm cursor-pointer"
-                :class="simulatedTime === '11:30' && simulatedDayOfWeek === 6 ? 'bg-emerald-700 text-white font-black ring-2 ring-emerald-400' : 'bg-emerald-600 text-white hover:bg-emerald-700'">
+                :class="simulatedTime === '10:00' && simulatedDayOfWeek === 6 ? 'bg-emerald-700 text-white font-black ring-2 ring-emerald-400' : 'bg-emerald-600 text-white hover:bg-emerald-700'">
           🏆 Saturday
         </button>
       </div>
@@ -496,7 +517,7 @@
                        ? 'bg-blue-600 text-white border-blue-700 shadow-sm ring-2 ring-blue-400 ring-offset-1 font-extrabold'
                        : 'bg-slate-50 text-slate-700 border-slate-200 font-semibold'"
                      :title="slot.full_title">
-                  <div class="text-[9px] font-bold opacity-80" x-text="'P' + slot.period"></div>
+                  <div class="text-[9px] font-bold opacity-80" x-text="slot.period_label || ('P' + slot.period)"></div>
                   <div class="text-[10px] truncate mt-0.5" x-text="slot.abbr"></div>
                 </div>
               </template>
@@ -504,18 +525,12 @@
           </div>
         </div>
 
-        {{-- Card Footer --}}
-        <div class="p-4 bg-slate-50/80 border-t border-slate-100 flex items-center gap-2">
+        {{-- Card Footer: Single Primary Action 'View Timetable' --}}
+        <div class="p-4 bg-slate-50/80 border-t border-slate-100 flex items-center">
           <button @click="openTimetableModal(cls, currentSection)"
-                  class="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition cursor-pointer">
+                  class="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition cursor-pointer">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             View Timetable
-          </button>
-          <button @click="openEditTimetableModal(cls, currentSection)"
-                  class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300 shadow-2xs transition cursor-pointer"
-                  title="Edit Timetable for this Class & Section">
-            <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-            <span>Edit</span>
           </button>
         </div>
       </div>
@@ -714,25 +729,20 @@
               </div>
               <p class="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5 font-medium">
                 <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                8 Periods Daily &nbsp;•&nbsp; 09:15 AM – 04:30 PM
+                7 Periods + Diary &nbsp;•&nbsp; 09:10 AM – 03:00 PM
               </p>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            {{-- Declare Holiday shortcut --}}
+            @can('edit academics')
+            {{-- Declare Holiday shortcut (Admin Only) --}}
             <button @click="showHolidayModal = true; loadDeclaredHolidays()"
                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 shadow-2xs transition cursor-pointer"
                     title="Declare a school holiday for a specific date">
               <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
               <span>Declare Holiday</span>
             </button>
-            {{-- Edit Timetable shortcut --}}
-            <button @click="modalOpen = false; openEditTimetableModal(modalClass, modalSection)"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 shadow-2xs transition cursor-pointer"
-                    title="Edit Timetable for this Class & Section">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-              <span>Edit</span>
-            </button>
+            @endcan
             {{-- PDF --}}
             <a :href="'{{ url('classes') }}/' + (modalClass?.id || '') + '/timetable/pdf?section_id=' + (modalSection?.id || '')"
                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-xs transition">
@@ -795,18 +805,18 @@
             <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 text-center">
               Day
             </div>
-            <template x-for="[p, times] in [
-              [1,'09:15–10:00'],
-              [2,'10:00–10:45'],
-              [3,'11:00–11:45'],
-              [4,'11:45–12:30'],
-              [5,'01:15–02:00'],
-              [6,'02:00–02:45'],
-              [7,'03:00–03:45'],
-              [8,'03:45–04:30']
+            <template x-for="[p, times, label] in [
+              [1, '09:10–09:50', 'Period I'],
+              [2, '09:50–10:30', 'Period II'],
+              [3, '10:40–11:20', 'Period III'],
+              [4, '11:20–12:00', 'Period IV'],
+              [5, '12:00–12:40', 'Period V'],
+              [6, '01:20–02:00', 'Period VI'],
+              [7, '02:10–02:50', 'Period VII'],
+              [8, '02:50–03:00', 'Diary']
             ]" :key="p">
               <div class="bg-white border border-slate-200/90 rounded-xl py-2 px-1 text-center shadow-xs flex flex-col items-center justify-center">
-                <span class="text-xs font-black text-blue-600 tracking-tight" x-text="'Period ' + p"></span>
+                <span class="text-xs font-black text-blue-600 tracking-tight" x-text="label"></span>
                 <span class="text-[9.5px] text-slate-400 font-medium tracking-tight mt-0.5" x-text="times"></span>
               </div>
             </template>
@@ -856,27 +866,49 @@
                   <template x-for="p in [1,2,3,4,5,6,7,8]" :key="p">
                     <div class="rounded-xl border transition-all p-3 flex flex-col justify-between overflow-hidden"
                          style="height: 86px; max-height: 86px;"
-                         :class="d.dayNum === 6
-                           ? 'bg-emerald-50/40 hover:bg-emerald-50 border-emerald-200 hover:border-emerald-300 hover:shadow-sm'
-                           : (getPeriodEntry(d.dayNum, p)?.subject_name
-                               ? 'bg-white hover:bg-blue-50/30 border-slate-200/90 hover:border-blue-300 shadow-xs hover:shadow-md'
-                               : 'bg-slate-100/40 border-dashed border-slate-200 items-center justify-center')">
+                         :class="isMyPeriod(getPeriodEntry(d.dayNum, p))
+                           ? 'bg-blue-50/70 hover:bg-blue-100/70 border-blue-400 ring-2 ring-blue-400/40 shadow-xs cursor-pointer'
+                           : (d.dayNum === 6
+                             ? 'bg-emerald-50/40 hover:bg-emerald-50 border-emerald-200 cursor-default'
+                             : (getPeriodEntry(d.dayNum, p)?.subject_name
+                                 ? 'bg-white hover:bg-slate-50/80 border-slate-200/90 shadow-xs cursor-default'
+                                 : (canManageTimetable
+                                     ? 'bg-slate-50/80 hover:bg-blue-50/80 border-dashed border-slate-300 hover:border-blue-400 items-center justify-center cursor-pointer transition shadow-2xs'
+                                     : 'bg-slate-100/40 border-dashed border-slate-200 items-center justify-center cursor-default')))"
+                         @click="isMyPeriod(getPeriodEntry(d.dayNum, p))
+                           ? openTeacherPeriodReportModal(getPeriodEntry(d.dayNum, p), d.name)
+                           : (!getPeriodEntry(d.dayNum, p)?.subject_name && canManageTimetable
+                               ? onFreePeriodClick(d.dayNum, p)
+                               : null)">
 
                       <template x-if="getPeriodEntry(d.dayNum, p)?.subject_name">
                         <div class="flex flex-col justify-between h-full w-full">
                           <div>
-                            <h4 class="font-extrabold text-xs leading-snug truncate"
-                                :class="d.dayNum === 6 ? 'text-emerald-950' : 'text-slate-900'"
-                                x-text="getPeriodEntry(d.dayNum, p)?.subject_name"
-                                :title="getPeriodEntry(d.dayNum, p)?.subject_name"></h4>
+                            <div class="flex items-center justify-between gap-1">
+                              <h4 class="font-extrabold text-xs leading-snug truncate"
+                                  :class="d.dayNum === 6 ? 'text-emerald-950' : 'text-slate-900'"
+                                  x-text="getPeriodEntry(d.dayNum, p)?.subject_name"
+                                  :title="getPeriodEntry(d.dayNum, p)?.subject_name"></h4>
+                              <template x-if="isMyPeriod(getPeriodEntry(d.dayNum, p))">
+                                <span class="text-[8px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-full bg-blue-600 text-white shrink-0 shadow-2xs">
+                                  Your Period
+                                </span>
+                              </template>
+                            </div>
                           </div>
                           <div class="mt-auto pt-1 flex items-center justify-between">
-                            <p class="text-[10.5px] text-slate-500 truncate font-medium"
-                               x-text="getPeriodEntry(d.dayNum, p)?.teacher_name || 'Faculty'"
-                               :title="getPeriodEntry(d.dayNum, p)?.teacher_name"></p>
+                            <p class="text-[10.5px] truncate font-medium"
+                                :class="isMyPeriod(getPeriodEntry(d.dayNum, p)) ? 'text-blue-900 font-bold' : 'text-slate-500'"
+                                x-text="getPeriodEntry(d.dayNum, p)?.teacher_name || 'Faculty'"
+                                :title="getPeriodEntry(d.dayNum, p)?.teacher_name"></p>
                             <template x-if="getPeriodEntry(d.dayNum, p)?.period_type === 'substitution'">
-                              <span class="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 flex-shrink-0">
-                                🔄 Sub
+                               <span class="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 flex-shrink-0">
+                                 🔄 Sub
+                               </span>
+                            </template>
+                            <template x-if="isMyPeriod(getPeriodEntry(d.dayNum, p))">
+                              <span class="text-[9px] font-bold text-blue-700 underline shrink-0">
+                                Log Report &rarr;
                               </span>
                             </template>
                           </div>
@@ -884,7 +916,14 @@
                       </template>
 
                       <template x-if="!getPeriodEntry(d.dayNum, p)?.subject_name">
-                        <span class="text-[11px] text-slate-300 font-medium italic">Free Period</span>
+                        <div class="text-center space-y-0.5">
+                          <span class="text-[11px] font-semibold transition"
+                                :class="canManageTimetable ? 'text-blue-600 hover:text-blue-800' : 'text-slate-400 italic'"
+                                x-text="canManageTimetable ? '+ Assign Period' : 'Free Period'"></span>
+                          <template x-if="canManageTimetable">
+                            <p class="text-[9px] text-slate-400">Click to assign staff</p>
+                          </template>
+                        </div>
                       </template>
                     </div>
                   </template>
@@ -897,7 +936,7 @@
 
         {{-- ── 6. FOOTER ── --}}
         <div class="px-6 py-2.5 flex-shrink-0 flex items-center justify-between bg-white border-t border-slate-200">
-          <p class="text-[11px] text-slate-500 font-medium">🔔 &nbsp;09:15 Start · 10:45 Break · 12:30 Lunch · 02:45 Break · 04:30 Dispersal</p>
+          <p class="text-[11px] text-slate-500 font-medium">🔔 &nbsp;Period I 09:10 · Interval 10:30 · Lunch 12:40 · Interval 02:00 · Diary 02:50 · Dispersal 03:00 PM</p>
           <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">DASA EduERP</p>
         </div>
 
@@ -908,22 +947,22 @@
   {{-- ── 5. Full Interactive "Edit Timetable" Modal (Teleported to Body) ── --}}
   <template x-teleport="body">
     <div x-show="editModalOpen"
-         @keydown.window.escape="editModalOpen = false"
-         @click.self="editModalOpen = false"
-         class="fixed inset-0 z-[9999] flex items-center justify-center"
-         style="display:none; padding:24px 16px; box-sizing:border-box; background:rgba(15, 23, 42, 0.7);"
+         @keydown.window.escape="confirmCloseEditModal()"
+         class="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-5"
+         style="display:none; background:rgba(15, 23, 42, 0.7); backdrop-filter:blur(4px);"
          x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0 scale-98"
+         x-transition:enter-start="opacity-0 scale-95"
          x-transition:enter-end="opacity-100 scale-100"
          x-transition:leave="transition ease-in duration-150"
          x-transition:leave-start="opacity-100 scale-100"
-         x-transition:leave-end="opacity-0 scale-98">
+         x-transition:leave-end="opacity-0 scale-95">
 
       {{-- Modal Panel --}}
-      <div class="bg-white"
-           style="max-width:1220px; max-height:calc(100vh - 48px); min-height:0; overflow:hidden; display:flex; flex-direction:column; width:100%; border-radius:20px; box-shadow:0 25px 60px -15px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.06);">
+      <div class="bg-white flex flex-col w-full max-w-6xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+           style="max-height: calc(100vh - 40px); min-height: 0;"
+           @click.stop>
 
-        {{-- ── Top Header ── --}}
+        {{-- ── Modal Header ── --}}
         <div class="px-6 py-3.5 flex-shrink-0 flex items-center justify-between gap-4 bg-white border-b border-slate-200">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm font-bold text-base">
@@ -937,52 +976,55 @@
             </div>
           </div>
 
-          <button @click="editModalOpen = false"
+          <button type="button" @click="confirmCloseEditModal()"
                   class="w-8 h-8 rounded-full bg-slate-100 hover:bg-red-500 hover:text-white text-slate-500 flex items-center justify-center transition shadow-xs cursor-pointer"
                   title="Close (Esc)">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
 
-        {{-- ── Filter & Action Bar (Neat, Aligned Order) ── --}}
-        <div class="px-6 py-3 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between flex-wrap gap-4 flex-shrink-0">
+        {{-- ── Controls Bar: Class & Section, Day, Holiday Action ── --}}
+        <div class="px-6 py-3 bg-slate-50/90 border-b border-slate-200 flex items-center justify-between flex-wrap gap-3 flex-shrink-0">
           <div class="flex items-center gap-3 flex-wrap">
-            {{-- Class Selector --}}
+            {{-- Class & Section Dropdown (Searchable Picker) --}}
             <div class="flex items-center gap-2">
-              <label class="text-xs font-bold text-slate-600">Class:</label>
-              <select x-model="editSelectedClassId"
-                      @change="onEditClassChange()"
-                      class="h-9 pl-3 pr-8 min-w-[135px] bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer">
-                <template x-for="c in classesData" :key="c.id">
-                  <option :value="c.id" x-text="c.display_name"></option>
-                </template>
-              </select>
+              <label class="text-xs font-bold text-slate-700">Class & Section:</label>
+              <div class="relative" x-data="{ openDropdown: false, classFilter: '' }" @click.outside="openDropdown = false">
+                <button type="button" @click="openDropdown = !openDropdown"
+                        class="h-9 px-3 min-w-[240px] bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-xs flex items-center justify-between gap-2 hover:border-blue-400 transition cursor-pointer">
+                  <span class="truncate font-bold" x-text="getSelectedClassSectionLabel()"></span>
+                  <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div x-show="openDropdown"
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0 scale-95"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     class="absolute left-0 top-10 z-[100] w-72 bg-white border border-slate-200 rounded-xl shadow-xl p-2"
+                     style="display:none;">
+                  <input type="text" x-model="classFilter" placeholder="Search class or section..."
+                         class="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg mb-2 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                         @click.stop>
+                  <div class="max-h-60 overflow-y-auto space-y-1">
+                    <template x-for="opt in getFilteredClassSectionOptions(classFilter)" :key="opt.key">
+                      <button type="button"
+                              @click="onClassSectionPicked(opt.classId, opt.sectionId); openDropdown = false;"
+                              class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-50 hover:text-blue-700 flex items-center justify-between transition cursor-pointer"
+                              :class="editSelectedClassId === opt.classId && editSelectedSectionId === opt.sectionId ? 'bg-blue-100 text-blue-800 font-bold' : 'text-slate-700'">
+                        <span x-text="opt.label"></span>
+                        <span class="text-[10px] text-slate-400" x-text="opt.teacher ? opt.teacher.split(' ')[0] : ''"></span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {{-- Section Selector --}}
+            {{-- Day Dropdown Selector --}}
             <div class="flex items-center gap-2">
-              <label class="text-xs font-bold text-slate-600">Section:</label>
-              <select x-model="editSelectedSectionId"
-                      @change="onEditSectionChange()"
-                      class="h-9 pl-3 pr-8 min-w-[125px] bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition cursor-pointer">
-                <template x-for="s in (editClass?.sections || [])" :key="s.id">
-                  <option :value="s.id" x-text="'Section ' + s.name"></option>
-                </template>
-              </select>
-            </div>
-
-            {{-- Search / Load Button --}}
-            <button @click="loadEditTimetable()"
-                    class="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-              <span>Search & Load</span>
-            </button>
-
-            {{-- Day Holiday Action (No vertical divider line) --}}
-            <div class="flex items-center gap-2">
-              <label class="text-xs font-bold text-slate-600">Day:</label>
-              <select x-model.number="selectedHolidayDay"
-                      class="h-9 pl-3 pr-8 min-w-[115px] bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-xs cursor-pointer">
+              <label class="text-xs font-bold text-slate-700">Day:</label>
+              <select :value="editDay"
+                      @change="onDayChangePicked(parseInt($event.target.value, 10))"
+                      class="h-9 pl-3 pr-8 min-w-[125px] bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 shadow-xs cursor-pointer focus:ring-2 focus:ring-blue-500">
                 <option value="1">Monday</option>
                 <option value="2">Tuesday</option>
                 <option value="3">Wednesday</option>
@@ -990,291 +1032,554 @@
                 <option value="5">Friday</option>
                 <option value="6">Saturday</option>
               </select>
+            </div>
 
-              <button @click="toggleDayHoliday(selectedHolidayDay)"
-                      class="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-xs cursor-pointer"
-                      :disabled="isDayHoliday(selectedHolidayDay)"
-                      :class="isDayHoliday(selectedHolidayDay) ? 'opacity-60 cursor-not-allowed bg-slate-400' : ''">
-                <span>🏖️ Mark as Holiday</span>
-              </button>
+            {{-- Mark as Holiday / Undo Holiday Button --}}
+            <div>
+              <template x-if="!isDayHoliday(editDay)">
+                <button type="button" @click="toggleDayHoliday(editDay)"
+                        class="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition shadow-xs cursor-pointer">
+                  <span>🏖️</span>
+                  <span>Mark as Holiday</span>
+                </button>
+              </template>
+              <template x-if="isDayHoliday(editDay)">
+                <button type="button" @click="toggleDayHoliday(editDay)"
+                        class="h-9 inline-flex items-center gap-1.5 px-3.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-xs cursor-pointer">
+                  <span>↩️</span>
+                  <span>Undo Holiday (Restore Classes)</span>
+                </button>
+              </template>
             </div>
           </div>
 
-          {{-- Active Class & Teacher Display Card --}}
+          {{-- Active Section Info Card --}}
           <div class="text-right">
-            <div class="text-xs font-extrabold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200/60"
-                 x-text="(editClass?.display_name || 'Class') + ' — Section ' + (editSection?.name || 'A')"></div>
+            <div class="text-xs font-extrabold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200/60 inline-flex items-center gap-1.5"
+                 x-text="getSelectedClassSectionLabel()"></div>
             <div class="text-[11px] text-slate-500 mt-0.5 font-medium">
-              Teacher: <strong class="text-slate-700" x-text="editSection?.class_teacher || 'Assigned Teacher'"></strong>
-              &nbsp;•&nbsp; Room: <strong class="text-slate-700" x-text="editSection?.room || 'Room'"></strong>
+              Class Teacher: <strong class="text-slate-700" x-text="editSection?.class_teacher || 'Not Assigned'"></strong>
+              &nbsp;•&nbsp; Room: <strong class="text-slate-700" x-text="editSection?.room || ('Room ' + (editClass?.name || '1') + '-' + (editSection?.name || 'A'))"></strong>
             </div>
           </div>
         </div>
 
-        {{-- ── Day Filter Bar ── --}}
+        {{-- ── Quick Day Tabs Bar (Monday to Saturday) ── --}}
         <div class="px-6 py-2 bg-white border-b border-slate-200 flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
           <div class="flex items-center gap-1.5 flex-wrap">
-            <button @click="editDay = 0"
-                    :class="editDay === 0 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                    class="px-3.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer">All Week</button>
-            <template x-for="[num, label] in [[1,'Mon'],[2,'Tue'],[3,'Wed'],[4,'Thu'],[5,'Fri'],[6,'Sat']]" :key="num">
-              <button @click="editDay = num"
-                      :class="editDay === num ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
-                      class="px-3.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer"
-                      x-text="label"></button>
+            <template x-for="[num, label] in [[1,'Monday'],[2,'Tuesday'],[3,'Wednesday'],[4,'Thursday'],[5,'Friday'],[6,'Saturday']]" :key="num">
+              <button type="button" @click="onDayChangePicked(num)"
+                      :class="editDay === num
+                        ? (isDayHoliday(num) ? 'bg-amber-600 text-white font-bold shadow-sm' : 'bg-blue-600 text-white font-bold shadow-sm')
+                        : (isDayHoliday(num) ? 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100' : 'bg-slate-100 text-slate-700 hover:bg-slate-200')"
+                      class="px-3.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer flex items-center gap-1">
+                <span x-text="label"></span>
+                <span x-show="isDayHoliday(num)" class="text-[10px]">🏖️</span>
+              </button>
             </template>
           </div>
           <div class="text-[11px] text-slate-400 font-medium">
-            💡 Click on any period card below to change subject, handling teacher, or period timings.
+            💡 Timetable timings follow client schedule: Period I (09:10) to Period VII (02:50) + Diary (02:50–03:00 PM).
           </div>
         </div>
 
-        {{-- ── Fixed Period Headers (Period 1 to 8 Timings) ── --}}
-        <div class="px-6 pt-3 pb-2 bg-slate-50/80 border-b border-slate-200/80 flex-shrink-0">
-          <div style="min-width: 900px; display: grid; grid-template-columns: 100px repeat(8, minmax(0, 1fr)); gap: 10px; align-items: center;">
-            <div class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 text-center">
-              Day / Status
+        {{-- ── Scrollable Timetable Content Area (Internal Scroll) ── --}}
+        <div class="flex-1 overflow-y-auto p-6 bg-slate-50/40" style="min-height:0;">
+
+          {{-- 1. Loading State --}}
+          <div x-show="editTimetableLoading" class="flex flex-col items-center justify-center py-20 text-center space-y-3">
+            <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-sm font-extrabold text-slate-800">Loading timetable...</p>
+            <p class="text-xs text-slate-400" x-text="'Fetching schedule for ' + getSelectedClassSectionLabel()"></p>
+          </div>
+
+          {{-- 2. Error State --}}
+          <div x-show="!editTimetableLoading && editTimetableError" class="rounded-2xl border border-rose-200 bg-rose-50/80 p-8 text-center space-y-3 my-4">
+            <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-xl font-bold">⚠️</div>
+            <h4 class="text-sm font-extrabold text-rose-900">Unable to load timetable. Please try again.</h4>
+            <p class="text-xs text-rose-700" x-text="editTimetableError"></p>
+            <button type="button" @click="loadTimetableForActiveSelection()"
+                    class="mt-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer">
+              🔄 Retry
+            </button>
+          </div>
+
+          {{-- 3. Holiday State --}}
+          <div x-show="!editTimetableLoading && !editTimetableError && isDayHoliday(editDay)"
+               class="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-8 text-center space-y-3 my-4 shadow-xs">
+            <div class="w-14 h-14 rounded-2xl bg-amber-200/90 text-amber-900 flex items-center justify-center mx-auto text-3xl shadow-xs">
+              🏖️
             </div>
-            <template x-for="[p, times] in [
-              [1,'09:15–10:00'],
-              [2,'10:00–10:45'],
-              [3,'11:00–11:45'],
-              [4,'11:45–12:30'],
-              [5,'01:15–02:00'],
-              [6,'02:00–02:45'],
-              [7,'03:00–03:45'],
-              [8,'03:45–04:30']
-            ]" :key="p">
-              <div class="bg-white border border-slate-200/90 rounded-xl py-2 px-1 text-center shadow-xs flex flex-col items-center justify-center">
-                <span class="text-xs font-black text-blue-600 tracking-tight" x-text="'Period ' + p"></span>
-                <span class="text-[9.5px] text-slate-400 font-medium tracking-tight mt-0.5" x-text="times"></span>
-              </div>
-            </template>
+            <div>
+              <h4 class="font-extrabold text-base text-amber-950" x-text="getDayName(editDay) + ' — School Holiday'"></h4>
+              <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-200 text-amber-900 uppercase tracking-wider mt-1">No Academic Classes</span>
+            </div>
+            <p class="text-xs text-amber-800/80 max-w-md mx-auto font-medium">
+              Entire day is marked as a school holiday. Regular period assignments and timetable editing are suspended for this day.
+            </p>
+            <div class="pt-2">
+              <button type="button" @click="toggleDayHoliday(editDay)"
+                      class="px-5 py-2.5 rounded-xl text-xs font-bold bg-white text-amber-950 border border-amber-300 hover:bg-amber-100 shadow-xs transition cursor-pointer">
+                <span>↩️</span> Undo Holiday (Restore Classes)
+              </button>
+            </div>
           </div>
-        </div>
 
-        {{-- ── Scrollable Editable Timetable Cards Grid ── --}}
-        <div class="flex-1 overflow-y-auto p-6 bg-slate-50/30" style="min-height:0;">
-          <div style="min-width: 900px; display: flex; flex-direction: column; gap: 12px;">
-            <template x-for="d in getEditDays()" :key="d.dayNum">
-              <div style="display: grid; grid-template-columns: 100px repeat(8, minmax(0, 1fr)); gap: 10px; align-items: stretch;">
-                
-                {{-- Day Card with Holiday Toggle & Undo --}}
-                <div class="rounded-xl border flex flex-col items-center justify-between text-center p-2.5 shadow-xs"
-                     style="height: 86px;"
-                     :class="isDayHoliday(d.dayNum) ? 'bg-amber-50 border-amber-300 text-amber-900' : (d.dayNum === 6 ? 'bg-emerald-50/90 border-emerald-200 text-emerald-950' : 'bg-white border-slate-200 text-slate-800')">
-                  <span class="font-extrabold text-xs tracking-tight uppercase" x-text="d.name"></span>
+          {{-- 4. Empty State --}}
+          <div x-show="!editTimetableLoading && !editTimetableError && !isDayHoliday(editDay) && activeDayPeriods.length === 0"
+               class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500 space-y-3 my-4">
+            <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto text-xl font-bold">📅</div>
+            <h4 class="text-sm font-extrabold text-slate-700">No timetable configured for this class and day.</h4>
+            <p class="text-xs text-slate-400">Initialize standard client period timings (Period I–VII + Diary) to begin editing.</p>
+            <button type="button" @click="initializeDefaultDayPeriods()"
+                    class="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer">
+              + Initialize Standard Schedule
+            </button>
+          </div>
+
+          {{-- 5. Dynamic Period Cards (Period 1 to Period 7 + Diary) --}}
+          <div x-show="!editTimetableLoading && !editTimetableError && !isDayHoliday(editDay) && activeDayPeriods.length > 0">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <template x-for="(period, idx) in activeDayPeriods" :key="period.period_number">
+                <div class="rounded-2xl p-4 shadow-xs transition-all flex flex-col justify-between space-y-3 min-w-0 overflow-hidden"
+                     :class="hasConsecutiveTeacherConflict(idx) ? 'bg-rose-50/30 border border-rose-400 ring-2 ring-rose-200 shadow-rose-100' : 'bg-white border border-slate-200 hover:border-blue-300 hover:shadow-md'">
                   
-                  <template x-if="!isDayHoliday(d.dayNum)">
-                    <button @click.stop="toggleDayHoliday(d.dayNum)"
-                            class="text-[9.5px] font-bold px-2 py-0.5 rounded-md transition cursor-pointer bg-slate-100 hover:bg-amber-100 text-slate-600 hover:text-amber-800"
-                            title="Mark entire day as holiday">
-                      + Holiday
-                    </button>
-                  </template>
-                  <template x-if="isDayHoliday(d.dayNum)">
-                    <span class="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded bg-amber-200/90 text-amber-900">
-                      🏖️ Holiday
-                    </span>
-                  </template>
-                </div>
-
-                {{-- Full-row Holiday Banner if Day is Marked as Holiday (Explicit grid-column: 2 / span 8 across all 8 periods) --}}
-                <template x-if="isDayHoliday(d.dayNum)">
-                  <div class="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 px-6 py-3 flex items-center justify-between shadow-xs"
-                       style="grid-column: 2 / span 8; height: 86px; min-width: 0;">
-                    <div class="flex items-center gap-3.5">
-                      <div class="w-10 h-10 rounded-xl bg-amber-200/90 text-amber-900 flex items-center justify-center font-bold text-xl shadow-xs flex-shrink-0">
-                        🏖️
-                      </div>
+                  {{-- Period Card Header --}}
+                  <div>
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2 mb-3">
                       <div>
-                        <div class="flex items-center gap-2">
-                          <h4 class="font-extrabold text-sm text-amber-950" x-text="d.name + ' — School Holiday'"></h4>
-                          <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-200/70 text-amber-900 uppercase tracking-wider">No Classes</span>
+                        <span class="text-xs font-black tracking-tight"
+                              :class="period.period_number === 8 ? 'text-purple-600' : 'text-blue-600'"
+                              x-text="period.period_label"></span>
+                        <div class="text-[10px] text-slate-400 font-semibold mt-0.5" x-text="period.timing"></div>
+                      </div>
+                      
+                      {{-- Period Type Selector (Small pill button) --}}
+                      <select x-model="period.period_type" @change="onPeriodTypeChange(period); markUnsaved()"
+                              class="text-[10px] font-bold px-2 py-0.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 cursor-pointer focus:ring-1 focus:ring-blue-500">
+                        <option value="class">📚 Class</option>
+                        <option value="activity">🎨 Activity</option>
+                        <option value="practical">🔬 Practical</option>
+                        <option value="free">⚡ Free</option>
+                      </select>
+                    </div>
+
+                    {{-- Subject Selection (Condition-adaptive) --}}
+                    <div class="space-y-1 mb-2.5 min-w-0">
+                      <div class="flex items-center justify-between">
+                        <label class="block text-[11px] font-bold text-slate-700">Subject:</label>
+                        <span class="text-[9px] font-bold text-blue-600 uppercase tracking-wider" x-show="period.period_type === 'class'">Academic</span>
+                        <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider" x-show="period.period_type === 'activity'">Activity</span>
+                        <span class="text-[9px] font-bold text-cyan-600 uppercase tracking-wider" x-show="period.period_type === 'practical' || period.period_type === 'lab'">Practical</span>
+                        <span class="text-[9px] font-bold text-amber-600 uppercase tracking-wider" x-show="period.period_type === 'free'">Free Study</span>
+                      </div>
+
+                      {{-- 1. Academic Theory & Languages Selection --}}
+                      <select x-show="period.period_type === 'class'" x-model.number="period.subject_id" @change="markUnsaved()"
+                              class="w-full min-w-0 max-w-full h-9 px-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white transition cursor-pointer truncate">
+                        <option value="">-- Select Academic Subject --</option>
+                        <optgroup label="📚 Core Academic & Languages">
+                          @foreach($theorySubjects as $subj)
+                            <option value="{{ $subj->id }}">{{ $subj->name }}{{ $subj->code ? ' (' . $subj->code . ')' : '' }}</option>
+                          @endforeach
+                        </optgroup>
+                        @if($allSubjects->reject(fn($s) => in_array($s->type, ['theory', 'language']))->isNotEmpty())
+                          <optgroup label="── All Other Subjects ──">
+                            @foreach($allSubjects->reject(fn($s) => in_array($s->type, ['theory', 'language'])) as $subj)
+                              <option value="{{ $subj->id }}">{{ $subj->name }}{{ $subj->code ? ' (' . $subj->code . ')' : '' }}</option>
+                            @endforeach
+                          </optgroup>
+                        @endif
+                      </select>
+
+                      {{-- 2. Activity / Co-Curricular Selection --}}
+                      <select x-show="period.period_type === 'activity'" x-model.number="period.subject_id" @change="markUnsaved()"
+                              class="w-full min-w-0 max-w-full h-9 px-2.5 bg-purple-50/50 border border-purple-200 rounded-xl text-xs font-semibold text-purple-950 focus:ring-2 focus:ring-purple-500 focus:bg-white transition cursor-pointer truncate">
+                        <option value="">-- Select Activity Subject --</option>
+                        <optgroup label="🎨 Co-Curricular, Sports & Wellness">
+                          @foreach($activitySubjects as $subj)
+                            <option value="{{ $subj->id }}">{{ $subj->name }}{{ $subj->code ? ' (' . $subj->code . ')' : '' }}</option>
+                          @endforeach
+                        </optgroup>
+                        @if($allSubjects->reject(fn($s) => $s->type === 'activity' || $s->is_coscholastic)->isNotEmpty())
+                          <optgroup label="── All Other Subjects ──">
+                            @foreach($allSubjects->reject(fn($s) => $s->type === 'activity' || $s->is_coscholastic) as $subj)
+                              <option value="{{ $subj->id }}">{{ $subj->name }}{{ $subj->code ? ' (' . $subj->code . ')' : '' }}</option>
+                            @endforeach
+                          </optgroup>
+                        @endif
+                      </select>
+
+                      {{-- 3. Practical / Computer Lab Selection --}}
+                      <select x-show="period.period_type === 'practical' || period.period_type === 'lab'" x-model.number="period.subject_id" @change="markUnsaved()"
+                              class="w-full min-w-0 max-w-full h-9 px-2.5 bg-cyan-50/50 border border-cyan-200 rounded-xl text-xs font-semibold text-cyan-950 focus:ring-2 focus:ring-cyan-500 focus:bg-white transition cursor-pointer truncate">
+                        <option value="">-- Select Practical / Lab Subject --</option>
+                        <optgroup label="🔬 Practical & Computer Labs">
+                          @foreach($practicalSubjects as $subj)
+                            <option value="{{ $subj->id }}">{{ $subj->name }}{{ $subj->code ? ' (' . $subj->code . ')' : '' }}</option>
+                          @endforeach
+                        </optgroup>
+                        @if($allSubjects->reject(fn($s) => $s->type === 'practical' || stripos($s->name, 'computer') !== false || stripos($s->name, 'lab') !== false)->isNotEmpty())
+                          <optgroup label="── All Other Subjects ──">
+                            @foreach($allSubjects->reject(fn($s) => $s->type === 'practical' || stripos($s->name, 'computer') !== false || stripos($s->name, 'lab') !== false) as $subj)
+                              <option value="{{ $subj->id }}">{{ $subj->name }}{{ $subj->code ? ' (' . $subj->code . ')' : '' }}</option>
+                            @endforeach
+                          </optgroup>
+                        @endif
+                      </select>
+
+                      {{-- 4. Free Period / Self-Study Display --}}
+                      <div x-show="period.period_type === 'free'"
+                           class="h-9 px-3 flex items-center justify-between bg-amber-50 text-amber-800 text-xs font-bold rounded-xl border border-amber-200">
+                        <div class="flex items-center gap-1.5">
+                          <span>⚡ Free Period / Self Study</span>
                         </div>
-                        <p class="text-xs text-amber-800/80 mt-0.5 font-medium">Entire day marked as holiday. All 8 academic periods suspended.</p>
+                        <span class="text-[10px] bg-amber-200/60 text-amber-900 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">No Subject</span>
                       </div>
                     </div>
-                    <button @click.stop="toggleDayHoliday(d.dayNum)"
-                            class="px-4 py-2 rounded-xl text-xs font-bold bg-white text-amber-900 border border-amber-300 hover:bg-amber-100 hover:border-amber-400 shadow-sm transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0">
-                      <span>↩️</span> Undo Holiday (Restore Classes)
-                    </button>
+
+                    {{-- Teacher Selection (Condition-adaptive) --}}
+                    <div class="space-y-1 min-w-0">
+                      <div class="flex items-center justify-between">
+                        <label class="block text-[11px] font-bold text-slate-700">Teacher:</label>
+                        <span class="text-[9px] font-bold text-blue-600 uppercase tracking-wider" x-show="period.period_type === 'class'">Faculty</span>
+                        <span class="text-[9px] font-bold text-purple-600 uppercase tracking-wider" x-show="period.period_type === 'activity'">Coach</span>
+                        <span class="text-[9px] font-bold text-cyan-600 uppercase tracking-wider" x-show="period.period_type === 'practical' || period.period_type === 'lab'">Lab Incharge</span>
+                        <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider" x-show="period.period_type === 'free'">Unassigned</span>
+                      </div>
+
+                      {{-- 1. Academic Teaching Faculty --}}
+                      <select x-show="period.period_type === 'class'" x-model.number="period.teacher_id" @change="markUnsaved()"
+                              :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-slate-300 bg-slate-50 text-slate-900 focus:ring-blue-500'"
+                              class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                        <option value="">-- Select Teacher --</option>
+                        <optgroup label="👩‍🏫 Academic Teaching Faculty">
+                          @foreach($academicTeachers as $t)
+                            <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                          @endforeach
+                        </optgroup>
+                        @if($allTeachers->diff($academicTeachers)->isNotEmpty())
+                          <optgroup label="── Other Staff ──">
+                            @foreach($allTeachers->diff($academicTeachers) as $t)
+                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                            @endforeach
+                          </optgroup>
+                        @endif
+                      </select>
+
+                      {{-- 2. Activity / Sports Coaches --}}
+                      <select x-show="period.period_type === 'activity'" x-model.number="period.teacher_id" @change="markUnsaved()"
+                              :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-purple-200 bg-purple-50/50 text-purple-950 focus:ring-purple-500'"
+                              class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                        <option value="">-- Select Activity Coach --</option>
+                        <optgroup label="🏃 PET, Sports & Activity Coaches">
+                          @foreach($activityTeachers as $t)
+                            <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }} ({{ $t->designation ?: 'Coach' }})</option>
+                          @endforeach
+                        </optgroup>
+                        @if($allTeachers->diff($activityTeachers)->isNotEmpty())
+                          <optgroup label="── All Other Teachers ──">
+                            @foreach($allTeachers->diff($activityTeachers) as $t)
+                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                            @endforeach
+                          </optgroup>
+                        @endif
+                      </select>
+
+                      {{-- 3. Lab / Computer Faculty --}}
+                      <select x-show="period.period_type === 'practical' || period.period_type === 'lab'" x-model.number="period.teacher_id" @change="markUnsaved()"
+                              :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-cyan-200 bg-cyan-50/50 text-cyan-950 focus:ring-cyan-500 focus:bg-white transition cursor-pointer'"
+                              class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                        <option value="">-- Select Lab Faculty --</option>
+                        <optgroup label="💻 Lab Incharges & Computer Faculty">
+                          @foreach($labTeachers as $t)
+                            <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }} ({{ $t->designation ?: 'Lab Incharge' }})</option>
+                          @endforeach
+                        </optgroup>
+                        @if($allTeachers->diff($labTeachers)->isNotEmpty())
+                          <optgroup label="── All Other Teachers ──">
+                            @foreach($allTeachers->diff($labTeachers) as $t)
+                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                            @endforeach
+                          </optgroup>
+                        @endif
+                      </select>
+
+                      {{-- 4. Free Period Teacher Display --}}
+                      <div x-show="period.period_type === 'free'"
+                           class="h-9 px-3 flex items-center justify-between bg-slate-100 text-slate-500 text-xs font-semibold rounded-xl border border-slate-200">
+                        <span>✨ No Teacher Required</span>
+                        <span class="text-[10px] bg-slate-200/80 text-slate-600 px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">Unassigned</span>
+                      </div>
+
+                      {{-- Consecutive Conflict Alert --}}
+                      <template x-if="hasConsecutiveTeacherConflict(idx) && period.period_type !== 'free'">
+                        <div class="mt-1.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-[11px] text-rose-700 font-semibold flex items-start gap-1.5 leading-snug">
+                          <span class="flex-shrink-0 text-xs">⚠️</span>
+                          <span>This teacher is already assigned to the adjacent period. A teacher cannot be assigned to consecutive periods.</span>
+                        </div>
+                      </template>
+                    </div>
                   </div>
-                </template>
 
-                {{-- 8 Interactive Clean Period Cards if Day is Active --}}
-                <template x-if="!isDayHoliday(d.dayNum)">
-                  <template x-for="p in [1,2,3,4,5,6,7,8]" :key="p">
-                    <div @click.stop="openSlotEditor(d.dayNum, p)"
-                         class="rounded-xl border transition-all p-2.5 flex flex-col justify-between overflow-hidden cursor-pointer group hover:shadow-md hover:border-blue-400 bg-white"
-                         style="height: 86px; max-height: 86px;"
-                         :class="getSlotCardClass(d.dayNum, p)">
-
-                      <div class="flex flex-col justify-between h-full w-full">
-                        {{-- Top line: Subject Name alone --}}
-                        <div class="flex items-start justify-between gap-1">
-                          <h4 class="font-extrabold text-xs leading-snug truncate"
-                              :class="getSlotTextClass(d.dayNum, p)"
-                              x-text="getPeriodEntryDisplay(d.dayNum, p)?.subject_name"
-                              :title="getPeriodEntryDisplay(d.dayNum, p)?.subject_name"></h4>
-                          <span class="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 bg-blue-50 px-1 py-0.5 rounded transition">✏️ Edit</span>
-                        </div>
-
-                        {{-- Bottom line: Teacher Name alone (or Free Period / Substitution tag) --}}
-                        <div class="mt-auto pt-1 flex items-center justify-between">
-                          <p class="text-[10.5px] text-slate-500 truncate font-medium"
-                             x-text="getPeriodEntryDisplay(d.dayNum, p)?.teacher_name"
-                             :title="getPeriodEntryDisplay(d.dayNum, p)?.teacher_name"></p>
-                          
-                          <template x-if="getPeriodEntryDisplay(d.dayNum, p)?.period_type === 'substitution'">
-                            <span class="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
-                              🔄 Sub
-                            </span>
-                          </template>
-                          <template x-if="getPeriodEntryDisplay(d.dayNum, p)?.period_type === 'free'">
-                            <span class="text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-                              ⚡ Free
-                            </span>
-                          </template>
-                        </div>
-                      </div>
+                  {{-- Optional Room Note & Quick Location Chips --}}
+                  <div class="pt-2 border-t border-slate-100 space-y-1.5">
+                    <div class="flex items-center justify-between text-[10px] text-slate-400">
+                      <span x-text="'Slot ' + period.period_number"></span>
+                      <input type="text" x-model="period.room" @input="markUnsaved()" placeholder="Room"
+                             class="w-28 px-2 py-0.5 text-[10px] font-semibold border border-slate-200 rounded-lg bg-slate-50 text-right focus:bg-white focus:border-blue-400">
                     </div>
-                  </template>
-                </template>
 
-              </div>
+                    {{-- Quick Location Chips based on period type --}}
+                    <div x-show="period.period_type === 'activity'" class="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span class="text-[9px] text-purple-600 font-bold uppercase tracking-wider">Quick:</span>
+                      <button type="button" @click="period.room = 'Ground'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/60 cursor-pointer">🏟️ Ground</button>
+                      <button type="button" @click="period.room = 'Yoga Hall'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/60 cursor-pointer">🧘 Yoga</button>
+                      <button type="button" @click="period.room = 'Art Room'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/60 cursor-pointer">🎨 Art</button>
+                      <button type="button" @click="period.room = 'Music Studio'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/60 cursor-pointer">🎵 Music</button>
+                      <button type="button" @click="period.room = 'Library'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200/60 cursor-pointer">📚 Library</button>
+                    </div>
+
+                    <div x-show="period.period_type === 'practical' || period.period_type === 'lab'" class="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span class="text-[9px] text-cyan-600 font-bold uppercase tracking-wider">Quick:</span>
+                      <button type="button" @click="period.room = 'Computer Lab'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200/60 cursor-pointer">💻 Comp Lab</button>
+                      <button type="button" @click="period.room = 'Science Lab'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200/60 cursor-pointer">🧪 Sci Lab</button>
+                      <button type="button" @click="period.room = 'STEM / Robotics Lab'; markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200/60 cursor-pointer">🤖 STEM</button>
+                    </div>
+
+                    <div x-show="period.period_type === 'class'" class="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Quick:</span>
+                      <button type="button" @click="period.room = editSection?.room || ('Room ' + (editClass?.name || '1') + '-' + (editSection?.name || 'A')); markUnsaved()" class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 cursor-pointer">🏫 Classroom</button>
+                    </div>
+                  </div>
+
+                </div>
+              </template>
+            </div>
+          </div>
+
+        </div>
+
+        {{-- ── Footer with Cancel & Save Timetable Actions ── --}}
+        <div class="px-6 py-3.5 flex-shrink-0 flex items-center justify-between bg-white border-t border-slate-200">
+          <div>
+            <template x-if="hasAnyConsecutiveConflict()">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300">
+                <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                <span>Consecutive teacher assignment detected. Please select another teacher.</span>
+              </span>
+            </template>
+            <template x-if="!hasAnyConsecutiveConflict() && hasUnsavedChanges">
+              <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                <span>Unsaved changes on <strong x-text="getDayName(editDay)"></strong></span>
+              </span>
+            </template>
+            <template x-if="!hasAnyConsecutiveConflict() && !hasUnsavedChanges">
+              <span class="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                <span class="text-emerald-500 font-bold">✓</span>
+                <span>All changes saved for this schedule</span>
+              </span>
             </template>
           </div>
-        </div>
 
-        {{-- ── Footer with Save Button ── --}}
-        <div class="px-6 py-3 flex-shrink-0 flex items-center justify-between bg-white border-t border-slate-200">
-          <p class="text-[11px] text-slate-500 font-medium">🔔 &nbsp;09:15 Start · 10:45 Break · 12:30 Lunch · 02:45 Break · 04:30 Dispersal</p>
           <div class="flex items-center gap-3">
-            <button type="button" @click="editModalOpen = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
-              Close
+            <button type="button" @click="confirmCloseEditModal()"
+                    class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 transition cursor-pointer">
+              Cancel
             </button>
-            <button type="button" @click="saveAndApplyTimetable()" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer">
-              <span>💾</span> Save Timetable
+            <button type="button" @click="saveActiveDayTimetable()"
+                    :disabled="isSavingTimetable || hasAnyConsecutiveConflict()"
+                    :class="hasAnyConsecutiveConflict() ? 'opacity-50 cursor-not-allowed bg-slate-400 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'"
+                    class="px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer">
+              <span x-show="isSavingTimetable" class="animate-spin">🌀</span>
+              <span x-show="!isSavingTimetable">💾</span>
+              <span x-text="isSavingTimetable ? 'Saving Timetable...' : 'Save Timetable'"></span>
             </button>
           </div>
         </div>
 
       </div>
 
-      {{-- ── Slot Editor Sub-Modal Overlay (Directly inside Edit Modal) ── --}}
-      <div x-show="editSlotModalOpen"
-           class="fixed inset-0 z-[10010] flex items-center justify-center p-4 overflow-y-auto"
-           style="display:none;"
-           x-transition:enter="transition ease-out duration-150"
-           x-transition:enter-start="opacity-0 scale-95"
-           x-transition:enter-end="opacity-100 scale-100"
-           x-transition:leave="transition ease-in duration-100"
-           x-transition:leave-start="opacity-100 scale-100"
-           x-transition:leave-end="opacity-0 scale-95">
-        
-        {{-- Backdrop --}}
-        <div class="fixed inset-0 bg-slate-950/75 backdrop-blur-xs" @click="editSlotModalOpen = false"></div>
+    </div>
+  </template>
 
-        {{-- Dialog Panel --}}
-        <div class="relative bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden z-10 my-auto"
-             @click.stop>
-          
-          {{-- Editor Header --}}
-          <div class="px-6 py-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded bg-blue-500 text-white text-[10px] font-black uppercase" x-text="'Period ' + editSlotData.period_number"></span>
-                <h3 class="text-base font-extrabold text-white">Edit Period Slot</h3>
-              </div>
-              <p class="text-xs text-slate-300 mt-1" x-text="editSlotData.dayName + ' • ' + (editClass?.display_name || '') + ' (' + (editSection?.name || '') + ')'"></p>
+  {{-- ── Unsaved Changes Confirmation Dialog ── --}}
+  <template x-teleport="body">
+    <div x-show="discardConfirmModalOpen"
+         class="fixed inset-0 z-[10020] flex items-center justify-center p-4"
+         style="display:none; background:rgba(15, 23, 42, 0.75);"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+      <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 text-center space-y-4"
+           @click.stop>
+        <div class="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto text-2xl font-bold">
+          ⚠️
+        </div>
+        <div>
+          <h4 class="text-base font-extrabold text-slate-900">Unsaved Changes</h4>
+          <p class="text-xs text-slate-500 mt-1">
+            You have unsaved timetable changes. Do you want to discard them?
+          </p>
+        </div>
+        <div class="flex items-center justify-center gap-3 pt-2">
+          <button type="button" @click="discardConfirmModalOpen = false; pendingSwitchAction = null;"
+                  class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+            Keep Editing
+          </button>
+          <button type="button" @click="proceedDiscardChanges()"
+                  class="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition cursor-pointer">
+            Discard Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  {{-- ── Teacher Period Reporting Modal (Teleported to Body) ── --}}
+  <template x-teleport="body">
+    <div x-show="teacherReportModalOpen"
+         @keydown.window.escape="teacherReportModalOpen = false"
+         class="fixed inset-0 z-[10030] flex items-center justify-center p-3 sm:p-5"
+         style="display:none; background:rgba(15, 23, 42, 0.75); backdrop-filter:blur(4px);"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+
+      <div class="bg-white flex flex-col w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+           @click.stop>
+
+        {{-- Modal Header --}}
+        <div class="px-6 py-4 shrink-0 flex items-center justify-between bg-slate-900 text-white">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white text-base font-bold shadow-xs">
+              📝
             </div>
-            <button @click="editSlotModalOpen = false" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer">
-              ✕
-            </button>
+            <div>
+              <h3 class="text-base font-extrabold tracking-tight">Period Class Report</h3>
+              <p class="text-[11px] text-blue-200 mt-0.5" x-text="teacherReportSlot ? ('Period ' + teacherReportSlot.period_number + ' • ' + (teacherReportSlot.class_name ? 'Class ' + teacherReportSlot.class_name : '') + ' Sec ' + (teacherReportSlot.section_name || '')) : ''"></p>
+            </div>
           </div>
+          <button type="button" @click="teacherReportModalOpen = false"
+                  class="w-8 h-8 rounded-full bg-white/10 hover:bg-rose-600 hover:text-white text-slate-300 flex items-center justify-center transition cursor-pointer">
+            &times;
+          </button>
+        </div>
 
-          {{-- Editor Form Body --}}
-          <div class="p-6 space-y-4">
-            {{-- Period Type Selector (Pills) --}}
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1.5">Period Type</label>
-              <div class="grid grid-cols-4 gap-2">
-                <button type="button" @click="editSlotData.period_type = 'class'"
-                        class="px-2.5 py-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer"
-                        :class="editSlotData.period_type === 'class' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'">
-                  📚 Class
-                </button>
-                <button type="button" @click="editSlotData.period_type = 'free'"
-                        class="px-2.5 py-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer"
-                        :class="editSlotData.period_type === 'free' ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'">
-                  ⚡ Free
-                </button>
-                <button type="button" @click="editSlotData.period_type = 'lab'"
-                        class="px-2.5 py-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer"
-                        :class="editSlotData.period_type === 'lab' ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'">
-                  🔬 Practical
-                </button>
-                <button type="button" @click="editSlotData.period_type = 'activity'"
-                        class="px-2.5 py-2 rounded-xl text-xs font-bold border text-center transition cursor-pointer"
-                        :class="editSlotData.period_type === 'activity' ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'">
-                  🎨 Club
-                </button>
-              </div>
+        {{-- Modal Body --}}
+        <div class="p-6 overflow-y-auto space-y-4 text-xs">
+
+          {{-- Period Details Context Pill --}}
+          <div class="p-3.5 bg-blue-50/70 border border-blue-100 rounded-xl space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-900 text-sm" x-text="teacherReportSlot?.subject_name || 'Subject'"></span>
+              <span class="font-mono text-xs text-blue-700 font-bold" x-text="teacherReportSlot?.start_time && teacherReportSlot?.end_time ? (teacherReportSlot.start_time + ' - ' + teacherReportSlot.end_time) : ''"></span>
             </div>
-
-            {{-- Subject Selection --}}
-            <div x-show="editSlotData.period_type !== 'free'">
-              <label class="block text-xs font-bold text-slate-700 mb-1">Subject</label>
-              <select x-model="editSlotData.subject_id"
-                      class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white transition cursor-pointer">
-                <template x-for="subj in allSubjects" :key="subj.id">
-                  <option :value="subj.id" x-text="subj.name + ' (' + subj.code + ')'"></option>
-                </template>
-              </select>
-            </div>
-
-            {{-- Teacher Selection --}}
-            <div x-show="editSlotData.period_type !== 'free'">
-              <label class="block text-xs font-bold text-slate-700 mb-1">Assigned Handling Teacher</label>
-              <select x-model="editSlotData.teacher_id"
-                      class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white transition cursor-pointer">
-                <option value="">-- Select Handling Teacher --</option>
-                <template x-for="t in allTeachers" :key="t.id">
-                  <option :value="t.id" x-text="t.first_name + ' ' + (t.last_name || '') + ' (' + (t.employee_code || 'EMP') + ')'"></option>
-                </template>
-              </select>
-            </div>
-
-            {{-- Room / Lab Location (Optional) --}}
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">Room / Lab (Optional)</label>
-              <input type="text"
-                     x-model="editSlotData.room"
-                     placeholder="e.g. Room 1-A / Physics Lab"
-                     class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:bg-white transition">
+            <div class="flex items-center justify-between text-[11px] text-slate-600 flex-wrap gap-2">
+              <span x-text="'Faculty: ' + (teacherReportSlot?.teacher_name || 'Assigned Teacher')"></span>
+              <span x-text="'Day: ' + (teacherReportSlot?.day_name || teacherReportForm.day || '')"></span>
+              <span x-show="teacherReportSlot?.room" x-text="'Room: ' + teacherReportSlot?.room"></span>
             </div>
           </div>
 
-          {{-- Editor Footer with Undo Option --}}
-          <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-            <button type="button" @click="resetSlotToDefault()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-200 border border-slate-300 transition cursor-pointer flex items-center gap-1">
-              <span>↩️</span> Undo / Reset Slot
-            </button>
-            <div class="flex items-center gap-2">
-              <button type="button" @click="editSlotModalOpen = false" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer">
-                Cancel
-              </button>
-              <button type="button" @click="saveSlotEdit()" :disabled="isSavingSlot" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md transition disabled:opacity-50 flex items-center gap-2 cursor-pointer">
-                <span x-show="isSavingSlot" class="animate-spin">🌀</span>
-                <span x-text="isSavingSlot ? 'Saving...' : '💾 Save Changes'"></span>
-              </button>
+          {{-- Date Picker --}}
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Date *</label>
+            <input type="date" x-model="teacherReportForm.date" @change="fetchTeacherReportForDate()"
+                   class="w-full h-9 px-3 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden">
+          </div>
+
+          {{-- Student Strength & Attendance Counts --}}
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="font-bold text-slate-800">Attendance Counts</label>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700"
+                    x-text="'Section Strength: ' + (teacherReportTotalStudents || 0) + ' Students'"></span>
             </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1">Present Count *</label>
+                <input type="number" min="0" x-model.number="teacherReportForm.present_count"
+                       class="w-full h-9 px-3 border rounded-xl text-xs font-bold text-emerald-950 focus:ring-2 focus:ring-emerald-500"
+                       :class="isTeacherAttendanceExceeded() ? 'border-rose-400 bg-rose-50/50' : 'border-slate-300 bg-white'">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1">Absent Count *</label>
+                <input type="number" min="0" x-model.number="teacherReportForm.absent_count"
+                       class="w-full h-9 px-3 border rounded-xl text-xs font-bold text-rose-950 focus:ring-2 focus:ring-rose-500"
+                       :class="isTeacherAttendanceExceeded() ? 'border-rose-400 bg-rose-50/50' : 'border-slate-300 bg-white'">
+              </div>
+            </div>
+
+            {{-- Total vs Strength Validation Feedback --}}
+            <div class="flex items-center justify-between text-[11px] pt-1">
+              <span class="text-slate-500 font-medium">
+                Total Counted: <strong x-text="(parseInt(teacherReportForm.present_count || 0) + parseInt(teacherReportForm.absent_count || 0))"></strong>
+              </span>
+              <template x-if="isTeacherAttendanceExceeded()">
+                <span class="font-bold text-rose-600 flex items-center gap-1">
+                  <span>⚠️</span>
+                  <span>Exceeds section strength!</span>
+                </span>
+              </template>
+              <template x-if="!isTeacherAttendanceExceeded() && (parseInt(teacherReportForm.present_count || 0) + parseInt(teacherReportForm.absent_count || 0)) > 0">
+                <span class="font-semibold text-emerald-600 flex items-center gap-1">
+                  <span>✓</span>
+                  <span>Valid attendance</span>
+                </span>
+              </template>
+            </div>
+          </div>
+
+          {{-- Description / Topics Covered --}}
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">
+              Description / What Was Taught *
+            </label>
+            <p class="text-[10px] text-slate-400 mb-1.5">Enter details of the lessons, chapters covered, exercises, or class activities completed during this period.</p>
+            <textarea rows="4" x-model="teacherReportForm.description"
+                      placeholder="Example: Completed Chapter 3 and conducted the worksheet activity."
+                      class="w-full p-3 border border-slate-300 rounded-xl text-xs leading-relaxed focus:ring-2 focus:ring-blue-500 focus:outline-hidden"></textarea>
+          </div>
+
+          {{-- Error message banner if any --}}
+          <div x-show="teacherReportError" class="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2" style="display:none;">
+            <span>⚠️</span>
+            <span x-text="teacherReportError"></span>
+          </div>
+
+          {{-- Notice if updating existing record --}}
+          <div x-show="teacherReportExistingId" class="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-[11px] font-semibold flex items-center gap-2" style="display:none;">
+            <span>ℹ️</span>
+            <span>A previously saved report for this date was loaded. Saving will update the existing record (no duplicates).</span>
           </div>
 
         </div>
-      </div>
 
+        {{-- Modal Footer --}}
+        <div class="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+          <button type="button" @click="teacherReportModalOpen = false"
+                  class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer">
+            Cancel
+          </button>
+          <button type="button" @click="submitTeacherPeriodReport()"
+                  :disabled="teacherReportSubmitting || isTeacherAttendanceExceeded()"
+                  class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+            <span x-show="teacherReportSubmitting" class="animate-spin">🌀</span>
+            <span x-show="!teacherReportSubmitting">💾</span>
+            <span x-text="teacherReportSubmitting ? 'Saving...' : (teacherReportExistingId ? 'Update Report' : 'Save Report')"></span>
+          </button>
+        </div>
+
+      </div>
     </div>
   </template>
 
@@ -1287,6 +1592,9 @@ function classesDashboard() {
     classesData: @json($classesData),
     allSubjects: @json($allSubjects),
     allTeachers: @json($allTeachers),
+    activitySubjectIds: @json($activitySubjects->pluck('id')->values()),
+    practicalSubjectIds: @json($practicalSubjects->pluck('id')->values()),
+    theorySubjectIds: @json($theorySubjects->pluck('id')->values()),
     filterCategory: 'all',
     searchQuery: '',
 
@@ -1408,38 +1716,177 @@ function classesDashboard() {
     modalSection: null,
     modalDay: 0,
 
+    canManageTimetable: {{ \App\Http\Controllers\Admin\ClassesController::canManageTimetable(auth()->user()) ? 'true' : 'false' }},
+    authTeacherId: {{ $authEmployeeId ?? ($authTeacherId ?? 'null') }},
+
+    onFreePeriodClick(dayNum, periodNum) {
+      if (this.canManageTimetable) {
+        const cls = this.modalClass;
+        const sec = this.modalSection;
+        this.modalOpen = false;
+        this.openEditTimetableModal(cls, sec, dayNum);
+        this.showToast(`Opened editor for Day ${dayNum}, Period ${periodNum}. Select subject and teacher to assign.`, 'info');
+      }
+    },
+
+    // Teacher Period Reporting Modal State
+    teacherReportModalOpen: false,
+    teacherReportSlot: null,
+    teacherReportTotalStudents: 0,
+    teacherReportExistingId: null,
+    teacherReportSubmitting: false,
+    teacherReportError: '',
+    teacherReportForm: {
+      timetable_id: null,
+      class_id: null,
+      section_id: null,
+      subject_id: null,
+      period_number: null,
+      date: new Date().toISOString().split('T')[0],
+      day: '',
+      present_count: 0,
+      absent_count: 0,
+      description: ''
+    },
+    isMyPeriod(entry) {
+      return this.authTeacherId && entry && entry.teacher_id && parseInt(entry.teacher_id) === parseInt(this.authTeacherId);
+    },
+    async openTeacherPeriodReportModal(entry, dayName) {
+      if (!entry || !entry.id) return;
+      this.teacherReportError = '';
+      this.teacherReportExistingId = null;
+      this.teacherReportSlot = null;
+      this.teacherReportTotalStudents = 0;
+      this.teacherReportForm.date = new Date().toISOString().split('T')[0];
+      this.teacherReportForm.present_count = 0;
+      this.teacherReportForm.absent_count = 0;
+      this.teacherReportForm.description = '';
+
+      try {
+        const res = await fetch(`{{ url('academics/timetable/period-report') }}/${entry.id}?date=${this.teacherReportForm.date}`);
+        const data = await res.json();
+
+        if (!data.success) {
+          alert(data.message || 'Unable to open period report for this slot.');
+          return;
+        }
+
+        this.teacherReportSlot = data.timetable;
+        this.teacherReportTotalStudents = data.total_students || 0;
+
+        this.teacherReportForm.timetable_id = data.timetable.id;
+        this.teacherReportForm.class_id = data.timetable.class_id;
+        this.teacherReportForm.section_id = data.timetable.section_id;
+        this.teacherReportForm.subject_id = data.timetable.subject_id;
+        this.teacherReportForm.period_number = data.timetable.period_number;
+        this.teacherReportForm.day = data.timetable.day_name || dayName || '';
+
+        if (data.report) {
+          this.teacherReportExistingId = data.report.id;
+          this.teacherReportForm.present_count = data.report.present_count ?? 0;
+          this.teacherReportForm.absent_count = data.report.absent_count ?? 0;
+          this.teacherReportForm.description = data.report.description ?? '';
+        } else if (this.teacherReportTotalStudents > 0) {
+          this.teacherReportForm.present_count = this.teacherReportTotalStudents;
+          this.teacherReportForm.absent_count = 0;
+        }
+
+        this.teacherReportModalOpen = true;
+      } catch (err) {
+        console.error('Fetch report error:', err);
+        alert('An error occurred while loading period details: ' + err.message);
+      }
+    },
+    async fetchTeacherReportForDate() {
+      if (!this.teacherReportSlot || !this.teacherReportForm.date) return;
+      try {
+        const res = await fetch(`{{ url('academics/timetable/period-report') }}/${this.teacherReportSlot.id}?date=${this.teacherReportForm.date}`);
+        const data = await res.json();
+        if (data.success && data.report) {
+          this.teacherReportExistingId = data.report.id;
+          this.teacherReportForm.present_count = data.report.present_count ?? 0;
+          this.teacherReportForm.absent_count = data.report.absent_count ?? 0;
+          this.teacherReportForm.description = data.report.description ?? '';
+        } else {
+          this.teacherReportExistingId = null;
+        }
+      } catch (e) {
+        console.error('Error fetching date report:', e);
+      }
+    },
+    isTeacherAttendanceExceeded() {
+      if (!this.teacherReportTotalStudents || this.teacherReportTotalStudents <= 0) return false;
+      const p = parseInt(this.teacherReportForm.present_count || 0, 10);
+      const a = parseInt(this.teacherReportForm.absent_count || 0, 10);
+      return (p + a) > this.teacherReportTotalStudents;
+    },
+    async submitTeacherPeriodReport() {
+      this.teacherReportError = '';
+      if (this.teacherReportForm.present_count === null || this.teacherReportForm.present_count < 0) {
+        this.teacherReportError = 'Present count must be 0 or greater.';
+        return;
+      }
+      if (this.teacherReportForm.absent_count === null || this.teacherReportForm.absent_count < 0) {
+        this.teacherReportError = 'Absent count must be 0 or greater.';
+        return;
+      }
+      if (!this.teacherReportForm.description || !this.teacherReportForm.description.trim()) {
+        this.teacherReportError = 'Please enter a description of what was covered during the period.';
+        return;
+      }
+      if (this.isTeacherAttendanceExceeded()) {
+        this.teacherReportError = 'Present count + Absent count cannot exceed total section strength.';
+        return;
+      }
+
+      this.teacherReportSubmitting = true;
+      try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        const res = await fetch('{{ route("academics.timetable.period-report.save") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': token,
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(this.teacherReportForm)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          this.teacherReportError = data.message || 'Failed to save period report.';
+          return;
+        }
+        this.teacherReportModalOpen = false;
+        this.showToast(data.message || 'Period report saved successfully!', 'success');
+      } catch (err) {
+        console.error('Submit report error:', err);
+        this.teacherReportError = 'Network error while saving report: ' + err.message;
+      } finally {
+        this.teacherReportSubmitting = false;
+      }
+    },
+
     // Edit Timetable Modal State
     editModalOpen: false,
     editSelectedClassId: null,
     editSelectedSectionId: null,
     editClass: null,
     editSection: null,
-    editDay: 0,
-    selectedHolidayDay: 6,
+    editDay: 1,
     holidayDays: {},
-
-    // Slot Editor Modal State
-    editSlotModalOpen: false,
-    isSavingSlot: false,
-    editSlotData: {
-      class_id: null,
-      section_id: null,
-      day_of_week: 1,
-      dayName: 'Monday',
-      period_number: 1,
-      subject_id: null,
-      teacher_id: null,
-      substitute_teacher_id: null,
-      room: '',
-      period_type: 'class',
-      notes: ''
-    },
+    editTimetableLoading: false,
+    editTimetableError: null,
+    isSavingTimetable: false,
+    hasUnsavedChanges: false,
+    discardConfirmModalOpen: false,
+    pendingSwitchAction: null,
+    activeDayPeriods: [],
 
     currentPeriod: {
-      title: 'Period 1 In Session',
+      title: 'Period I In Session',
       badge_title: 'Live Now',
-      timing: '09:15 AM – 10:00 AM',
-      remaining_text: '45m remaining',
+      timing: '09:10 AM – 09:50 AM',
+      remaining_text: '40m remaining',
       day_type: 'Regular Academic Day',
       period_number: 1,
       is_live: true
@@ -1514,7 +1961,7 @@ function classesDashboard() {
           title: 'Sunday — Campus Holiday',
           badge_title: 'Weekend',
           timing: 'Campus Closed',
-          remaining_text: 'Classes resume Monday 09:15 AM',
+          remaining_text: 'Classes resume Monday 09:10 AM',
           day_type: 'Sunday Holiday',
           period_number: 0,
           is_live: false,
@@ -1525,74 +1972,74 @@ function classesDashboard() {
 
       const dayLabel = isSat ? 'Saturday Extracurricular' : 'Regular Schedule';
 
-      if (timeInMins < 555) {
+      if (timeInMins < 550) {
         this.currentPeriod = {
-          title: 'School Starts at 09:15 AM',
+          title: 'School Starts at 09:10 AM',
           badge_title: 'Pre-Session',
-          timing: 'Starts in ' + (555 - timeInMins) + ' mins',
-          remaining_text: 'Period 1 begins at 09:15 AM',
+          timing: 'Starts in ' + (550 - timeInMins) + ' mins',
+          remaining_text: 'Period I begins at 09:10 AM',
           day_type: dayLabel,
           period_number: 0,
           is_live: false
         };
-      } else if (timeInMins < 600) {
-        this.setPeriodState(1, 'Period 1', '09:15 AM – 10:00 AM', 555, 600, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 645) {
-        this.setPeriodState(2, 'Period 2', '10:00 AM – 10:45 AM', 600, 645, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 660) {
+      } else if (timeInMins < 590) {
+        this.setPeriodState(1, 'Period I', '09:10 AM – 09:50 AM', 550, 590, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 630) {
+        this.setPeriodState(2, 'Period II', '09:50 AM – 10:30 AM', 590, 630, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 640) {
         this.currentPeriod = {
           title: 'Morning Interval Break',
           badge_title: '☕ Interval',
-          timing: '10:45 AM – 11:00 AM',
-          remaining_text: (660 - timeInMins) + 'm left',
+          timing: '10:30 AM – 10:40 AM',
+          remaining_text: (640 - timeInMins) + 'm left',
           day_type: dayLabel,
           period_number: 0,
           is_live: true,
           is_break: true,
           next_period_num: 3
         };
-      } else if (timeInMins < 705) {
-        this.setPeriodState(3, 'Period 3', '11:00 AM – 11:45 AM', 660, 705, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 750) {
-        this.setPeriodState(4, 'Period 4', '11:45 AM – 12:30 PM', 705, 750, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 795) {
+      } else if (timeInMins < 680) {
+        this.setPeriodState(3, 'Period III', '10:40 AM – 11:20 AM', 640, 680, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 720) {
+        this.setPeriodState(4, 'Period IV', '11:20 AM – 12:00 PM', 680, 720, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 760) {
+        this.setPeriodState(5, 'Period V', '12:00 PM – 12:40 PM', 720, 760, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 800) {
         this.currentPeriod = {
           title: '🍱 Lunch Break',
           badge_title: 'Lunch',
-          timing: '12:30 PM – 01:15 PM',
-          remaining_text: (795 - timeInMins) + 'm left',
+          timing: '12:40 PM – 01:20 PM',
+          remaining_text: (800 - timeInMins) + 'm left',
           day_type: dayLabel,
           period_number: 0,
           is_live: true,
           is_break: true,
-          next_period_num: 5
+          next_period_num: 6
         };
       } else if (timeInMins < 840) {
-        this.setPeriodState(5, 'Period 5', '01:15 PM – 02:00 PM', 795, 840, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 885) {
-        this.setPeriodState(6, 'Period 6', '02:00 PM – 02:45 PM', 840, 885, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 900) {
+        this.setPeriodState(6, 'Period VI', '01:20 PM – 02:00 PM', 800, 840, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 850) {
         this.currentPeriod = {
           title: 'Afternoon Refreshment Break',
-          badge_title: 'Break',
-          timing: '02:45 PM – 03:00 PM',
-          remaining_text: (900 - timeInMins) + 'm left',
+          badge_title: 'Interval',
+          timing: '02:00 PM – 02:10 PM',
+          remaining_text: (850 - timeInMins) + 'm left',
           day_type: dayLabel,
           period_number: 0,
           is_live: true,
           is_break: true,
           next_period_num: 7
         };
-      } else if (timeInMins < 945) {
-        this.setPeriodState(7, 'Period 7', '03:00 PM – 03:45 PM', 900, 945, timeInMins, dayLabel, isSat);
-      } else if (timeInMins < 990) {
-        this.setPeriodState(8, 'Period 8', '03:45 PM – 04:30 PM', 945, 990, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 890) {
+        this.setPeriodState(7, 'Period VII', '02:10 PM – 02:50 PM', 850, 890, timeInMins, dayLabel, isSat);
+      } else if (timeInMins < 900) {
+        this.setPeriodState(8, 'Diary', '02:50 PM – 03:00 PM', 890, 900, timeInMins, dayLabel, isSat);
       } else {
         this.currentPeriod = {
           title: 'School Dispersed for the Day',
           badge_title: 'Dismissed',
-          timing: 'Ended at 04:30 PM',
-          remaining_text: 'Campus re-opens 09:15 AM tomorrow',
+          timing: 'Ended at 03:00 PM',
+          remaining_text: 'Campus re-opens 09:10 AM tomorrow',
           day_type: dayLabel,
           period_number: 0,
           is_live: false
@@ -1631,11 +2078,14 @@ function classesDashboard() {
           badge_text: 'Weekend Holiday',
           subject_name: 'Sunday Campus Holiday',
           teacher_name: 'No sessions scheduled',
-          timing: 'Resumes Monday 09:15 AM'
+          timing: 'Resumes Monday 09:10 AM'
         };
       }
 
       if (pNum === 0) {
+        const nextText = this.currentPeriod.next_period_num 
+          ? ((this.currentPeriod.next_period_num === 8 ? 'Diary' : ('Period ' + this.currentPeriod.next_period_num)) + ' begins next')
+          : null;
         return {
           is_active_period: false,
           is_break: this.currentPeriod.is_break || false,
@@ -1643,14 +2093,13 @@ function classesDashboard() {
           subject_name: this.currentPeriod.title,
           teacher_name: 'Supervised Interval',
           timing: this.currentPeriod.timing,
-          next_period_text: this.currentPeriod.next_period_num ? ('Period ' + this.currentPeriod.next_period_num + ' begins next') : null
+          next_period_text: nextText
         };
       }
 
       const weekSchedule = sec.weekly_schedule || {};
       const dayEntries = weekSchedule[day] || weekSchedule[String(day)] || weekSchedule[1] || weekSchedule['1'] || [];
       const entry = dayEntries.find(e => parseInt(e.period, 10) === pNum) || dayEntries[pNum - 1] || null;
-      const nextEntry = dayEntries.find(e => parseInt(e.period, 10) === pNum + 1) || dayEntries[pNum] || null;
 
       // Extract real ongoing subject name & teacher name
       let subjectName = entry?.subject_name;
@@ -1662,7 +2111,7 @@ function classesDashboard() {
         if (currentSlot && currentSlot.full_title) {
           subjectName = currentSlot.full_title.split(' (')[0];
         } else {
-          const defaultSubjects = ['Tamil', 'English', 'Mathematics', 'Science', 'Social Science', 'Computer Science', 'Hindi', 'Physical Education'];
+          const defaultSubjects = ['Tamil', 'English', 'Mathematics', 'Science', 'Social Science', 'Computer Science', 'Hindi', 'Diary'];
           subjectName = defaultSubjects[(pNum - 1) % defaultSubjects.length];
         }
       }
@@ -1671,20 +2120,19 @@ function classesDashboard() {
         ? (entry.start_time + ' – ' + entry.end_time)
         : this.currentPeriod.timing;
 
-      const nextSlot = pNum < 8 ? (dayEntries.find(e => parseInt(e.period, 10) === pNum + 1) || dayEntries[pNum] || null) : null;
       let nextPeriodText = null;
-
       if (pNum < 8) {
-        const nextSubject = nextSlot?.subject_name || (this.getTodayPeriods(cls, sec)[pNum]?.full_title?.split(' (')[0]) || ('Period ' + (pNum + 1));
-        nextPeriodText = 'Period ' + (pNum + 1) + ': ' + nextSubject;
+        const nextSlot = dayEntries.find(e => parseInt(e.period, 10) === pNum + 1) || dayEntries[pNum] || null;
+        const nextSubject = nextSlot?.subject_name || (this.getTodayPeriods(cls, sec)[pNum]?.full_title?.split(' (')[0]) || (pNum === 7 ? 'Diary' : ('Period ' + (pNum + 1)));
+        nextPeriodText = (pNum === 7 ? 'Diary' : ('Period ' + (pNum + 1))) + ': ' + nextSubject;
       } else {
-        nextPeriodText = 'End of Day (04:30 PM)';
+        nextPeriodText = 'End of Day (03:00 PM)';
       }
 
       return {
         is_active_period: true,
         is_saturday: day === 6,
-        badge_text: 'LIVE NOW • PERIOD ' + pNum,
+        badge_text: pNum === 8 ? 'LIVE NOW • DIARY' : ('LIVE NOW • PERIOD ' + pNum),
         subject_name: subjectName,
         teacher_name: teacherName,
         timing: timing,
@@ -1703,12 +2151,13 @@ function classesDashboard() {
 
       return [1, 2, 3, 4, 5, 6, 7, 8].map(p => {
         const entry = dayEntries.find(e => parseInt(e.period, 10) === p) || dayEntries[p - 1];
-        let name = entry ? entry.subject_name : 'Period ' + p;
+        let name = entry ? entry.subject_name : (p === 8 ? 'Diary' : 'Period ' + p);
         let abbr = name.split(' ')[0].substring(0, 4);
         if (abbr.length < 3) abbr = name.substring(0, 4);
 
         return {
           period: p,
+          period_label: p === 8 ? 'Diary' : ('P' + p),
           full_title: name + ' (' + (entry ? entry.teacher_name : '') + ')',
           abbr: abbr,
           is_current: (p === currentPeriodNum && day !== 7)
@@ -1731,6 +2180,9 @@ function classesDashboard() {
           if (data && data.timetable) {
             this.modalSection.weekly_schedule = data.timetable;
           }
+          if (data && data.holiday_days) {
+            this.modalSection.holiday_days = data.holiday_days;
+          }
         } catch (err) {
           console.warn('Using local cache for timetable:', err);
         }
@@ -1738,8 +2190,12 @@ function classesDashboard() {
     },
 
     isModalDayHoliday(dayNum) {
-      if (!this.modalSection || !this.modalSection.weekly_schedule) return false;
-      const dayEntries = this.modalSection.weekly_schedule[dayNum] || this.modalSection.weekly_schedule[String(dayNum)] || [];
+      if (!this.modalSection) return false;
+      if (this.modalSection.holiday_days && this.modalSection.holiday_days[dayNum]) {
+        return true;
+      }
+      const weekSchedule = this.modalSection.weekly_schedule || {};
+      const dayEntries = weekSchedule[dayNum] || weekSchedule[String(dayNum)] || [];
       return dayEntries.length > 0 && dayEntries.every(e => e.subject_type === 'holiday' || e.period_type === 'holiday');
     },
 
@@ -1767,86 +2223,290 @@ function classesDashboard() {
     },
 
     // ── Edit Timetable Modal Methods ──
-    openEditTimetableModal(cls, sec) {
-      const targetClass = cls || (this.classesData.find(c => c.id === this.editSelectedClassId) || this.classesData[0]);
+
+    getDayName(d) {
+      const names = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
+      return names[d] || 'Monday';
+    },
+
+    markUnsaved() {
+      this.hasUnsavedChanges = true;
+    },
+
+    confirmCloseEditModal() {
+      if (this.hasUnsavedChanges) {
+        this.pendingSwitchAction = () => {
+          this.editModalOpen = false;
+        };
+        this.discardConfirmModalOpen = true;
+      } else {
+        this.editModalOpen = false;
+      }
+    },
+
+    proceedDiscardChanges() {
+      this.hasUnsavedChanges = false;
+      this.discardConfirmModalOpen = false;
+      if (typeof this.pendingSwitchAction === 'function') {
+        const action = this.pendingSwitchAction;
+        this.pendingSwitchAction = null;
+        action();
+      }
+    },
+
+    openEditTimetableModal(cls, sec, day = 1) {
+      const targetClass = cls || (this.classesData.find(c => c.id === this.editSelectedClassId) || this.classesData.find(c => c.numeric_value === 1) || this.classesData[0]);
       if (!targetClass) return;
 
       this.editClass = targetClass;
       this.editSelectedClassId = targetClass.id;
 
-      const targetSection = sec || (targetClass.sections.find(s => s.id === this.editSelectedSectionId) || targetClass.sections[0] || null);
+      const targetSection = sec || (targetClass.sections && targetClass.sections.find(s => s.id === this.editSelectedSectionId)) || (targetClass.sections && targetClass.sections.find(s => s.name === 'A')) || (targetClass.sections && targetClass.sections[0]) || null;
       this.editSection = targetSection;
       this.editSelectedSectionId = targetSection ? targetSection.id : null;
 
-      this.editDay = 0;
+      this.editDay = (day >= 1 && day <= 6) ? day : 1;
+      this.hasUnsavedChanges = false;
+      this.pendingSwitchAction = null;
       this.editModalOpen = true;
+
+      this.loadTimetableForActiveSelection();
     },
 
-    onEditClassChange() {
-      const cid = parseInt(this.editSelectedClassId, 10);
-      const cls = this.classesData.find(c => c.id === cid);
+    getSelectedClassSectionLabel() {
+      if (!this.editClass || !this.editSection) return 'Select Class & Section';
+      const cName = this.editClass.display_name || this.editClass.name;
+      return `${cName} – Section ${this.editSection.name}`;
+    },
+
+    getFilteredClassSectionOptions(filter) {
+      const options = [];
+      (this.classesData || []).forEach(cls => {
+        (cls.sections || []).forEach(sec => {
+          const label = `${cls.display_name || cls.name} – Section ${sec.name}`;
+          options.push({
+            key: `${cls.id}-${sec.id}`,
+            classId: cls.id,
+            sectionId: sec.id,
+            label: label,
+            teacher: sec.class_teacher || ''
+          });
+        });
+      });
+      if (!filter || !filter.trim()) return options;
+      const f = filter.toLowerCase().trim();
+      return options.filter(opt => opt.label.toLowerCase().includes(f) || (opt.teacher && opt.teacher.toLowerCase().includes(f)));
+    },
+
+    onClassSectionPicked(classId, sectionId) {
+      if (this.editSelectedClassId === classId && this.editSelectedSectionId === sectionId) return;
+
+      if (this.hasUnsavedChanges) {
+        this.pendingSwitchAction = () => {
+          this.executeClassSectionSwitch(classId, sectionId);
+        };
+        this.discardConfirmModalOpen = true;
+        return;
+      }
+      this.executeClassSectionSwitch(classId, sectionId);
+    },
+
+    executeClassSectionSwitch(classId, sectionId) {
+      const cls = this.classesData.find(c => c.id === classId);
       if (cls) {
         this.editClass = cls;
-        if (cls.sections.length > 0) {
-          this.editSelectedSectionId = cls.sections[0].id;
-          this.editSection = cls.sections[0];
-        } else {
-          this.editSelectedSectionId = null;
-          this.editSection = null;
-        }
-      }
-    },
-
-    onEditSectionChange() {
-      if (!this.editClass) return;
-      const sid = parseInt(this.editSelectedSectionId, 10);
-      const sec = this.editClass.sections.find(s => s.id === sid);
-      if (sec) {
+        this.editSelectedClassId = cls.id;
+        const sec = (cls.sections || []).find(s => s.id === sectionId) || (cls.sections && cls.sections[0]) || null;
         this.editSection = sec;
+        this.editSelectedSectionId = sec ? sec.id : null;
+        this.hasUnsavedChanges = false;
+        this.loadTimetableForActiveSelection();
       }
     },
 
-    loadEditTimetable() {
-      this.onEditClassChange();
-      this.onEditSectionChange();
+    onDayChangePicked(dayNum) {
+      if (this.editDay === dayNum) return;
+
+      if (this.hasUnsavedChanges) {
+        this.pendingSwitchAction = () => {
+          this.executeDayChange(dayNum);
+        };
+        this.discardConfirmModalOpen = true;
+        return;
+      }
+      this.executeDayChange(dayNum);
     },
 
-    syncCurrentEditToClassesData() {
-      if (this.editClass && this.editSection) {
-        const cls = this.classesData.find(c => c.id === this.editClass.id);
-        if (cls) {
-          const sec = cls.sections.find(s => s.id === this.editSection.id);
-          if (sec) {
-            sec.weekly_schedule = JSON.parse(JSON.stringify(this.editSection.weekly_schedule || {}));
-          }
+    executeDayChange(dayNum) {
+      this.editDay = dayNum;
+      this.hasUnsavedChanges = false;
+      this.loadActiveDayPeriods();
+    },
+
+    async loadTimetableForActiveSelection() {
+      if (!this.editClass || !this.editSection) {
+        this.activeDayPeriods = [];
+        return;
+      }
+
+      this.editTimetableLoading = true;
+      this.editTimetableError = null;
+
+      try {
+        const res = await fetch(`/classes/${this.editClass.id}/timetable-data?section_id=${this.editSection.id}`);
+        if (!res.ok) {
+          throw new Error(`Server returned error (${res.status})`);
+        }
+        const data = await res.json();
+
+        if (data && data.timetable) {
+          this.editSection.weekly_schedule = data.timetable;
+        } else if (!this.editSection.weekly_schedule) {
+          this.editSection.weekly_schedule = {};
+        }
+
+        if (data && data.holiday_days) {
+          this.holidayDays = Object.assign({}, data.holiday_days);
+        }
+
+        this.syncCurrentEditToClassesData();
+        this.loadActiveDayPeriods();
+      } catch (err) {
+        console.error('Failed to load timetable:', err);
+        if (this.editSection && this.editSection.weekly_schedule) {
+          this.loadActiveDayPeriods();
+        } else {
+          this.editTimetableError = err.message || 'Unable to fetch timetable from server.';
+        }
+      } finally {
+        this.editTimetableLoading = false;
+      }
+    },
+
+    loadActiveDayPeriods() {
+      if (!this.editSection) {
+        this.activeDayPeriods = [];
+        return;
+      }
+
+      const weekSchedule = this.editSection.weekly_schedule || {};
+      const dayEntries = weekSchedule[this.editDay] || weekSchedule[String(this.editDay)] || [];
+
+      const periods = [];
+      for (let p = 1; p <= 8; p++) {
+        const entry = dayEntries.find(e => parseInt(e.period, 10) === p) || null;
+        const timing = this.getClientPeriodTiming(p);
+        const label = this.getClientPeriodLabel(p);
+
+        let slotType = entry?.period_type || entry?.subject_type || (p === 8 ? 'class' : 'class');
+        if (slotType === 'lab') slotType = 'practical';
+
+        periods.push({
+          period_number: p,
+          period_label: label,
+          timing: timing,
+          period_type: slotType,
+          subject_id: entry?.subject_id ? parseInt(entry.subject_id, 10) : (entry?.subject_name ? this.findSubjectIdByName(entry.subject_name) : null),
+          teacher_id: entry?.teacher_id ? parseInt(entry.teacher_id, 10) : (entry?.teacher_name ? this.findTeacherIdByName(entry.teacher_name) : null),
+          room: entry?.room || this.editSection.room || `Room ${this.editClass.name || '1'}-${this.editSection.name || 'A'}`,
+          notes: entry?.notes || ''
+        });
+      }
+
+      this.activeDayPeriods = periods;
+      this.hasUnsavedChanges = false;
+    },
+
+    onPeriodTypeChange(period) {
+      if (!period) return;
+      if (period.period_type === 'free') {
+        period.subject_id = null;
+        period.teacher_id = null;
+        period.room = 'Self Study';
+      } else if (period.period_type === 'activity') {
+        const isAct = this.activitySubjectIds.includes(Number(period.subject_id));
+        if (!isAct) {
+          period.subject_id = null;
+        }
+        if (!period.room || period.room.startsWith('Room')) {
+          period.room = 'Ground';
+        }
+      } else if (period.period_type === 'practical' || period.period_type === 'lab') {
+        const isPrac = this.practicalSubjectIds.includes(Number(period.subject_id));
+        if (!isPrac) {
+          period.subject_id = null;
+        }
+        if (!period.room || period.room.startsWith('Room')) {
+          period.room = 'Computer Lab';
+        }
+      } else if (period.period_type === 'class') {
+        if (period.room === 'Ground' || period.room === 'Self Study' || period.room === 'Computer Lab') {
+          period.room = this.editSection?.room || `Room ${this.editClass?.name || '1'}-${this.editSection?.name || 'A'}`;
         }
       }
     },
 
-    saveAndApplyTimetable() {
-      this.syncCurrentEditToClassesData();
-      this.editModalOpen = false;
+    initializeDefaultDayPeriods() {
+      const periods = [];
+      for (let p = 1; p <= 8; p++) {
+        periods.push({
+          period_number: p,
+          period_label: this.getClientPeriodLabel(p),
+          timing: this.getClientPeriodTiming(p),
+          period_type: 'class',
+          subject_id: null,
+          teacher_id: null,
+          room: this.editSection?.room || `Room ${this.editClass?.name || '1'}-${this.editSection?.name || 'A'}`,
+          notes: ''
+        });
+      }
+      this.activeDayPeriods = periods;
+      this.markUnsaved();
     },
 
-    getEditDays() {
-      const allDays = [
-        { dayNum: 1, name: 'Monday' },
-        { dayNum: 2, name: 'Tuesday' },
-        { dayNum: 3, name: 'Wednesday' },
-        { dayNum: 4, name: 'Thursday' },
-        { dayNum: 5, name: 'Friday' },
-        { dayNum: 6, name: 'Saturday' }
-      ];
+    getClientPeriodLabel(p) {
+      if (p === 8) return 'Diary';
+      const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+      return 'Period ' + (roman[p - 1] || p);
+    },
 
-      if (this.editDay === 0) {
-        return allDays;
-      }
-      return allDays.filter(d => d.dayNum === this.editDay);
+    getClientPeriodTiming(p) {
+      const timings = {
+        1: '09:10 AM – 09:50 AM',
+        2: '09:50 AM – 10:30 AM',
+        3: '10:40 AM – 11:20 AM',
+        4: '11:20 AM – 12:00 PM',
+        5: '12:00 PM – 12:40 PM',
+        6: '01:20 PM – 02:00 PM',
+        7: '02:10 PM – 02:50 PM',
+        8: '02:50 PM – 03:00 PM'
+      };
+      return timings[p] || '09:10 AM – 03:00 PM';
+    },
+
+    findSubjectIdByName(name) {
+      if (!name || !this.allSubjects) return null;
+      const lower = name.toLowerCase().trim();
+      const match = this.allSubjects.find(s =>
+        s.name.toLowerCase().trim() === lower ||
+        (s.code && s.code.toLowerCase().trim() === lower)
+      );
+      return match ? match.id : null;
+    },
+
+    findTeacherIdByName(name) {
+      if (!name || !this.allTeachers) return null;
+      const lower = name.toLowerCase().trim();
+      const match = this.allTeachers.find(t => {
+        const full = `${t.first_name} ${t.last_name || ''}`.toLowerCase().trim();
+        return full === lower || t.first_name.toLowerCase().trim() === lower;
+      });
+      return match ? match.id : null;
     },
 
     isDayHoliday(dayNum) {
       if (this.holidayDays[dayNum] !== undefined) {
-        return this.holidayDays[dayNum];
+        return Boolean(this.holidayDays[dayNum]);
       }
       if (this.editSection && this.editSection.weekly_schedule) {
         const dayEntries = this.editSection.weekly_schedule[dayNum] || this.editSection.weekly_schedule[String(dayNum)] || [];
@@ -1858,38 +2518,16 @@ function classesDashboard() {
     },
 
     async toggleDayHoliday(dayNum) {
-      const newStatus = !this.isDayHoliday(dayNum);
+      if (!this.editClass || !this.editSection) return;
+      const current = this.isDayHoliday(dayNum);
+      const newStatus = !current;
+
       this.holidayDays[dayNum] = newStatus;
-
-      // Local state update
-      if (this.editSection && this.editSection.weekly_schedule) {
-        if (!this.editSection.weekly_schedule[dayNum]) {
-          this.editSection.weekly_schedule[dayNum] = [];
-        }
-        for (let p = 1; p <= 8; p++) {
-          const entryIdx = this.editSection.weekly_schedule[dayNum].findIndex(e => parseInt(e.period, 10) === p);
-          const holidaySlot = {
-            period: p,
-            subject_name: newStatus ? 'Holiday / No Class' : 'Study Period',
-            teacher_name: newStatus ? 'Holiday' : 'Faculty',
-            room: newStatus ? 'Holiday' : (this.editSection.room || 'Room'),
-            subject_type: newStatus ? 'holiday' : 'class',
-            period_type: newStatus ? 'holiday' : 'class'
-          };
-          if (entryIdx >= 0) {
-            this.editSection.weekly_schedule[dayNum][entryIdx] = Object.assign({}, this.editSection.weekly_schedule[dayNum][entryIdx], holidaySlot);
-          } else {
-            this.editSection.weekly_schedule[dayNum].push(holidaySlot);
-          }
-        }
-      }
-
-      this.syncCurrentEditToClassesData();
 
       // Backend sync
       try {
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        await fetch('{{ route("classes.timetable.toggle-holiday") }}', {
+        const res = await fetch('{{ route("classes.timetable.toggle-holiday") }}', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1903,124 +2541,145 @@ function classesDashboard() {
             is_holiday: newStatus
           })
         });
+
+        const data = await res.json();
+        if (data.success) {
+          this.showToast(data.message || (newStatus ? 'Marked day as Holiday.' : 'Holiday removed.'), 'success');
+        } else {
+          this.holidayDays[dayNum] = current; // revert
+          this.showToast(data.message || 'Failed to update holiday status.', 'error');
+        }
       } catch (e) {
+        this.holidayDays[dayNum] = current; // revert
         console.error('Holiday toggle sync error:', e);
+        this.showToast('Failed to update holiday status: ' + e.message, 'error');
       }
     },
 
-    getPeriodEntryDisplay(dayNum, periodNum) {
-      if (!this.editSection) return { subject_name: '—', teacher_name: 'Faculty', room: 'Room', period_type: 'class' };
-      const weekSchedule = this.editSection.weekly_schedule || {};
-      const dayEntries = weekSchedule[dayNum] || weekSchedule[String(dayNum)] || [];
-      const entry = dayEntries.find(e => parseInt(e.period, 10) === periodNum) || dayEntries[periodNum - 1] || null;
-      if (!entry) {
-        return { subject_name: 'Study Period', teacher_name: 'Subject Faculty', room: this.editSection.room || 'Room', period_type: 'class' };
+    hasConsecutiveTeacherConflict(idx) {
+      if (!this.activeDayPeriods || !this.activeDayPeriods[idx]) return false;
+      const current = this.activeDayPeriods[idx];
+      const teacherId = current.teacher_id;
+      const periodType = current.period_type || 'class';
+
+      if (!teacherId || periodType === 'free' || periodType === 'holiday') {
+        return false;
       }
-      return entry;
+
+      // Check immediately previous slot
+      if (idx > 0) {
+        const prev = this.activeDayPeriods[idx - 1];
+        const prevType = prev.period_type || 'class';
+        if (prev.teacher_id && prev.teacher_id === teacherId && prevType !== 'free' && prevType !== 'holiday') {
+          return true;
+        }
+      }
+
+      // Check immediately next slot
+      if (idx < this.activeDayPeriods.length - 1) {
+        const next = this.activeDayPeriods[idx + 1];
+        const nextType = next.period_type || 'class';
+        if (next.teacher_id && next.teacher_id === teacherId && nextType !== 'free' && nextType !== 'holiday') {
+          return true;
+        }
+      }
+
+      return false;
     },
 
-    getSlotCardClass(dayNum, p) {
-      const entry = this.getPeriodEntryDisplay(dayNum, p);
-      const type = entry.period_type || entry.subject_type || 'class';
-      if (type === 'free') {
-        return 'bg-amber-50/50 hover:bg-amber-50 border-amber-200/80 hover:border-amber-300';
+    hasAnyConsecutiveConflict() {
+      if (!this.activeDayPeriods || this.activeDayPeriods.length === 0) return false;
+      for (let i = 0; i < this.activeDayPeriods.length; i++) {
+        if (this.hasConsecutiveTeacherConflict(i)) {
+          return true;
+        }
       }
-      if (type === 'substitution') {
-        return 'bg-purple-50/50 hover:bg-purple-50 border-purple-200/80 hover:border-purple-300';
-      }
-      if (type === 'activity' || dayNum === 6) {
-        return 'bg-emerald-50/50 hover:bg-emerald-50 border-emerald-200/80 hover:border-emerald-300';
-      }
-      return 'bg-white hover:bg-blue-50/30 border-slate-200/90 hover:border-blue-300 shadow-xs';
+      return false;
     },
 
-    getSlotTextClass(dayNum, p) {
-      const entry = this.getPeriodEntryDisplay(dayNum, p);
-      const type = entry.period_type || entry.subject_type || 'class';
-      if (type === 'free') return 'text-amber-900';
-      if (type === 'substitution') return 'text-purple-900';
-      if (type === 'activity' || dayNum === 6) return 'text-emerald-950';
-      return 'text-slate-900';
-    },
-
-    // ── Open Slot Editor ──
-    openSlotEditor(dayNum, periodNum) {
+    async saveActiveDayTimetable(forceConflict = false) {
       if (!this.editClass || !this.editSection) return;
-      const dayNames = { 1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday' };
-      const currentEntry = this.getPeriodEntryDisplay(dayNum, periodNum);
 
-      this.editSlotData = {
-        class_id: this.editClass.id,
-        section_id: this.editSection.id,
-        day_of_week: dayNum,
-        dayName: dayNames[dayNum] || 'Monday',
-        period_number: periodNum,
-        subject_id: currentEntry?.subject_id || (this.allSubjects && this.allSubjects[0]?.id) || 1,
-        teacher_id: currentEntry?.teacher_id || (this.allTeachers && this.allTeachers[0]?.id) || null,
-        substitute_teacher_id: null,
-        room: currentEntry?.room || this.editSection.room || 'Room 1-A',
-        period_type: currentEntry?.period_type || currentEntry?.subject_type || 'class',
-        notes: ''
-      };
+      if (this.hasAnyConsecutiveConflict()) {
+        this.showToast('This teacher is already assigned to the adjacent period. A teacher cannot be assigned to consecutive periods.', 'error');
+        return;
+      }
 
-      this.editSlotModalOpen = true;
-    },
+      this.isSavingTimetable = true;
 
-    setSlotAsFree() {
-      this.editSlotData.period_type = 'free';
-      this.saveSlotEdit();
-    },
-
-    resetSlotToDefault() {
-      this.editSlotData.period_type = 'class';
-      this.editSlotData.substitute_teacher_id = null;
-      this.saveSlotEdit();
-    },
-
-    async saveSlotEdit() {
-      this.isSavingSlot = true;
       try {
+        const payload = {
+          class_id: this.editClass.id,
+          section_id: this.editSection.id,
+          day_of_week: this.editDay,
+          force_conflict: forceConflict,
+          periods: this.activeDayPeriods.map(p => ({
+            period_number: p.period_number,
+            period_type: p.period_type || 'class',
+            subject_id: p.subject_id || null,
+            teacher_id: p.teacher_id || null,
+            room: p.room || '',
+            notes: p.notes || ''
+          }))
+        };
+
         const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        const res = await fetch('{{ route("classes.timetable.update-slot") }}', {
+        const res = await fetch('{{ route("classes.timetable.save-day") }}', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': token,
             'Accept': 'application/json'
           },
-          body: JSON.stringify(this.editSlotData)
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json();
-        if (data.success && data.slot) {
-          const dayNum = this.editSlotData.day_of_week;
-          const periodNum = this.editSlotData.period_number;
 
+        if (res.status === 422 && data.consecutive_conflict) {
+          this.isSavingTimetable = false;
+          this.showToast(data.message || 'This teacher is already assigned to the adjacent period. A teacher cannot be assigned to consecutive periods.', 'error');
+          return;
+        }
+
+        if (res.status === 422 && data.conflict) {
+          this.isSavingTimetable = false;
+          if (confirm(`${data.message}\n\nDo you want to override and assign this teacher anyway?`)) {
+            await this.saveActiveDayTimetable(true);
+          }
+          return;
+        }
+
+        if (data.success) {
           if (!this.editSection.weekly_schedule) {
             this.editSection.weekly_schedule = {};
           }
-          if (!this.editSection.weekly_schedule[dayNum]) {
-            this.editSection.weekly_schedule[dayNum] = [];
-          }
-
-          const dayEntries = this.editSection.weekly_schedule[dayNum];
-          const existingIdx = dayEntries.findIndex(e => parseInt(e.period, 10) === periodNum);
-
-          if (existingIdx >= 0) {
-            dayEntries[existingIdx] = data.slot;
-          } else {
-            dayEntries.push(data.slot);
-          }
+          this.editSection.weekly_schedule[this.editDay] = data.day_periods || [];
 
           this.syncCurrentEditToClassesData();
-          this.editSlotModalOpen = false;
+          this.loadActiveDayPeriods(); // Re-sync active periods
+          this.hasUnsavedChanges = false;
+          this.showToast(data.message || 'Timetable saved successfully!', 'success');
         } else {
-          alert(data.message || 'Failed to update slot.');
+          this.showToast(data.message || 'Failed to save timetable.', 'error');
         }
       } catch (err) {
-        alert('An error occurred while saving the slot: ' + err.message);
+        console.error('Save timetable error:', err);
+        this.showToast('An error occurred while saving timetable: ' + err.message, 'error');
       } finally {
-        this.isSavingSlot = false;
+        this.isSavingTimetable = false;
+      }
+    },
+
+    syncCurrentEditToClassesData() {
+      if (this.editClass && this.editSection) {
+        const cls = this.classesData.find(c => c.id === this.editClass.id);
+        if (cls) {
+          const sec = cls.sections.find(s => s.id === this.editSection.id);
+          if (sec) {
+            sec.weekly_schedule = JSON.parse(JSON.stringify(this.editSection.weekly_schedule || {}));
+          }
+        }
       }
     },
 

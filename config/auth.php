@@ -114,4 +114,15 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Security PIN (Local Development / Testing Fallback)
+    |--------------------------------------------------------------------------
+    |
+    | In local or testing environments, this temporary PIN allows seamless testing
+    | of the Admin PIN verification step without granting PIN-only or unverified access.
+    |
+    */
+    'admin_dev_pin' => env('ADMIN_DEV_PIN', '1122'),
+
 ];

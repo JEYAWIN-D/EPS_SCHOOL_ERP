@@ -37,6 +37,11 @@ class Timetable extends Model
         return $this->belongsTo(Employee::class, 'teacher_id');
     }
 
+    public function periodReports(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PeriodReport::class, 'timetable_id');
+    }
+
     // Mutator for employee_id compatibility
     public function setEmployeeIdAttribute($value)
     {

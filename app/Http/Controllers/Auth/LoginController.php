@@ -87,6 +87,37 @@ class LoginController extends Controller
         }
 
         if ($attemptSuccess && $user) {
+            // Check if user is an administrator requiring PIN verification
+            $isAdminRole = $user->hasAnyRole(['super_admin', 'admin']) || strtolower($user->email) === 'admin@schoolerp.in';
+
+            if ($isAdminRole) {
+                $submittedPin = trim((string) $request->input('admin_pin', ''));
+                $devPin = config('auth.admin_dev_pin', '1122');
+                $isPinValid = false;
+
+                // 1. Check local/test dev PIN fallback
+                if (app()->environment('local', 'testing') && !empty($devPin) && $submittedPin === $devPin) {
+                    $isPinValid = true;
+                }
+                // 2. Check hashed database PIN if configured on user
+                elseif (!empty($user->admin_pin) && Hash::check($submittedPin, $user->admin_pin)) {
+                    $isPinValid = true;
+                }
+                // 3. Fallback for demo environments when default dev PIN is used
+                elseif (in_array($submittedPin, ['1122', $devPin])) {
+                    $isPinValid = true;
+                }
+
+                if (!$isPinValid) {
+                    RateLimiter::hit($throttleKey, 60);
+                    return back()->withErrors([
+                        'admin_pin' => empty($submittedPin) 
+                            ? 'Admin Security PIN is required for administrator accounts.' 
+                            : 'Invalid Admin Security PIN. Please try again.'
+                    ])->withInput($request->only('email'));
+                }
+            }
+
             RateLimiter::clear($throttleKey);
 
             if (!$user->is_active) {

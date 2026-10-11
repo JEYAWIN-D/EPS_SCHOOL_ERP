@@ -1406,8 +1406,12 @@
       <h1 class="page-title">My Dashboard</h1>
       <p class="page-subtitle">Welcome back, {{ auth()->user()->name }} &mdash; {{ now()->format('l, d M Y') }}</p>
     </div>
-    <div class="flex gap-2 flex-wrap">
+    <div class="flex gap-2 flex-wrap items-center">
       <span class="badge-blue text-sm px-3 py-1">{{ $currentYear?->name ?? '—' }}</span>
+      <a href="{{ route('academics.timetable') }}" class="btn-sm btn-secondary inline-flex items-center gap-1.5 shadow-2xs font-semibold">
+        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span>View Timetable</span>
+      </a>
       <a href="{{ route('attendance.mark') }}" class="btn-sm btn-primary">Mark Attendance</a>
     </div>
   </div>
@@ -1447,7 +1451,13 @@
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     {{-- Today's schedule --}}
     <div class="card lg:col-span-2">
-      <h3 class="font-semibold text-slate-800 mb-4">Today's Schedule — {{ now()->format('l') }}</h3>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-slate-800">Today's Schedule — {{ now()->format('l') }}</h3>
+        <a href="{{ route('academics.timetable') }}" class="text-xs font-bold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 transition">
+          <span>View Full Timetable</span>
+          <span>&rarr;</span>
+        </a>
+      </div>
       @if($myScheduleToday->isEmpty())
         <div class="text-center py-10 text-slate-400">
           <svg class="w-10 h-10 mx-auto mb-2 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -1476,6 +1486,12 @@
       <div class="card">
         <h3 class="font-semibold text-slate-800 mb-3">Quick Actions</h3>
         <div class="space-y-2">
+          <a href="{{ route('academics.timetable') }}" class="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-blue-50 transition group text-sm">
+            <div class="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition flex-shrink-0">
+              <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <span class="font-medium text-slate-700">View Timetable</span>
+          </a>
           <a href="{{ route('attendance.mark') }}" class="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-green-50 transition group text-sm">
             <div class="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition flex-shrink-0">
               <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>

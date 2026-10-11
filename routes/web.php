@@ -213,16 +213,21 @@ Route::middleware(['auth'])->group(function () {
     // ── Module — Classes & Timetables ────────────────────
     Route::middleware('permission:view academics')->prefix('classes')->name('classes.')->group(function () {
         Route::get('/',                     [ClassesController::class, 'index'])->name('index');
-        Route::put('/{id}/rename',          [ClassesController::class, 'rename'])->name('rename')->where('id', '[0-9]+');
-        Route::post('/timetable/update-slot', [ClassesController::class, 'updateSlot'])->name('timetable.update-slot');
-        Route::post('/timetable/toggle-holiday', [ClassesController::class, 'toggleHoliday'])->name('timetable.toggle-holiday');
-        Route::post('/timetable/declare-holiday', [ClassesController::class, 'declareHoliday'])->name('timetable.declare-holiday');
-        Route::delete('/timetable/delete-holiday/{id}', [ClassesController::class, 'deleteHoliday'])->name('timetable.delete-holiday');
         Route::get('/timetable/declared-holidays', [ClassesController::class, 'getHolidaysList'])->name('timetable.declared-holidays');
         Route::get('/{id}',                 [ClassesController::class, 'show'])->name('show')->where('id', '[0-9]+');
         Route::get('/{id}/timetable-data',  [ClassesController::class, 'timetableData'])->name('timetable-data')->where('id', '[0-9]+');
         Route::get('/{id}/timetable/pdf',   [ClassesController::class, 'downloadPdf'])->name('timetable.pdf')->where('id', '[0-9]+');
         Route::get('/{id}/timetable/csv',   [ClassesController::class, 'exportCsv'])->name('timetable.csv')->where('id', '[0-9]+');
+
+        // Mutation / Editing endpoints strictly restricted to edit academics permission (Admin / Super Admin)
+        Route::middleware('permission:edit academics')->group(function () {
+            Route::put('/{id}/rename',              [ClassesController::class, 'rename'])->name('rename')->where('id', '[0-9]+');
+            Route::post('/timetable/update-slot',   [ClassesController::class, 'updateSlot'])->name('timetable.update-slot');
+            Route::post('/timetable/save-day',      [ClassesController::class, 'saveDay'])->name('timetable.save-day');
+            Route::post('/timetable/toggle-holiday', [ClassesController::class, 'toggleHoliday'])->name('timetable.toggle-holiday');
+            Route::post('/timetable/declare-holiday', [ClassesController::class, 'declareHoliday'])->name('timetable.declare-holiday');
+            Route::delete('/timetable/delete-holiday/{id}', [ClassesController::class, 'deleteHoliday'])->name('timetable.delete-holiday');
+        });
     });
 
     // ── Module 3 — Academics ──────────────────────────────
@@ -296,6 +301,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/timetable/teacher',      [AcademicController::class, 'teacherTimetable'])->name('timetable.teacher');
         Route::get('/timetable/workload',     [AcademicController::class, 'teacherWorkload'])->name('timetable.workload');
         Route::get('/timetable/conflicts',    [AcademicController::class, 'timetableConflicts'])->name('timetable.conflicts');
+        // Period Reports (Teacher class-period attendance & topic log)
+        Route::get('/timetable/period-reports',               [\App\Http\Controllers\Admin\PeriodReportController::class, 'listReports'])->name('timetable.period-reports.list');
+        Route::get('/timetable/period-report/{timetable_id}', [\App\Http\Controllers\Admin\PeriodReportController::class, 'getReport'])->name('timetable.period-report.get');
+        Route::post('/timetable/period-report',                [\App\Http\Controllers\Admin\PeriodReportController::class, 'saveReport'])->name('timetable.period-report.save');
         Route::get('/calendar/pdf',       [AcademicController::class, 'calendarPdf'])->name('calendar.pdf');
         // Terms / Semesters
         Route::get('/terms',              [AcademicController::class, 'terms'])->name('terms');

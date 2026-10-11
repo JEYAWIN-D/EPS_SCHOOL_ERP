@@ -46,29 +46,133 @@ class AcademicController extends Controller
 
     public function timetable(Request $request)
     {
-        $classes  = Classes::active()->get();
-        $subjects = Subject::where('is_active', true)->orderBy('name')->get();
-        $teachers = Employee::where('is_active', true)->where('employee_type', 'teaching')->orderBy('first_name')->get();
-        if ($teachers->isEmpty()) {
-            $teachers = Employee::where('is_active', true)->orderBy('first_name')->get();
+        $user = auth()->user();
+        $authEmployeeId = \App\Http\Controllers\Admin\PeriodReportController::resolveAuthEmployeeId();
+        $canManage = \App\Http\Controllers\Admin\ClassesController::canManageTimetable($user);
+
+        // Find classes where this teacher is assigned periods
+        $teacherClassIds = collect();
+        if ($authEmployeeId) {
+            $teacherClassIds = \App\Models\Timetable::where('teacher_id', $authEmployeeId)
+                ->where('is_active', true)
+                ->pluck('class_id')
+                ->unique()
+                ->filter();
         }
+
+        // If no class is explicitly requested, auto-select the teacher's primary assigned class
+        if (!$request->class_id && $authEmployeeId && $teacherClassIds->isNotEmpty()) {
+            $firstClassId = $teacherClassIds->first();
+            $firstSlot = \App\Models\Timetable::where('teacher_id', $authEmployeeId)
+                ->where('class_id', $firstClassId)
+                ->where('is_active', true)
+                ->first();
+            $request->merge([
+                'class_id'   => $firstClassId,
+                'section_id' => $firstSlot?->section_id,
+            ]);
+        }
+
+        $classes  = Classes::active()->orderBy('sort_order')->get();
+        $subjects = Subject::where('is_active', true)->orderBy('name')->get();
+        $allTeachers = Employee::where('is_active', true)->orderBy('first_name')->get();
+        $teachers = $allTeachers->filter(fn($t) => ($t->employee_type ?? 'teaching') === 'teaching');
+        if ($teachers->isEmpty()) {
+            $teachers = $allTeachers;
+        }
+
+        // Partition for conditional selection boxes
+        $theorySubjects = $subjects->filter(fn($s) => in_array($s->type, ['theory', 'language']));
+        $activitySubjects = $subjects->filter(fn($s) => $s->type === 'activity' || $s->is_coscholastic);
+        $practicalSubjects = $subjects->filter(fn($s) => $s->type === 'practical' || stripos($s->name, 'computer') !== false || stripos($s->name, 'lab') !== false);
+
+        $activityTeachers = $allTeachers->filter(function ($t) {
+            $desig = strtolower($t->designation ?? '');
+            $dept = strtolower($t->department ?? '');
+            return str_contains($desig, 'sport') || str_contains($desig, 'physical') || str_contains($desig, 'yoga') ||
+                   str_contains($desig, 'music') || str_contains($desig, 'dance') || str_contains($desig, 'art') ||
+                   str_contains($desig, 'coach') || str_contains($dept, 'sport') || str_contains($dept, 'physical') ||
+                   str_contains($dept, 'performing') || str_contains($dept, 'fine art');
+        });
+
+        $labTeachers = $allTeachers->filter(function ($t) {
+            $desig = strtolower($t->designation ?? '');
+            $dept = strtolower($t->department ?? '');
+            return str_contains($desig, 'computer') || str_contains($desig, 'lab') || str_contains($desig, 'robotics') ||
+                   str_contains($desig, 'stem') || str_contains($desig, 'it') || str_contains($dept, 'computer') ||
+                   str_contains($dept, 'science lab');
+        });
+
         $sections = collect();
         $timetable = [];
 
         if ($request->class_id) {
-            $sections  = Section::where('class_id', $request->class_id)->get();
-            $timetable = \App\Models\Timetable::with(['subject', 'teacher'])
+            $sections = Section::where('class_id', $request->class_id)->orderBy('name')->get();
+
+            if (!$request->section_id && $sections->isNotEmpty()) {
+                $teacherSecId = $authEmployeeId ? \App\Models\Timetable::where('teacher_id', $authEmployeeId)
+                    ->where('class_id', $request->class_id)
+                    ->value('section_id') : null;
+                $request->merge(['section_id' => $teacherSecId ?: $sections->first()->id]);
+            }
+
+            $timetable = \App\Models\Timetable::with(['subject', 'teacher', 'class', 'section'])
                 ->where('class_id', $request->class_id)
                 ->when($request->section_id, fn($q, $v) => $q->where('section_id', $v))
                 ->orderBy('day_of_week')->orderBy('start_time')
                 ->get()->groupBy('day_of_week');
         }
 
-        return view('academics.timetable', compact('classes', 'sections', 'timetable', 'subjects', 'teachers'));
+        $previousReports = collect();
+        if ($authEmployeeId) {
+            $previousReports = \App\Models\PeriodReport::with(['subject', 'class', 'section'])
+                ->where('teacher_id', $authEmployeeId)
+                ->orderBy('date', 'desc')
+                ->orderBy('id', 'desc')
+                ->take(50)
+                ->get();
+        }
+
+        $formattedPreviousReports = $previousReports->map(function ($r) {
+            return [
+                'id'             => $r->id,
+                'timetable_id'   => $r->timetable_id,
+                'date'           => $r->date ? $r->date->format('Y-m-d') : '',
+                'formatted_date' => $r->date ? $r->date->format('d M Y') : '',
+                'day'            => $r->day ?: ($r->date ? $r->date->format('l') : ''),
+                'class_id'       => $r->class_id,
+                'class_name'     => $r->class?->name ?? '',
+                'section_id'     => $r->section_id,
+                'section_name'   => $r->section?->name ?? '',
+                'subject_id'     => $r->subject_id,
+                'subject_name'   => $r->subject?->name ?? 'Subject',
+                'period_number'  => $r->period_number,
+                'present_count'  => $r->student_present_count,
+                'absent_count'   => $r->student_absent_count,
+                'description'    => $r->description,
+            ];
+        })->values();
+
+        return view('academics.timetable', compact(
+            'classes', 'sections', 'timetable', 'subjects', 'teachers',
+            'theorySubjects', 'activitySubjects', 'practicalSubjects',
+            'activityTeachers', 'labTeachers',
+            'authEmployeeId', 'teacherClassIds', 'previousReports', 'formattedPreviousReports'
+        ));
     }
 
     public function saveTimetable(Request $request)
     {
+        if (!\App\Http\Controllers\Admin\ClassesController::canManageTimetable(auth()->user())) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: Principal and view-only roles do not have permission to modify timetable entries.'
+                ], 403);
+            }
+            abort(403, 'Unauthorized: Principal and view-only roles do not have permission to modify timetable entries.');
+        }
+
         $request->validate([
             'entries'                 => 'required|array',
             'entries.*.class_id'      => 'required|exists:classes,id',
@@ -80,6 +184,82 @@ class AcademicController extends Controller
             'Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3,
             'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7,
         ];
+
+        $currentYear = \App\Models\AcademicYear::current() ?? \App\Models\AcademicYear::first();
+
+        // Validate consecutive assignments across entries
+        foreach ($request->entries as $entry) {
+            $dayOfWeek = $entry['day_of_week'];
+            if (isset($dayMap[$dayOfWeek])) {
+                $dayOfWeek = $dayMap[$dayOfWeek];
+            } else {
+                $dayOfWeek = (int) $dayOfWeek;
+            }
+
+            $teacherId = $entry['teacher_id'] ?? ($entry['employee_id'] ?? null);
+            $periodType = $entry['period_type'] ?? 'class';
+
+            if ($teacherId && !in_array($periodType, ['free', 'holiday'])) {
+                $consecutiveConflict = \App\Http\Controllers\Admin\ClassesController::checkConsecutiveTeacherConflict(
+                    (int) $entry['class_id'],
+                    (int) ($entry['section_id'] ?? 0),
+                    (int) $dayOfWeek,
+                    (int) $currentYear->id,
+                    [[
+                        'period_number' => (int) $entry['period_number'],
+                        'teacher_id'    => (int) $teacherId,
+                        'period_type'   => $periodType,
+                    ]]
+                );
+
+                if ($consecutiveConflict) {
+                    if ($request->wantsJson() || $request->ajax()) {
+                        return response()->json([
+                            'success'              => false,
+                            'consecutive_conflict' => true,
+                            'message'              => $consecutiveConflict,
+                        ], 422);
+                    }
+                    return back()->with('error', $consecutiveConflict);
+                }
+
+                // Check cross-class double booking
+                if (!$request->boolean('force_conflict')) {
+                    $conflict = \App\Models\Timetable::where('academic_year_id', $currentYear->id)
+                        ->where('day_of_week', $dayOfWeek)
+                        ->where('period_number', (int) $entry['period_number'])
+                        ->where('teacher_id', (int) $teacherId)
+                        ->where('is_active', true)
+                        ->whereNotIn('period_type', ['holiday', 'free'])
+                        ->where(function ($q) use ($entry) {
+                            $q->where('class_id', '!=', $entry['class_id']);
+                            if (!empty($entry['section_id'])) {
+                                $q->orWhere('section_id', '!=', $entry['section_id']);
+                            }
+                        })
+                        ->with(['class', 'section', 'subject', 'teacher'])
+                        ->first();
+
+                    if ($conflict) {
+                        $teacherName = $conflict->teacher ? ($conflict->teacher->first_name . ' ' . $conflict->teacher->last_name) : 'Faculty member';
+                        $conflictClass = ($conflict->class?->name ?? 'Class') . ' - Section ' . ($conflict->section?->name ?? 'A');
+                        $conflictSubject = $conflict->subject?->name ?? 'another session';
+                        $dayNames = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
+                        $dayName = $dayNames[$dayOfWeek] ?? 'this day';
+
+                        $msg = "Teacher Conflict: {$teacherName} is already assigned to {$conflictClass} ({$conflictSubject}) during Period {$entry['period_number']} on {$dayName}.";
+                        if ($request->wantsJson() || $request->ajax()) {
+                            return response()->json([
+                                'success'  => false,
+                                'conflict' => true,
+                                'message'  => $msg,
+                            ], 422);
+                        }
+                        return back()->with('error', $msg);
+                    }
+                }
+            }
+        }
 
         foreach ($request->entries as $entry) {
             $dayOfWeek = $entry['day_of_week'];
@@ -975,22 +1155,60 @@ class AcademicController extends Controller
 
     public function teacherTimetable(Request $request)
     {
-        $teachers  = Employee::where('is_active', true)
-            ->where(fn($q) => $q->where('employee_type', 'teaching')->orWhereNull('employee_type'))
-            ->orderBy('first_name')->get();
+        $user = auth()->user();
+        $authEmployeeId = \App\Http\Controllers\Admin\PeriodReportController::resolveAuthEmployeeId();
+        $isElevated = $user && $user->hasAnyRole(['super_admin', 'admin', 'principal']);
+        $isTeacherUser = !$isElevated && $user && ($user->hasRole('teacher') || $authEmployeeId);
+
+        $teachers  = collect();
         $timetable = collect();
         $teacher   = null;
 
-        if ($request->teacher_id) {
-            $teacher   = Employee::findOrFail($request->teacher_id);
-            $timetable = \App\Models\Timetable::with(['subject', 'class', 'section'])
-                ->where('teacher_id', $request->teacher_id)
-                ->where('period_type', 'class')
-                ->orderBy('day_of_week')->orderBy('period_number')
-                ->get()->groupBy('day_of_week');
+        if ($isTeacherUser) {
+            // Logged-in teacher: strictly scoped to their own account mapping
+            if ($authEmployeeId) {
+                $teacher = Employee::find($authEmployeeId);
+                if ($teacher) {
+                    $timetable = \App\Models\Timetable::with(['subject', 'class', 'section'])
+                        ->where('teacher_id', $teacher->id)
+                        ->whereNotIn('period_type', ['free', 'holiday'])
+                        ->orderBy('day_of_week')->orderBy('period_number')
+                        ->get()->groupBy('day_of_week');
+                }
+            }
+        } else {
+            // Admins / Principal: can view any teacher's timetable
+            $teachers = Employee::where('is_active', true)
+                ->where(fn($q) => $q->where('employee_type', 'teaching')->orWhereNull('employee_type'))
+                ->orderBy('first_name')->get();
+
+            $targetTeacherId = $request->teacher_id ?: ($teachers->first()?->id);
+            if ($targetTeacherId) {
+                $teacher = Employee::find($targetTeacherId);
+                if ($teacher) {
+                    $timetable = \App\Models\Timetable::with(['subject', 'class', 'section'])
+                        ->where('teacher_id', $teacher->id)
+                        ->whereNotIn('period_type', ['free', 'holiday'])
+                        ->orderBy('day_of_week')->orderBy('period_number')
+                        ->get()->groupBy('day_of_week');
+                }
+            }
         }
 
-        return view('academics.teacher-timetable', compact('teachers', 'timetable', 'teacher'));
+        // Previously saved period reports for this teacher
+        $previousReports = collect();
+        if ($teacher) {
+            $previousReports = \App\Models\PeriodReport::with(['subject', 'class', 'section'])
+                ->where('teacher_id', $teacher->id)
+                ->orderBy('date', 'desc')
+                ->orderBy('id', 'desc')
+                ->take(50)
+                ->get();
+        }
+
+        return view('academics.teacher-timetable', compact(
+            'teachers', 'timetable', 'teacher', 'isTeacherUser', 'previousReports'
+        ));
     }
 
     // ── Teacher Workload Report ────────────────────────────
@@ -1004,7 +1222,7 @@ class AcademicController extends Controller
 
         $workload = $teachers->map(function ($teacher) use ($maxPerWeek) {
             $periods = \App\Models\Timetable::where('teacher_id', $teacher->id)
-                ->where('period_type', 'class')->count();
+                ->whereNotIn('period_type', ['free', 'holiday'])->count();
             return [
                 'teacher'    => $teacher,
                 'periods'    => $periods,

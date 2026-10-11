@@ -19,6 +19,20 @@ use Illuminate\Support\Facades\Cache;
 
 class ClassesController extends Controller
 {
+    public static function getPeriodTimings(): array
+    {
+        return [
+            1 => ['09:10:00', '09:50:00'],
+            2 => ['09:50:00', '10:30:00'],
+            3 => ['10:40:00', '11:20:00'],
+            4 => ['11:20:00', '12:00:00'],
+            5 => ['12:00:00', '12:40:00'],
+            6 => ['13:20:00', '14:00:00'],
+            7 => ['14:10:00', '14:50:00'],
+            8 => ['14:50:00', '15:00:00'], // Diary
+        ];
+    }
+
     public static function clearCache(): void
     {
         Cache::forget('classes_module_base_v1_0');
@@ -32,8 +46,104 @@ class ClassesController extends Controller
         } catch (\Throwable $e) {}
     }
 
+    /**
+     * Check whether a user is authorized to manage/edit timetable assignments.
+     * Principals, teachers, staff, students, and other view-only roles are strictly prohibited from modifying timetables.
+     */
+    public static function canManageTimetable(?\App\Models\User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        // View-only and non-management roles are strictly prohibited from modifying timetables
+        if ($user->hasAnyRole(['principal', 'teacher', 'class_teacher', 'subject_teacher', 'staff', 'student', 'parent', 'accountant', 'librarian', 'warden'])) {
+            return false;
+        }
+
+        // Only super_admin, admin, or authorized timetable managers with explicit 'edit academics' permission
+        return $user->hasAnyRole(['super_admin', 'admin']) || $user->can('edit academics');
+    }
+
+    /**
+     * Validate consecutive teacher assignment in timetable.
+     * Prevents the same teacher from being assigned to adjacent periods on the same day in the same class/section.
+     *
+     * @param int $classId
+     * @param int $sectionId
+     * @param int $dayOfWeek
+     * @param int $academicYearId
+     * @param array $slots Array of slots being saved
+     * @return string|null Error message if consecutive assignment detected, null otherwise
+     */
+    public static function checkConsecutiveTeacherConflict(int $classId, int $sectionId, int $dayOfWeek, int $academicYearId, array $slots): ?string
+    {
+        $submittedByPeriod = [];
+        foreach ($slots as $s) {
+            $pNum = (int) ($s['period_number'] ?? 0);
+            if ($pNum > 0) {
+                $submittedByPeriod[$pNum] = [
+                    'teacher_id'  => !empty($s['teacher_id']) ? (int) $s['teacher_id'] : null,
+                    'period_type' => $s['period_type'] ?? 'class',
+                ];
+            }
+        }
+
+        // Fetch existing slots for this class, section, day, year
+        $existingSlots = Timetable::where('academic_year_id', $academicYearId)
+            ->where('class_id', $classId)
+            ->where('section_id', $sectionId)
+            ->where('day_of_week', $dayOfWeek)
+            ->where('is_active', true)
+            ->get(['period_number', 'teacher_id', 'period_type'])
+            ->keyBy('period_number');
+
+        // Merge: submitted overrides existing
+        $mergedSlots = [];
+        for ($p = 1; $p <= 8; $p++) {
+            if (isset($submittedByPeriod[$p])) {
+                $mergedSlots[$p] = $submittedByPeriod[$p];
+            } elseif (isset($existingSlots[$p])) {
+                $mergedSlots[$p] = [
+                    'teacher_id'  => $existingSlots[$p]->teacher_id,
+                    'period_type' => $existingSlots[$p]->period_type,
+                ];
+            }
+        }
+
+        // Check for adjacent periods with the same teacher
+        // Note: Free periods and holidays do not have teachers
+        // Only trigger if at least one of the adjacent slots was touched in this request
+        for ($p = 1; $p <= 7; $p++) {
+            $cur = $mergedSlots[$p] ?? null;
+            $next = $mergedSlots[$p + 1] ?? null;
+
+            if ($cur && $next) {
+                $curTeacher = $cur['teacher_id'];
+                $nextTeacher = $next['teacher_id'];
+                $curType = $cur['period_type'] ?? 'class';
+                $nextType = $next['period_type'] ?? 'class';
+
+                if ($curTeacher && $nextTeacher && $curTeacher === $nextTeacher) {
+                    if (!in_array($curType, ['free', 'holiday']) && !in_array($nextType, ['free', 'holiday'])) {
+                        // Check if either period was in the submitted slots
+                        if (isset($submittedByPeriod[$p]) || isset($submittedByPeriod[$p + 1])) {
+                            return "This teacher is already assigned to the adjacent period. A teacher cannot be assigned to consecutive periods.";
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function rename(Request $request, int $id)
     {
+        if (!self::canManageTimetable(auth()->user())) {
+            return back()->with('error', 'Unauthorized: Only Administrators can rename classes.');
+        }
+
         $request->validate(['name' => 'required|string|max:100']);
         $cls = Classes::findOrFail($id);
         $cls->update(['name' => $request->name]);
@@ -49,7 +159,7 @@ class ClassesController extends Controller
     {
         $currentYear = AcademicYear::current();
         $yearId = (int) ($currentYear?->id ?? 0);
-        $cacheKey = "classes_module_base_v2_{$yearId}";
+        $cacheKey = "classes_module_base_v3_{$yearId}";
 
         $cachedData = Cache::remember($cacheKey, 1800, function () {
             // Helper for ultra-fast time string formatting (50x faster than Carbon::parse)
@@ -104,10 +214,14 @@ class ClassesController extends Controller
                         $dayEntries = $sectionTimetables->where('day_of_week', $d)->sortBy('start_time')->values();
                         $weeklySchedule[$d] = $dayEntries->map(function ($entry, $idx) use ($fastFormat) {
                             return [
+                                'id'           => $entry->id,
                                 'period'       => $entry->period_number ?? ($idx + 1),
+                                'subject_id'   => $entry->subject_id,
                                 'subject_name' => $entry->subject?->name ?? 'Study Period',
                                 'subject_code' => $entry->subject?->code ?? '',
                                 'subject_type' => $entry->period_type ?? 'theory',
+                                'period_type'  => $entry->period_type ?? 'class',
+                                'teacher_id'   => $entry->teacher_id,
                                 'teacher_name' => $entry->teacher ? ($entry->teacher->first_name . ' ' . $entry->teacher->last_name) : 'Subject Teacher',
                                 'teacher_code' => $entry->teacher?->employee_code ?? '',
                                 'start_time'   => $fastFormat($entry->start_time),
@@ -129,8 +243,8 @@ class ClassesController extends Controller
                         'stream_name'      => $streamName,
                         'capacity'         => $sec->capacity ?? 40,
                         'student_count'    => $count,
-                        'class_teacher'    => ($sec->classTeacher && $sec->classTeacher->employee_id) ? $sec->classTeacher->name : 'Not Assigned',
-                        'teacher_avatar'   => 'https://ui-avatars.com/api/?name=' . urlencode(($sec->classTeacher && $sec->classTeacher->employee_id) ? $sec->classTeacher->name : 'NA') . '&background=0D8ABC&color=fff',
+                        'class_teacher'    => ($sec->classTeacher) ? $sec->classTeacher->name : 'Not Assigned',
+                        'teacher_avatar'   => 'https://ui-avatars.com/api/?name=' . urlencode(($sec->classTeacher) ? $sec->classTeacher->name : 'NA') . '&background=0D8ABC&color=fff',
                         'room'             => 'Room ' . ($cls->numeric_value > 0 ? ($cls->numeric_value . '-' . $sec->name) : ('KG-' . $sec->name)),
                         'weekly_schedule'  => $weeklySchedule,
                     ];
@@ -156,23 +270,62 @@ class ClassesController extends Controller
             if ($totalStudents === 0) {
                 $totalStudents = collect($rawClassesData)->sum('total_students');
             }
-            $allSubjects   = Subject::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'type', 'stream']);
-            $allTeachers   = Employee::orderBy('first_name')->get(['id', 'first_name', 'last_name', 'employee_code']);
+            $allSubjects   = Subject::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code', 'type', 'stream', 'is_coscholastic']);
+            $allTeachers   = Employee::where('is_active', true)->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'employee_code', 'designation', 'department', 'employee_type']);
+            if ($allTeachers->isEmpty()) {
+                $allTeachers = Employee::orderBy('first_name')->get(['id', 'first_name', 'last_name', 'employee_code', 'designation', 'department', 'employee_type']);
+            }
             $totalSubjects = $allSubjects->count();
             $totalTeachers = $allTeachers->count();
             $school        = SchoolSetting::getSingleton();
 
+            // Partition subjects by type for conditional selection boxes
+            $theorySubjects = $allSubjects->filter(fn($s) => in_array($s->type, ['theory', 'language']));
+            $activitySubjects = $allSubjects->filter(fn($s) => $s->type === 'activity' || $s->is_coscholastic);
+            $practicalSubjects = $allSubjects->filter(fn($s) => $s->type === 'practical' || stripos($s->name, 'computer') !== false || stripos($s->name, 'lab') !== false);
+
+            // Partition teachers by specialty for intuitive staff assignment
+            $activityTeachers = $allTeachers->filter(function ($t) {
+                $desig = strtolower($t->designation ?? '');
+                $dept = strtolower($t->department ?? '');
+                return str_contains($desig, 'sport') || str_contains($desig, 'physical') || str_contains($desig, 'yoga') ||
+                       str_contains($desig, 'music') || str_contains($desig, 'dance') || str_contains($desig, 'art') ||
+                       str_contains($desig, 'coach') || str_contains($dept, 'sport') || str_contains($dept, 'physical') ||
+                       str_contains($dept, 'performing') || str_contains($dept, 'fine art');
+            });
+
+            $labTeachers = $allTeachers->filter(function ($t) {
+                $desig = strtolower($t->designation ?? '');
+                $dept = strtolower($t->department ?? '');
+                return str_contains($desig, 'computer') || str_contains($desig, 'lab') || str_contains($desig, 'robotics') ||
+                       str_contains($desig, 'stem') || str_contains($desig, 'it') || str_contains($dept, 'computer') ||
+                       str_contains($dept, 'science lab');
+            });
+
+            $academicTeachers = $allTeachers->filter(function ($t) {
+                return ($t->employee_type ?? 'teaching') === 'teaching';
+            });
+            if ($academicTeachers->isEmpty()) {
+                $academicTeachers = $allTeachers;
+            }
+
             return [
-                'classes'        => $classes,
-                'rawClassesData' => $rawClassesData,
-                'totalStandards' => $totalStandards,
-                'totalSections'  => $totalSections,
-                'totalStudents'  => $totalStudents,
-                'totalSubjects'  => $totalSubjects,
-                'totalTeachers'  => $totalTeachers,
-                'allSubjects'    => $allSubjects,
-                'allTeachers'    => $allTeachers,
-                'school'         => $school,
+                'classes'           => $classes,
+                'rawClassesData'    => $rawClassesData,
+                'totalStandards'    => $totalStandards,
+                'totalSections'     => $totalSections,
+                'totalStudents'     => $totalStudents,
+                'totalSubjects'     => $totalSubjects,
+                'totalTeachers'     => $totalTeachers,
+                'allSubjects'       => $allSubjects,
+                'allTeachers'       => $allTeachers,
+                'theorySubjects'    => $theorySubjects,
+                'activitySubjects'  => $activitySubjects,
+                'practicalSubjects' => $practicalSubjects,
+                'academicTeachers'  => $academicTeachers,
+                'activityTeachers'  => $activityTeachers,
+                'labTeachers'       => $labTeachers,
+                'school'            => $school,
             ];
         });
 
@@ -191,15 +344,24 @@ class ClassesController extends Controller
             return $cls;
         });
 
-        $classes        = $cachedData['classes'];
-        $totalStandards = $cachedData['totalStandards'];
-        $totalSections  = $cachedData['totalSections'];
-        $totalStudents  = $cachedData['totalStudents'];
-        $totalSubjects  = $cachedData['totalSubjects'];
-        $totalTeachers  = $cachedData['totalTeachers'];
-        $allSubjects    = $cachedData['allSubjects'];
-        $allTeachers    = $cachedData['allTeachers'];
-        $school         = $cachedData['school'];
+        $classes           = $cachedData['classes'];
+        $totalStandards    = $cachedData['totalStandards'];
+        $totalSections     = $cachedData['totalSections'];
+        $totalStudents     = $cachedData['totalStudents'];
+        $totalSubjects     = $cachedData['totalSubjects'];
+        $totalTeachers     = $cachedData['totalTeachers'];
+        $allSubjects       = $cachedData['allSubjects'];
+        $allTeachers       = $cachedData['allTeachers'];
+        $theorySubjects    = $cachedData['theorySubjects'];
+        $activitySubjects  = $cachedData['activitySubjects'];
+        $practicalSubjects = $cachedData['practicalSubjects'];
+        $academicTeachers  = $cachedData['academicTeachers'];
+        $activityTeachers  = $cachedData['activityTeachers'];
+        $labTeachers       = $cachedData['labTeachers'];
+        $school            = $cachedData['school'];
+
+        $authEmployeeId = \App\Http\Controllers\Admin\PeriodReportController::resolveAuthEmployeeId();
+        $canManageTimetable = self::canManageTimetable(auth()->user());
 
         return view('classes.index', compact(
             'classes',
@@ -213,7 +375,15 @@ class ClassesController extends Controller
             'totalTeachers',
             'allSubjects',
             'allTeachers',
-            'school'
+            'theorySubjects',
+            'activitySubjects',
+            'practicalSubjects',
+            'academicTeachers',
+            'activityTeachers',
+            'labTeachers',
+            'school',
+            'authEmployeeId',
+            'canManageTimetable'
         ));
     }
 
@@ -286,9 +456,30 @@ class ClassesController extends Controller
             })->values()->all();
         }
 
+        // Determine holiday days for this section
+        $setting = SchoolSetting::first();
+        $meta = $setting?->seals_meta ?? [];
+        $secHolidays = $meta['section_day_holidays'] ?? [];
+
+        $holidayDays = [];
+        for ($d = 1; $d <= 6; $d++) {
+            $key = "{$sectionId}_{$d}";
+            if (isset($secHolidays[$key])) {
+                $holidayDays[$d] = (bool) $secHolidays[$key];
+            } else {
+                $daySlots = $timetable->get($d, collect());
+                if ($daySlots->isNotEmpty() && $daySlots->every(fn($t) => $t->period_type === 'holiday')) {
+                    $holidayDays[$d] = true;
+                } else {
+                    $holidayDays[$d] = false;
+                }
+            }
+        }
+
         return response()->json([
-            'class'     => $class,
-            'timetable' => $formattedTimetable,
+            'class'        => $class,
+            'timetable'    => $formattedTimetable,
+            'holiday_days' => $holidayDays,
         ]);
     }
 
@@ -297,6 +488,13 @@ class ClassesController extends Controller
      */
     public function updateSlot(Request $request)
     {
+        if (!self::canManageTimetable(auth()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized: Principal and view-only roles do not have permission to modify timetable entries.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'class_id'               => 'required|exists:classes,id',
             'section_id'             => 'required|exists:sections,id',
@@ -306,25 +504,16 @@ class ClassesController extends Controller
             'teacher_id'             => 'nullable|exists:employees,id',
             'substitute_teacher_id'  => 'nullable|exists:employees,id',
             'room'                   => 'nullable|string|max:50',
-            'period_type'            => 'nullable|string|in:class,free,substitution,activity,holiday',
+            'period_type'            => 'nullable|string|in:class,free,substitution,activity,holiday,practical',
             'notes'                  => 'nullable|string|max:255',
+            'force_conflict'         => 'nullable|boolean',
         ]);
 
         $currentYear = AcademicYear::where('is_current', true)->first()
             ?? AcademicYear::latest('id')->first();
 
-        $periodTimings = [
-            1 => ['09:15:00', '10:00:00'],
-            2 => ['10:00:00', '10:45:00'],
-            3 => ['11:00:00', '11:45:00'],
-            4 => ['11:45:00', '12:30:00'],
-            5 => ['13:15:00', '14:00:00'],
-            6 => ['14:00:00', '14:45:00'],
-            7 => ['15:00:00', '15:45:00'],
-            8 => ['15:45:00', '16:30:00'],
-        ];
-
-        $timings = $periodTimings[$validated['period_number']] ?? ['09:15:00', '10:00:00'];
+        $periodTimings = self::getPeriodTimings();
+        $timings = $periodTimings[$validated['period_number']] ?? ['09:10:00', '09:50:00'];
         $periodType = $validated['period_type'] ?? 'class';
 
         // If subject_id is not provided (e.g. for free period or holiday), fallback to first subject
@@ -333,6 +522,59 @@ class ClassesController extends Controller
         $effectiveTeacherId = $periodType === 'substitution' && !empty($validated['substitute_teacher_id'])
             ? $validated['substitute_teacher_id']
             : ($periodType === 'free' || $periodType === 'holiday' ? null : ($request->input('teacher_id') ?: null));
+
+        // Consecutive period validation: the same teacher cannot be assigned to adjacent periods on the same day
+        if ($effectiveTeacherId && !in_array($periodType, ['free', 'holiday'])) {
+            $consecutiveConflict = self::checkConsecutiveTeacherConflict(
+                (int) $validated['class_id'],
+                (int) $validated['section_id'],
+                (int) $validated['day_of_week'],
+                (int) $currentYear->id,
+                [[
+                    'period_number' => (int) $validated['period_number'],
+                    'teacher_id'    => $effectiveTeacherId,
+                    'period_type'   => $periodType,
+                ]]
+            );
+
+            if ($consecutiveConflict) {
+                return response()->json([
+                    'success'              => false,
+                    'consecutive_conflict' => true,
+                    'message'              => $consecutiveConflict,
+                ], 422);
+            }
+        }
+
+        // Conflict detection: verify teacher is not already assigned to another class during this period
+        if ($effectiveTeacherId && !in_array($periodType, ['free', 'holiday']) && !$request->boolean('force_conflict')) {
+            $conflict = Timetable::where('academic_year_id', $currentYear->id)
+                ->where('day_of_week', $validated['day_of_week'])
+                ->where('period_number', $validated['period_number'])
+                ->where('teacher_id', $effectiveTeacherId)
+                ->where('is_active', true)
+                ->whereNotIn('period_type', ['holiday', 'free'])
+                ->where(function ($q) use ($validated) {
+                    $q->where('class_id', '!=', $validated['class_id'])
+                      ->orWhere('section_id', '!=', $validated['section_id']);
+                })
+                ->with(['class', 'section', 'subject', 'teacher'])
+                ->first();
+
+            if ($conflict) {
+                $teacherName = $conflict->teacher ? ($conflict->teacher->first_name . ' ' . $conflict->teacher->last_name) : 'Faculty member';
+                $conflictClass = ($conflict->class?->name ?? 'Class') . ' - Section ' . ($conflict->section?->name ?? 'A');
+                $conflictSubject = $conflict->subject?->name ?? 'another session';
+                $dayNames = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
+                $dayName = $dayNames[$validated['day_of_week']] ?? 'this day';
+
+                return response()->json([
+                    'success'  => false,
+                    'conflict' => true,
+                    'message'  => "Teacher Conflict: {$teacherName} is already assigned to {$conflictClass} ({$conflictSubject}) during Period {$validated['period_number']} on {$dayName}."
+                ], 422);
+            }
+        }
 
         $timetable = Timetable::updateOrCreate(
             [
@@ -395,10 +637,192 @@ class ClassesController extends Controller
     }
 
     /**
+     * Save/update all periods of a specific day for a class section (Edit Timetable batch save).
+     */
+    public function saveDay(Request $request)
+    {
+        if (!self::canManageTimetable(auth()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized: Principal and view-only roles do not have permission to modify timetable entries.'
+            ], 403);
+        }
+
+        if (!$request->has('slots') && $request->has('periods')) {
+            $request->merge(['slots' => $request->input('periods')]);
+        }
+
+        $validated = $request->validate([
+            'class_id'              => 'required|exists:classes,id',
+            'section_id'            => 'required|exists:sections,id',
+            'day_of_week'           => 'required|integer|min:1|max:6',
+            'slots'                 => 'required|array',
+            'slots.*.period_number' => 'required|integer|min:1|max:8',
+            'slots.*.subject_id'    => 'nullable',
+            'slots.*.teacher_id'    => 'nullable',
+            'slots.*.room'          => 'nullable|string|max:50',
+            'slots.*.period_type'   => 'nullable|string|in:class,free,substitution,activity,holiday,practical',
+            'force_conflict'        => 'nullable|boolean',
+        ]);
+
+        $currentYear = AcademicYear::where('is_current', true)->first()
+            ?? AcademicYear::latest('id')->first();
+
+        $periodTimings = self::getPeriodTimings();
+        $forceConflict = $request->boolean('force_conflict');
+
+        // Consecutive period validation: the same teacher cannot be assigned to adjacent periods on the same day
+        $consecutiveConflict = self::checkConsecutiveTeacherConflict(
+            (int) $validated['class_id'],
+            (int) $validated['section_id'],
+            (int) $validated['day_of_week'],
+            (int) $currentYear->id,
+            $validated['slots']
+        );
+
+        if ($consecutiveConflict) {
+            return response()->json([
+                'success'              => false,
+                'consecutive_conflict' => true,
+                'message'              => $consecutiveConflict,
+            ], 422);
+        }
+
+        // Conflict detection: verify no assigned teacher has a collision in another class/section
+        if (!$forceConflict) {
+            foreach ($validated['slots'] as $slotData) {
+                $teacherId = !empty($slotData['teacher_id']) ? (int) $slotData['teacher_id'] : null;
+                $periodType = $slotData['period_type'] ?? 'class';
+                $periodNum = (int) $slotData['period_number'];
+
+                if ($teacherId && !in_array($periodType, ['free', 'holiday'])) {
+                    $conflict = Timetable::where('academic_year_id', $currentYear->id)
+                        ->where('day_of_week', $validated['day_of_week'])
+                        ->where('period_number', $periodNum)
+                        ->where('teacher_id', $teacherId)
+                        ->where('is_active', true)
+                        ->whereNotIn('period_type', ['holiday', 'free'])
+                        ->where(function ($q) use ($validated) {
+                            $q->where('class_id', '!=', $validated['class_id'])
+                              ->orWhere('section_id', '!=', $validated['section_id']);
+                        })
+                        ->with(['class', 'section', 'subject', 'teacher'])
+                        ->first();
+
+                    if ($conflict) {
+                        $teacherName = $conflict->teacher ? ($conflict->teacher->first_name . ' ' . $conflict->teacher->last_name) : 'Faculty member';
+                        $conflictClass = ($conflict->class?->name ?? 'Class') . ' - Section ' . ($conflict->section?->name ?? 'A');
+                        $conflictSubject = $conflict->subject?->name ?? 'another session';
+                        $dayNames = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
+                        $dayName = $dayNames[$validated['day_of_week']] ?? 'this day';
+
+                        return response()->json([
+                            'success'  => false,
+                            'conflict' => true,
+                            'message'  => "Teacher Conflict: {$teacherName} is already assigned to {$conflictClass} ({$conflictSubject}) during Period {$periodNum} on {$dayName}."
+                        ], 422);
+                    }
+                }
+            }
+        }
+
+        $savedSlots = [];
+        $firstSubject = Subject::first();
+
+        foreach ($validated['slots'] as $slotData) {
+            $periodNum = (int) $slotData['period_number'];
+            $timings = $periodTimings[$periodNum] ?? ['09:10:00', '09:50:00'];
+            $periodType = $slotData['period_type'] ?? 'class';
+            $subjectId = !empty($slotData['subject_id']) ? (int) $slotData['subject_id'] : ($firstSubject?->id ?? 1);
+            $teacherId = (!empty($slotData['teacher_id']) && !in_array($periodType, ['free', 'holiday'])) ? (int) $slotData['teacher_id'] : null;
+            $room = $slotData['room'] ?? ($periodType === 'holiday' ? 'Holiday' : 'Room 1-A');
+
+            $timetable = Timetable::updateOrCreate(
+                [
+                    'class_id'         => $validated['class_id'],
+                    'section_id'       => $validated['section_id'],
+                    'day_of_week'      => $validated['day_of_week'],
+                    'period_number'    => $periodNum,
+                    'academic_year_id' => $currentYear->id,
+                ],
+                [
+                    'subject_id'     => $subjectId,
+                    'teacher_id'     => $teacherId,
+                    'start_time'     => $timings[0],
+                    'end_time'       => $timings[1],
+                    'room'           => $room,
+                    'is_active'      => true,
+                    'period_type'    => $periodType,
+                    'effective_from' => '2025-06-01',
+                ]
+            );
+
+            // Ensure TeacherSubjectAllocation exists if both subject and teacher are set
+            if ($subjectId && $teacherId && $periodType === 'class') {
+                try {
+                    \App\Models\TeacherSubjectAllocation::firstOrCreate([
+                        'subject_id'       => $subjectId,
+                        'employee_id'      => $teacherId,
+                        'class_id'         => $validated['class_id'],
+                    ], [
+                        'academic_year_id' => $currentYear?->id,
+                    ]);
+                } catch (\Throwable $e) {}
+            }
+
+            $timetable->load(['subject', 'teacher']);
+            $subjectName = $timetable->subject?->name ?? 'Academic Class';
+            $teacherName = $timetable->teacher ? ($timetable->teacher->first_name . ' ' . $timetable->teacher->last_name) : 'Faculty';
+
+            if ($periodType === 'free') {
+                $subjectName = 'Free Period / Self Study';
+                $teacherName = 'Free Slot';
+            } elseif ($periodType === 'holiday') {
+                $subjectName = 'Holiday / No Class';
+                $teacherName = 'Holiday';
+            } elseif ($periodType === 'substitution') {
+                $teacherName = 'Sub: ' . $teacherName;
+            }
+
+            $savedSlots[] = [
+                'id'           => $timetable->id,
+                'period'       => (int) $timetable->period_number,
+                'subject_id'   => $timetable->subject_id,
+                'subject_name' => $subjectName,
+                'subject_code' => $timetable->subject?->code ?? '',
+                'subject_type' => $periodType,
+                'period_type'  => $periodType,
+                'teacher_id'   => $timetable->teacher_id,
+                'teacher_name' => $teacherName,
+                'room'         => $timetable->room,
+                'start_time'   => Carbon::parse($timetable->start_time)->format('h:i A'),
+                'end_time'     => Carbon::parse($timetable->end_time)->format('h:i A'),
+            ];
+        }
+
+        self::clearCache();
+
+        return response()->json([
+            'success'     => true,
+            'message'     => 'Timetable saved successfully!',
+            'slots'       => $savedSlots,
+            'day_periods' => $savedSlots,
+        ]);
+    }
+
+    /**
      * Mark an entire day as holiday or restore regular schedule for a class section.
+     * Holiday status is represented separately from timetable data so records are NOT deleted.
      */
     public function toggleHoliday(Request $request)
     {
+        if (!self::canManageTimetable(auth()->user())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized: Principal and view-only roles do not have permission to manage holidays.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'class_id'    => 'required|exists:classes,id',
             'section_id'  => 'required|exists:sections,id',
@@ -406,51 +830,28 @@ class ClassesController extends Controller
             'is_holiday'  => 'required|boolean',
         ]);
 
-        $currentYear = AcademicYear::where('is_current', true)->first()
-            ?? AcademicYear::latest('id')->first();
+        $sectionId = (int) $validated['section_id'];
+        $dayNum = (int) $validated['day_of_week'];
+        $isHoliday = (bool) $validated['is_holiday'];
 
-        $periodTimings = [
-            1 => ['09:15:00', '10:00:00'],
-            2 => ['10:00:00', '10:45:00'],
-            3 => ['11:00:00', '11:45:00'],
-            4 => ['11:45:00', '12:30:00'],
-            5 => ['13:15:00', '14:00:00'],
-            6 => ['14:00:00', '14:45:00'],
-            7 => ['15:00:00', '15:45:00'],
-            8 => ['15:45:00', '16:30:00'],
-        ];
-
-        $firstSubject = Subject::first();
-
-        for ($p = 1; $p <= 8; $p++) {
-            $timings = $periodTimings[$p] ?? ['09:15:00', '10:00:00'];
-            Timetable::updateOrCreate(
-                [
-                    'class_id'         => $validated['class_id'],
-                    'section_id'       => $validated['section_id'],
-                    'day_of_week'      => $validated['day_of_week'],
-                    'period_number'    => $p,
-                    'academic_year_id' => $currentYear->id,
-                ],
-                [
-                    'subject_id'     => $firstSubject?->id ?? 1,
-                    'teacher_id'     => null,
-                    'start_time'     => $timings[0],
-                    'end_time'       => $timings[1],
-                    'room'           => $validated['is_holiday'] ? 'Holiday' : 'Room',
-                    'is_active'      => true,
-                    'period_type'    => $validated['is_holiday'] ? 'holiday' : 'class',
-                    'effective_from' => '2025-06-01',
-                ]
-            );
+        // Save holiday status separately in SchoolSetting seals_meta
+        $setting = SchoolSetting::first();
+        if ($setting) {
+            $meta = $setting->seals_meta ?? [];
+            if (!isset($meta['section_day_holidays']) || !is_array($meta['section_day_holidays'])) {
+                $meta['section_day_holidays'] = [];
+            }
+            $meta['section_day_holidays']["{$sectionId}_{$dayNum}"] = $isHoliday;
+            $setting->update(['seals_meta' => $meta]);
         }
+        Cache::forever("section_day_holiday_{$sectionId}_{$dayNum}", $isHoliday);
 
         self::clearCache();
 
         return response()->json([
             'success'    => true,
-            'is_holiday' => $validated['is_holiday'],
-            'message'    => $validated['is_holiday'] ? 'Day marked as holiday successfully!' : 'Regular schedule restored for this day.',
+            'is_holiday' => $isHoliday,
+            'message'    => $isHoliday ? 'Day marked as holiday successfully!' : 'Regular schedule restored for this day.',
         ]);
     }
 
@@ -459,6 +860,13 @@ class ClassesController extends Controller
      */
     public function declareHoliday(Request $request)
     {
+        if (!self::canManageTimetable(auth()->user())) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized: Principal and view-only roles do not have permission to manage holidays.'], 403);
+            }
+            return back()->with('error', 'Unauthorized: Principal and view-only roles do not have permission to manage holidays.');
+        }
+
         $request->validate([
             'date'        => 'required|date',
             'name'        => 'required|string|max:255',
@@ -502,6 +910,13 @@ class ClassesController extends Controller
      */
     public function deleteHoliday(int $id)
     {
+        if (!self::canManageTimetable(auth()->user())) {
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized: Principal and view-only roles do not have permission to manage holidays.'], 403);
+            }
+            return back()->with('error', 'Unauthorized: Principal and view-only roles do not have permission to manage holidays.');
+        }
+
         $holiday = Holiday::findOrFail($id);
         $name    = $holiday->name;
         $dateStr = Carbon::parse($holiday->date)->format('D, M d, Y');
@@ -645,22 +1060,22 @@ class ClassesController extends Controller
     /**
      * Calculate period status from time.
      */
-    private function calculatePeriodStatus(string $timeStr, int $dayOfWeek): array
+    public static function calculatePeriodStatus(string $timeStr, int $dayOfWeek = 1): array
     {
         $time = Carbon::parse($timeStr);
 
         $schedule = [
-            ['type' => 'period',   'period' => 1, 'name' => 'Period 1',                    'start' => '09:15:00', 'end' => '10:00:00'],
-            ['type' => 'period',   'period' => 2, 'name' => 'Period 2',                    'start' => '10:00:00', 'end' => '10:45:00'],
-            ['type' => 'break',    'period' => 0, 'name' => 'Morning Interval Break',       'start' => '10:45:00', 'end' => '11:00:00'],
-            ['type' => 'period',   'period' => 3, 'name' => 'Period 3',                    'start' => '11:00:00', 'end' => '11:45:00'],
-            ['type' => 'period',   'period' => 4, 'name' => 'Period 4',                    'start' => '11:45:00', 'end' => '12:30:00'],
-            ['type' => 'lunch',    'period' => 0, 'name' => 'Lunch Break',                 'start' => '12:30:00', 'end' => '13:15:00'],
-            ['type' => 'period',   'period' => 5, 'name' => 'Period 5',                    'start' => '13:15:00', 'end' => '14:00:00'],
-            ['type' => 'period',   'period' => 6, 'name' => 'Period 6',                    'start' => '14:00:00', 'end' => '14:45:00'],
-            ['type' => 'break',    'period' => 0, 'name' => 'Afternoon Refreshment Break', 'start' => '14:45:00', 'end' => '15:00:00'],
-            ['type' => 'period',   'period' => 7, 'name' => 'Period 7',                    'start' => '15:00:00', 'end' => '15:45:00'],
-            ['type' => 'period',   'period' => 8, 'name' => 'Period 8',                    'start' => '15:45:00', 'end' => '16:30:00'],
+            ['type' => 'period',   'period' => 1, 'name' => 'Period 1',                    'start' => '09:10:00', 'end' => '09:50:00'],
+            ['type' => 'period',   'period' => 2, 'name' => 'Period 2',                    'start' => '09:50:00', 'end' => '10:30:00'],
+            ['type' => 'break',    'period' => 0, 'name' => 'Morning Interval Break',       'start' => '10:30:00', 'end' => '10:40:00'],
+            ['type' => 'period',   'period' => 3, 'name' => 'Period 3',                    'start' => '10:40:00', 'end' => '11:20:00'],
+            ['type' => 'period',   'period' => 4, 'name' => 'Period 4',                    'start' => '11:20:00', 'end' => '12:00:00'],
+            ['type' => 'period',   'period' => 5, 'name' => 'Period 5',                    'start' => '12:00:00', 'end' => '12:40:00'],
+            ['type' => 'lunch',    'period' => 0, 'name' => 'Lunch Break',                 'start' => '12:40:00', 'end' => '13:20:00'],
+            ['type' => 'period',   'period' => 6, 'name' => 'Period 6',                    'start' => '13:20:00', 'end' => '14:00:00'],
+            ['type' => 'break',    'period' => 0, 'name' => 'Afternoon Refreshment Break', 'start' => '14:00:00', 'end' => '14:10:00'],
+            ['type' => 'period',   'period' => 7, 'name' => 'Period 7',                    'start' => '14:10:00', 'end' => '14:50:00'],
+            ['type' => 'period',   'period' => 8, 'name' => 'Period 8 — Diary & Wrap-up',  'start' => '14:50:00', 'end' => '15:00:00'],
         ];
 
         if ($dayOfWeek === 7) {
@@ -670,23 +1085,23 @@ class ClassesController extends Controller
                 'title'         => 'Sunday — Campus Holiday',
                 'period_number' => 0,
                 'is_live'       => false,
-                'message'       => 'Classes will resume on Monday at 09:15 AM',
+                'message'       => 'Classes will resume on Monday at 09:10 AM',
                 'schedule'      => $schedule,
             ];
         }
 
-        $schoolStart = Carbon::parse('09:15:00');
-        $schoolEnd   = Carbon::parse('16:30:00');
+        $schoolStart = Carbon::parse('09:10:00');
+        $schoolEnd   = Carbon::parse('15:00:00');
 
         if ($time->lt($schoolStart)) {
             $minsUntil = $time->diffInMinutes($schoolStart);
             return [
                 'status'        => 'before_school',
                 'badge_color'   => 'amber',
-                'title'         => 'School Starts at 09:15 AM',
+                'title'         => 'School Starts at 09:10 AM',
                 'period_number' => 0,
                 'is_live'       => false,
-                'message'       => "Period 1 begins in {$minsUntil} minutes (09:15 AM)",
+                'message'       => "Period 1 begins in {$minsUntil} minutes (09:10 AM)",
                 'schedule'      => $schedule,
             ];
         }
@@ -698,7 +1113,7 @@ class ClassesController extends Controller
                 'title'         => 'School Dispersed for the Day',
                 'period_number' => 0,
                 'is_live'       => false,
-                'message'       => 'Campus schedule complete. Next session tomorrow at 09:15 AM',
+                'message'       => 'Campus schedule complete. Next session tomorrow at 09:10 AM',
                 'schedule'      => $schedule,
             ];
         }
