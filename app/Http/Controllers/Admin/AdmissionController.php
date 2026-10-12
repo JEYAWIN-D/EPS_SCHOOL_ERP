@@ -391,10 +391,28 @@ class AdmissionController extends Controller
             ->get()
             ->groupBy('class_id');
 
-        // Fetch active transport routes with stops for Transport facility
-        $transportRoutes = \App\Models\TransportRoute::with(['stops' => fn($q) => $q->orderBy('stop_order')])
+        // Fetch active transport routes with stops and vehicle details for Transport facility
+        $transportRoutes = \App\Models\TransportRoute::with(['stops' => fn($q) => $q->orderBy('stop_order'), 'vehicle'])
             ->where('is_active', true)
-            ->get();
+            ->get()
+            ->map(function ($route) {
+                $veh = $route->vehicle;
+                $occupied = \App\Models\TransportAllotment::where('route_id', $route->id)->where('is_active', true)->count();
+                $cap = $veh ? ($veh->capacity ?: $veh->seating_capacity) : 0;
+                $route->vehicle_details = $veh ? [
+                    'vehicle_number'   => $veh->vehicle_number,
+                    'model'            => $veh->model,
+                    'vehicle_type'     => $veh->vehicle_type,
+                    'capacity'         => $cap,
+                    'occupied'         => $occupied,
+                    'available'        => max(0, $cap - $occupied),
+                    'driver_name'      => $veh->driver_name,
+                    'driver_mobile'    => $veh->driver_mobile,
+                    'attendant_name'   => $veh->attendant_name,
+                    'attendant_mobile' => $veh->attendant_mobile,
+                ] : null;
+                return $route;
+            });
 
         // Concession categories specified by school
         $concessionTypes = [
@@ -791,15 +809,25 @@ class AdmissionController extends Controller
         $isAsp = $request->boolean('is_asp');
         $aspFee = $isAsp ? (float)($request->asp_fee ?? 15000) : 0;
 
-        // Transport Facility Fee — based on chosen Route & Stopping distance
+        // Transport Facility Fee — based on chosen Route & Stopping distance with seating capacity validation
         $transportFee = 0;
         if ($request->filled('transport_route_id')) {
+            $chosenRoute = \App\Models\TransportRoute::with('vehicle')->find($request->transport_route_id);
+            if ($chosenRoute && $chosenRoute->vehicle) {
+                $veh = $chosenRoute->vehicle;
+                $cap = $veh->capacity ?: $veh->seating_capacity;
+                if ($cap > 0) {
+                    $occupied = \App\Models\TransportAllotment::where('route_id', $chosenRoute->id)->where('is_active', true)->count();
+                    if ($occupied >= $cap) {
+                        return back()->withErrors(['transport_route_id' => "Van / Route '{$chosenRoute->route_name}' has reached full seating capacity ({$occupied}/{$cap} seats). Please select another route."])->withInput();
+                    }
+                }
+            }
             if ($request->filled('transport_stop_id')) {
                 $stop = \App\Models\TransportStop::find($request->transport_stop_id);
                 $transportFee = (float)($stop?->fare ?? $request->transport_fee ?? 0);
             } else {
-                $route = \App\Models\TransportRoute::find($request->transport_route_id);
-                $transportFee = (float)($route?->fee ?? $request->transport_fee ?? 0);
+                $transportFee = (float)($chosenRoute?->fee ?? $request->transport_fee ?? 0);
             }
         }
 
@@ -1234,7 +1262,7 @@ class AdmissionController extends Controller
             ]);
 
             // Save Student Enrollment
-            \App\Models\StudentEnrollment::create([
+            $studentEnrollment = \App\Models\StudentEnrollment::create([
                 'student_id'       => $student->id,
                 'class_id'         => $request->class_id,
                 'section_id'       => $sectionModel?->id,
@@ -1244,6 +1272,33 @@ class AdmissionController extends Controller
                 'status'           => $enrollmentStatus,
                 'enrollment_date'  => $paymentDate,
             ]);
+
+            // Save Transport Allotment if transport selected
+            if ($request->filled('transport_route_id')) {
+                $chosenRoute = \App\Models\TransportRoute::with('vehicle')->find($request->transport_route_id);
+                $chosenStop = $request->filled('transport_stop_id') ? \App\Models\TransportStop::find($request->transport_stop_id) : null;
+                if ($chosenRoute) {
+                    \App\Models\TransportAllotment::updateOrCreate(
+                        [
+                            'student_id'       => $student->id,
+                            'academic_year_id' => $currentYear?->id,
+                        ],
+                        [
+                            'enrollment_id'    => $studentEnrollment->id,
+                            'route_id'         => $chosenRoute->id,
+                            'stop_id'          => $chosenStop?->id,
+                            'vehicle_id'       => $chosenStop?->vehicle_id ?: $chosenRoute->vehicle_id,
+                            'fee'              => $transportFee,
+                            'pickup_time'      => $chosenStop?->pickup_time ?? $chosenRoute->departure_time,
+                            'drop_time'        => $chosenStop?->drop_time ?? $chosenRoute->arrival_time,
+                            'pickup_point'     => $chosenStop?->name ?? $chosenRoute->from_location,
+                            'boarding_stop'    => $chosenStop?->name ?? $chosenRoute->from_location,
+                            'allotment_date'   => $paymentDate,
+                            'is_active'        => true,
+                        ]
+                    );
+                }
+            }
 
             // Direct document file uploads processing
             $docInputs = [

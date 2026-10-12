@@ -2203,12 +2203,14 @@
                 <div x-show="transportRequired" x-transition class="space-y-4 pt-3 border-t border-[#FECACA]">
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Select Transport Route</label>
+                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Select Transport Van &amp; Route</label>
                       <select x-model="selectedRouteId" @change="selectedStopId = ''"
                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-[#8C2826]">
-                        <option value="">-- Choose School Route --</option>
+                        <option value="">-- Choose Van Route --</option>
                         <template x-for="route in transportRoutesData" :key="route.id">
-                          <option :value="route.id" x-text="route.route_name + ' (' + route.distance_km + ' km total)'"></option>
+                          <option :value="route.id" 
+                                  :disabled="route.vehicle_details && route.vehicle_details.capacity > 0 && route.vehicle_details.available <= 0"
+                                  x-text="route.route_name + ' • ' + (route.vehicle_details ? route.vehicle_details.vehicle_number + ' (' + route.vehicle_details.available + '/' + route.vehicle_details.capacity + ' seats)' : route.distance_km + ' km')"></option>
                         </template>
                       </select>
                     </div>
@@ -2219,21 +2221,49 @@
                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-[#8C2826]">
                         <option value="">-- Choose Stop / Landmark --</option>
                         <template x-for="stop in currentRouteStops" :key="stop.id">
-                          <option :value="stop.id" x-text="stop.name + ' • ' + stop.distance_km + ' km • ' + (stop.landmark ? '(' + stop.landmark + ') • ' : '') + formatMoney(stop.fare)"></option>
+                          <option :value="stop.id" x-text="'#' + stop.stop_order + ' ' + stop.name + ' • ' + stop.distance_km + ' km • ' + (stop.pickup_time ? stop.pickup_time + ' • ' : '') + formatMoney(stop.fare)"></option>
                         </template>
                       </select>
                     </div>
                   </div>
 
+                  {{-- Van & Staff Assignment Details Badge --}}
+                  <template x-if="currentRoute && currentRoute.vehicle_details">
+                    <div class="p-3.5 bg-rose-50/70 rounded-xl border border-rose-200 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <span class="text-[10px] font-bold text-rose-500 uppercase block tracking-wider">Assigned Van</span>
+                        <span class="font-extrabold text-slate-900 block" x-text="currentRoute.vehicle_details.vehicle_number"></span>
+                        <span class="text-[11px] text-slate-500" x-text="currentRoute.vehicle_details.model || 'Standard Van'"></span>
+                      </div>
+                      <div>
+                        <span class="text-[10px] font-bold text-rose-500 uppercase block tracking-wider">Driver &amp; Attendant</span>
+                        <span class="font-semibold text-slate-800 block" x-text="'Driver: ' + (currentRoute.vehicle_details.driver_name || 'Assigned') + (currentRoute.vehicle_details.driver_mobile ? ' (' + currentRoute.vehicle_details.driver_mobile + ')' : '')"></span>
+                        <span class="text-[11px] text-slate-600 block" x-text="'Attendant: ' + (currentRoute.vehicle_details.attendant_name || 'Assigned') + (currentRoute.vehicle_details.attendant_mobile ? ' (' + currentRoute.vehicle_details.attendant_mobile + ')' : '')"></span>
+                      </div>
+                      <div>
+                        <span class="text-[10px] font-bold text-rose-500 uppercase block tracking-wider">Seating Capacity</span>
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                          <span class="font-bold" :class="currentRoute.vehicle_details.available > 0 ? 'text-emerald-700' : 'text-red-700'"
+                                x-text="currentRoute.vehicle_details.available + ' / ' + currentRoute.vehicle_details.capacity + ' seats available'"></span>
+                          <span x-show="currentRoute.vehicle_details.available <= 0" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-300">FULL</span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
                   {{-- Live Stopping, Km & Fee Summary Badge --}}
                   <div x-show="currentStop" class="p-4 bg-white rounded-xl border border-[#FECACA] flex items-center justify-between text-xs shadow-2xs">
                     <div>
-                      <span class="font-extrabold text-[#380E0D] block" x-text="currentStop?.name"></span>
-                      <span class="text-[11px] text-slate-500" x-text="'Distance: ' + currentStop?.distance_km + ' km' + (currentStop?.landmark ? ' • Landmark: ' + currentStop.landmark : '')"></span>
+                      <span class="font-extrabold text-[#380E0D] text-sm block" x-text="currentStop?.name"></span>
+                      <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 mt-0.5">
+                        <span x-text="'Distance: ' + currentStop?.distance_km + ' km'"></span>
+                        <span x-show="currentStop?.pickup_time" x-text="'Morning Pickup: ' + currentStop?.pickup_time"></span>
+                        <span x-show="currentStop?.drop_time" x-text="'Evening Drop: ' + currentStop?.drop_time"></span>
+                      </div>
                     </div>
                     <div class="text-right">
-                      <span class="text-[10px] uppercase font-bold text-slate-400 block">Transport Fee</span>
-                      <span class="font-extrabold text-[#8C2826] text-sm tabular-nums" x-text="formatMoney(transportFee)"></span>
+                      <span class="text-[10px] uppercase font-bold text-slate-400 block">Transport Facility Fee</span>
+                      <span class="font-extrabold text-[#8C2826] text-base tabular-nums" x-text="formatMoney(transportFee)"></span>
                     </div>
                   </div>
                 </div>

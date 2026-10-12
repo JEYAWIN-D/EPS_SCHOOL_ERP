@@ -857,13 +857,21 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/routes',                  [TransportController::class, 'storeRoute'])->name('routes.store');
         Route::get('/routes/{id}/edit',         [TransportController::class, 'editRoute'])->name('routes.edit');
         Route::put('/routes/{id}',              [TransportController::class, 'updateRoute'])->name('routes.update');
+        Route::delete('/routes/{id}',           [TransportController::class, 'destroyRoute'])->name('routes.destroy');
         Route::patch('/routes/{id}/toggle',     [TransportController::class, 'toggleRoute'])->name('routes.toggle');
-        // Vehicles CRUD
-        Route::get('/vehicles',       [TransportController::class, 'vehicles'])->name('vehicles');
-        Route::get('/vehicles/create',[TransportController::class,'createVehicle'])->name('vehicles.create');
-        Route::post('/vehicles',      [TransportController::class,'storeVehicle'])->name('vehicles.store');
-        Route::get('/vehicles/{id}/edit',[TransportController::class,'editVehicle'])->name('vehicle.edit');
-        Route::put('/vehicles/{id}',  [TransportController::class,'updateVehicle'])->name('vehicle.update');
+        // Vehicles CRUD & Profile
+        Route::get('/vehicles',                 [TransportController::class, 'vehicles'])->name('vehicles');
+        Route::get('/vehicles/create',          [TransportController::class, 'createVehicle'])->name('vehicles.create');
+        Route::post('/vehicles',                [TransportController::class, 'storeVehicle'])->name('vehicles.store');
+        Route::get('/vehicles/{id}',            [TransportController::class, 'showVehicle'])->name('vehicle.show');
+        Route::get('/vehicles/{id}/edit',       [TransportController::class, 'editVehicle'])->name('vehicle.edit');
+        Route::put('/vehicles/{id}',            [TransportController::class, 'updateVehicle'])->name('vehicle.update');
+        Route::delete('/vehicles/{id}',         [TransportController::class, 'destroyVehicle'])->name('vehicle.destroy');
+        // Vehicle Document Management
+        Route::post('/vehicles/{id}/documents', [TransportController::class, 'uploadDocument'])->name('vehicle.documents.store');
+        Route::get('/documents/{id}/view',      [TransportController::class, 'viewDocument'])->name('documents.view');
+        Route::get('/documents/{id}/download',  [TransportController::class, 'downloadDocument'])->name('documents.download');
+        Route::delete('/documents/{id}',        [TransportController::class, 'destroyDocument'])->name('documents.destroy');
         // Drivers
         Route::get('/drivers',                           [TransportController::class, 'drivers'])->name('drivers');
         Route::get('/drivers/create',                    [TransportController::class, 'createDriver'])->name('drivers.create');
