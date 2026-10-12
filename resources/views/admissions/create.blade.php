@@ -314,6 +314,7 @@
       this.guardianPhotoFileName = file.name;
     }
   },
+  enableDocUpload: false, // Disabled by default; toggle ON whenever documents need to be uploaded
   docUploadMode: 'desk',
 
   // Multi-Format Date of Birth State (Day, Month, Year selectors & DD/MM/YYYY text entry)
@@ -2885,29 +2886,57 @@
       <div class="pt-8 border-t border-slate-100 space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
-            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wide">Student Documents &amp; Certificates</h3>
-            <p class="text-xs text-slate-500 font-medium mt-0.5">Upload certificate scans now at the desk, OR generate a self-service QR code for parent to upload from home</p>
+            <div class="flex items-center gap-2">
+              <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wide">Student Documents &amp; Certificates</h3>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full transition"
+                    :class="enableDocUpload ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'"
+                    x-text="enableDocUpload ? 'Upload Enabled' : 'Disabled (Optional)'"></span>
+            </div>
+            <p class="text-xs text-slate-500 font-medium mt-0.5">Attach digital scans at desk when needed, OR leave disabled and upload later anytime via student profile / parent QR code</p>
           </div>
           
-          {{-- Mode Selector Tabs --}}
-          <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl shrink-0">
-            <button type="button" @click="docUploadMode = 'desk'"
-                    :class="docUploadMode === 'desk' ? 'bg-white text-[#8C2826] shadow-xs' : 'text-slate-600 hover:text-slate-900'"
-                    class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-              <span>Upload at Desk</span>
+          <div class="flex items-center gap-2">
+            {{-- Toggle Button to Enable/Disable Document Upload --}}
+            <button type="button" @click="enableDocUpload = !enableDocUpload"
+                    class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer border shadow-2xs"
+                    :class="enableDocUpload ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'">
+              <span class="w-2 h-2 rounded-full" :class="enableDocUpload ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'"></span>
+              <span x-text="enableDocUpload ? 'Disable Upload' : 'Enable Upload When Needed'"></span>
             </button>
-            <button type="button" @click="docUploadMode = 'qr_home'"
-                    :class="docUploadMode === 'qr_home' ? 'bg-white text-[#8C2826] shadow-xs' : 'text-slate-600 hover:text-slate-900'"
-                    class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-              <span>Scan QR from Home</span>
-            </button>
+
+            {{-- Mode Selector Tabs (only visible when upload is enabled) --}}
+            <div x-show="enableDocUpload" x-transition class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl shrink-0">
+              <button type="button" @click="docUploadMode = 'desk'"
+                      :class="docUploadMode === 'desk' ? 'bg-white text-[#8C2826] shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                      class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                <span>Upload at Desk</span>
+              </button>
+              <button type="button" @click="docUploadMode = 'qr_home'"
+                      :class="docUploadMode === 'qr_home' ? 'bg-white text-[#8C2826] shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+                      class="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                <span>Scan QR from Home</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {{-- Mode A: Direct Document Uploads Now --}}
-        <div x-show="docUploadMode === 'desk'" x-transition class="space-y-4">
+        {{-- When Disabled: Informative placeholder banner --}}
+        <div x-show="!enableDocUpload" x-transition class="p-4 bg-slate-50/80 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+          <div class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-slate-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>Document file upload is <strong>disabled</strong> for this entry. You can complete admission now and upload scans later from the student profile, or click <strong>Enable Upload</strong> to attach files now.</span>
+          </div>
+          <button type="button" @click="enableDocUpload = true" class="px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg font-bold text-xs hover:bg-slate-100 transition shrink-0 cursor-pointer shadow-2xs">
+            + Enable Upload Now
+          </button>
+        </div>
+
+        {{-- Mode A: Direct Document Uploads Now (visible only when enabled and in 'desk' mode) --}}
+        <div x-show="enableDocUpload && docUploadMode === 'desk'" x-transition class="space-y-4">
           <div class="p-3.5 bg-[#FFF5F5] rounded-2xl border border-[#FECACA] flex items-center gap-2.5 text-xs text-[#5C1210]">
             <svg class="w-4 h-4 text-[#8C2826] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <span>Attach digital scans or photos directly (PDF, JPG, PNG &bull; max 5MB each). Verified records are stored securely in student dossier.</span>
@@ -2918,9 +2947,9 @@
             <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Birth Certificate</span>
-                <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Mandatory</span>
+                <span class="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Optional</span>
               </div>
-              <input type="file" name="doc_birth_certificate" accept=".pdf,image/*"
+              <input type="file" name="doc_birth_certificate" accept=".pdf,image/*" :disabled="!enableDocUpload"
                      class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
             </div>
 
@@ -2928,9 +2957,9 @@
             <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Student Aadhaar Card</span>
-                <span class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded">Mandatory</span>
+                <span class="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Optional</span>
               </div>
-              <input type="file" name="doc_aadhaar" accept=".pdf,image/*"
+              <input type="file" name="doc_aadhaar" accept=".pdf,image/*" :disabled="!enableDocUpload"
                      class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
             </div>
 
@@ -2940,7 +2969,7 @@
                 <span class="text-xs font-bold text-slate-800">Community Certificate</span>
                 <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">If Applicable</span>
               </div>
-              <input type="file" name="doc_caste" accept=".pdf,image/*"
+              <input type="file" name="doc_caste" accept=".pdf,image/*" :disabled="!enableDocUpload"
                      class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
             </div>
 
@@ -2948,9 +2977,9 @@
             <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Transfer Certificate (TC)</span>
-                <span class="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">Std 1 &amp; Above</span>
+                <span class="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Optional</span>
               </div>
-              <input type="file" name="doc_tc" accept=".pdf,image/*"
+              <input type="file" name="doc_tc" accept=".pdf,image/*" :disabled="!enableDocUpload"
                      class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
             </div>
 
@@ -2960,7 +2989,7 @@
                 <span class="text-xs font-bold text-slate-800">Previous Marksheet / Progress Card</span>
                 <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">Academic</span>
               </div>
-              <input type="file" name="doc_marksheet" accept=".pdf,image/*"
+              <input type="file" name="doc_marksheet" accept=".pdf,image/*" :disabled="!enableDocUpload"
                      class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
             </div>
 
@@ -2970,14 +2999,14 @@
                 <span class="text-xs font-bold text-slate-800">Parent PAN / ID Proof</span>
                 <span class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">Finance / 80G</span>
               </div>
-              <input type="file" name="doc_pan_id" accept=".pdf,image/*"
+              <input type="file" name="doc_pan_id" accept=".pdf,image/*" :disabled="!enableDocUpload"
                      class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
             </div>
           </div>
         </div>
 
         {{-- Mode B: Scan QR Code from Home (Upload Later) --}}
-        <div x-show="docUploadMode === 'qr_home'" x-transition class="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 space-y-4 shadow-xs">
+        <div x-show="enableDocUpload && docUploadMode === 'qr_home'" x-transition class="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 space-y-4 shadow-xs">
           <div class="flex flex-col sm:flex-row items-center gap-5">
             <div class="w-16 h-16 bg-white p-2 rounded-2xl shrink-0 flex flex-col items-center justify-center text-slate-700 border border-slate-200 shadow-2xs">
               <svg class="w-10 h-10 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
