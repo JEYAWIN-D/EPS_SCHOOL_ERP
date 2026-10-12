@@ -88,6 +88,81 @@
   curriculumTab: 'all', // 'all' | 'books' | 'notes' | 'uniforms'
   curriculumExpanded: false,
 
+  // Submission Acknowledgement Modal State
+  showAcknowledgementModal: false,
+  acknowledgementChecked: false,
+  ackError: '',
+  isSubmittingAdmission: false,
+  ackSummary: {
+    studentName: '',
+    className: '',
+    parentName: '',
+    parentMobile: '',
+    paymentTerms: '',
+    paymentMode: '',
+    totalFee: 0,
+    paidAmount: 0,
+    pendingAmount: 0,
+    transportDetails: '',
+  },
+
+  prepareAcknowledgement() {
+    this.ackError = '';
+    let fn = document.getElementById('first_name')?.value?.trim() || '';
+    let ln = document.getElementById('last_name')?.value?.trim() || '';
+    let sName = (fn + ' ' + ln).trim() || 'Student Candidate';
+
+    let cName = this.selectedClassName || 'Selected Class';
+    let sec = this.sectionsList?.find(s => s.id == this.selectedSectionId);
+    if (sec) cName += ' (Sec ' + sec.name + ')';
+
+    let pName = document.getElementById('parent_name')?.value?.trim() || 'Parent / Guardian';
+    let pMob = document.getElementById('parent_mobile')?.value?.trim() || '—';
+
+    let tPlan = this.paymentTerms === 'single' ? 'Single Shot (Full Payment)' :
+                (this.paymentTerms === '2_terms' ? '2 Terms Split' :
+                (this.paymentTerms === '3_terms' ? '3 Terms Split' : 'Admission Only'));
+
+    let pMode = this.paymentMode ? this.paymentMode.toUpperCase() : 'CASH';
+
+    let transStr = 'Day Scholar (No School Transport)';
+    if (this.transportRequired && this.currentRoute) {
+      let vNo = this.currentRoute.vehicle_details?.vehicle_number || 'Van';
+      let stName = this.currentStop?.name || 'Selected Stop';
+      let fare = this.transportFee ? '₹' + Number(this.transportFee).toLocaleString('en-IN') : '₹0';
+      transStr = `${this.currentRoute.route_name} • ${vNo} • Stop: ${stName} (${fare})`;
+    }
+
+    this.ackSummary = {
+      studentName: sName,
+      className: cName,
+      parentName: pName,
+      parentMobile: pMob,
+      paymentTerms: tPlan,
+      paymentMode: pMode,
+      totalFee: this.grandTotal,
+      paidAmount: this.amountCollected,
+      pendingAmount: this.pendingAmount,
+      transportDetails: transStr,
+    };
+
+    this.showAcknowledgementModal = true;
+  },
+
+  confirmAndSubmitAdmission() {
+    if (!this.acknowledgementChecked) {
+      this.ackError = 'Please check the acknowledgement declaration checkbox below to confirm and finalize enrollment.';
+      return;
+    }
+    this.ackError = '';
+    this.isSubmittingAdmission = true;
+    window._isFormAcknowledged = true;
+    const form = document.getElementById('admissionCreateForm');
+    if (form) {
+      form.submit();
+    }
+  },
+
   get selectedYearName() {
     let y = this.academicYearsList.find(x => x.id == this.academicYearId);
     return y ? y.name : '2026–2027';
@@ -183,6 +258,7 @@
   },
 
   initAdmission() {
+    window.openAdmissionAcknowledgement = () => this.prepareAcknowledgement();
     this.$watch('selectedClassId', () => {
       this.syncGroupFromStream();
       this.fetchBooksNotesChecklist();
@@ -3465,6 +3541,22 @@
         </div>
       </div>
 
+      {{-- ── Acknowledgement Declaration Section (On-Page) ───────────────── --}}
+      <div class="pt-4 border-t border-slate-100 print:hidden">
+        <label class="flex items-start gap-3.5 p-4 rounded-2xl bg-amber-50/70 border border-amber-200/90 hover:bg-amber-50 transition cursor-pointer select-none">
+          <input type="checkbox" id="page_ack_check" x-model="acknowledgementChecked" class="mt-1 w-4 h-4 text-[#8C2826] rounded border-amber-400 focus:ring-[#8C2826] cursor-pointer">
+          <div class="space-y-0.5 flex-1">
+            <span class="text-xs font-extrabold text-[#380E0D] flex items-center gap-2">
+              Official Enrollment &amp; Fee Acknowledgement
+              <span class="text-[10px] font-bold text-amber-800 bg-amber-200/70 px-2 py-0.5 rounded-full border border-amber-300">Required</span>
+            </span>
+            <p class="text-[11px] text-slate-600 leading-relaxed font-medium">
+              I acknowledge that I have verified the student credentials, parent details, curriculum books/notes checklist, fee payment plan (<span class="font-bold text-slate-800" x-text="paymentTerms === 'single' ? 'Single Shot' : (paymentTerms === '2_terms' ? '2 Terms' : '3 Terms')"></span>), and transport allocation before final submission.
+            </p>
+          </div>
+        </label>
+      </div>
+
       {{-- ── Form Action Buttons ────────────────────────────────────────── --}}
       <div class="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 print:hidden">
         <div class="flex items-center gap-2.5 text-xs text-slate-500 font-medium">
@@ -3483,6 +3575,141 @@
       </div>
     </div>
   </form>
+
+  {{-- ── Admission Acknowledgement & Confirmation Modal ───────────────── --}}
+  <div x-show="showAcknowledgementModal" 
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 print:hidden" 
+       style="display: none;">
+    
+    <div @click.away="if (!isSubmittingAdmission) showAcknowledgementModal = false"
+         class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all space-y-0">
+      
+      {{-- Modal Header --}}
+      <div class="bg-gradient-to-r from-[#8C2826] to-[#A13431] text-white p-6 relative">
+        <button type="button" 
+                @click="showAcknowledgementModal = false" 
+                :disabled="isSubmittingAdmission"
+                class="absolute right-4 top-4 text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+        
+        <div class="flex items-center gap-3 mb-2">
+          <div class="w-10 h-10 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center text-white shrink-0 shadow-inner">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-lg font-extrabold text-white">Admission Acknowledgement</h3>
+            <p class="text-xs text-rose-100 font-medium">Please review and confirm enrollment details before final record creation.</p>
+          </div>
+        </div>
+      </div>
+
+      {{-- Modal Body: Candidate Summary --}}
+      <div class="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+        
+        {{-- Student & Class Info Box --}}
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Candidate Name</span>
+            <span class="font-extrabold text-slate-900 text-sm block" x-text="ackSummary.studentName"></span>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Standard / Class</span>
+            <span class="font-bold text-slate-800 text-sm block" x-text="ackSummary.className"></span>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Father / Guardian</span>
+            <span class="font-semibold text-slate-700 block" x-text="ackSummary.parentName"></span>
+            <span class="text-[11px] text-slate-500 font-mono" x-text="ackSummary.parentMobile"></span>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Payment Terms &amp; Mode</span>
+            <span class="font-semibold text-slate-700 block" x-text="ackSummary.paymentTerms"></span>
+            <span class="text-[11px] font-bold text-indigo-700 uppercase" x-text="'Mode: ' + ackSummary.paymentMode"></span>
+          </div>
+        </div>
+
+        {{-- Financial Summary Banner --}}
+        <div class="p-4 rounded-2xl bg-[#FFF5F5] border border-[#FECACA] grid grid-cols-3 gap-2 text-center text-xs">
+          <div>
+            <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Net Fee</span>
+            <span class="font-extrabold text-slate-900 text-sm tabular-nums" x-text="formatMoney(ackSummary.totalFee)"></span>
+          </div>
+          <div class="border-x border-rose-200">
+            <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Paid Today</span>
+            <span class="font-extrabold text-emerald-700 text-sm tabular-nums" x-text="formatMoney(ackSummary.paidAmount)"></span>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Pending Balance</span>
+            <span class="font-extrabold text-amber-900 text-sm tabular-nums" x-text="formatMoney(ackSummary.pendingAmount)"></span>
+          </div>
+        </div>
+
+        {{-- Transport Facility Summary --}}
+        <div class="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-200/80 text-xs flex items-start gap-2.5">
+          <svg class="w-4 h-4 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+          <div class="flex-1">
+            <span class="text-[10px] font-bold text-blue-800 uppercase tracking-wider block">Transport Allocation</span>
+            <span class="font-semibold text-slate-800 text-[11px] block mt-0.5" x-text="ackSummary.transportDetails"></span>
+          </div>
+        </div>
+
+        {{-- Mandatory Acknowledgement Checkbox Callout --}}
+        <div class="space-y-2">
+          <label class="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border-2 cursor-pointer transition select-none"
+                 :class="ackError ? 'border-rose-400 bg-rose-50/70 ring-2 ring-rose-200' : (acknowledgementChecked ? 'border-emerald-500 bg-emerald-50/50' : 'border-amber-300 hover:border-amber-400')">
+            <input type="checkbox" 
+                   x-model="acknowledgementChecked" 
+                   @change="if (acknowledgementChecked) ackError = ''" 
+                   class="mt-1 w-5 h-5 text-[#8C2826] rounded border-amber-400 focus:ring-[#8C2826] cursor-pointer">
+            <div class="text-xs text-amber-950 font-medium leading-relaxed">
+              <span class="font-extrabold text-amber-900 block text-xs mb-0.5">Acknowledgement &amp; Verification Declaration *</span>
+              I confirm that all entered student records, contact numbers, fee calculations, and transport stop assignments have been thoroughly verified and approved for enrollment.
+            </div>
+          </label>
+          <div x-show="ackError" x-cloak class="p-2.5 rounded-xl bg-rose-100/90 border border-rose-300 text-rose-800 text-xs font-bold flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0 text-rose-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            <span x-text="ackError"></span>
+          </div>
+        </div>
+      </div>
+
+      {{-- Modal Footer --}}
+      <div class="p-5 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+        <button type="button" 
+                @click="showAcknowledgementModal = false" 
+                :disabled="isSubmittingAdmission"
+                class="px-5 h-11 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-200 text-xs transition shadow-2xs">
+          Back to Edit
+        </button>
+        
+        <button type="button" 
+                @click="confirmAndSubmitAdmission()" 
+                :disabled="isSubmittingAdmission"
+                class="px-7 h-11 rounded-xl bg-gradient-to-r from-[#8C2826] to-[#A13431] hover:from-[#731E1C] hover:to-[#8C2826] text-white font-extrabold text-xs shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 cursor-pointer">
+          <template x-if="!isSubmittingAdmission">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              <span>Confirm &amp; Finalize Enrollment</span>
+            </span>
+          </template>
+          <template x-if="isSubmittingAdmission">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+              <span>Enrolling Student...</span>
+            </span>
+          </template>
+        </button>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 
@@ -3949,6 +4176,22 @@
           } else if (clientAlert) {
             clientAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
+          return;
+        }
+
+        // If all validation rules pass, require explicit acknowledgement confirmation modal
+        if (!window._isFormAcknowledged) {
+          e.preventDefault();
+          if (typeof window.openAdmissionAcknowledgement === 'function') {
+            window.openAdmissionAcknowledgement();
+          } else {
+            const alpineRoot = document.querySelector('.admission-form-wrapper');
+            let alpineData = window.Alpine ? window.Alpine.$data(alpineRoot) : (alpineRoot?._x_dataStack ? alpineRoot._x_dataStack[0] : null);
+            if (alpineData && typeof alpineData.prepareAcknowledgement === 'function') {
+              alpineData.prepareAcknowledgement();
+            }
+          }
+          return;
         }
       });
     }
