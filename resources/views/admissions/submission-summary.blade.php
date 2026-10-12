@@ -425,6 +425,14 @@
 
         {{-- Action Links --}}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          @if($pendingFee > 0)
+          <a href="{{ route('students.show', $student->id) }}#fee-payment-section"
+             class="sm:col-span-2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#8C2826] to-[#A13431] hover:from-[#731E1C] hover:to-[#8C2826] text-white font-extrabold text-xs shadow-md transition flex items-center justify-center gap-2 group">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <span>Receive Remaining Amount &amp; Mark as Paid (₹{{ number_format($pendingFee, 2) }})</span>
+          </a>
+          @endif
+
           <a href="{{ route('students.visitor-card', $student->id) }}"
              class="py-2.5 px-4 rounded-xl bg-[#FFF5F5] hover:bg-[#FFEBEB] text-[#8C2826] font-bold text-xs border border-[#FECACA] shadow-2xs transition flex items-center justify-center gap-2 group">
             <svg class="w-4 h-4 text-[#8C2826] transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>

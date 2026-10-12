@@ -178,6 +178,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/{id}/edit',       [StudentController::class, 'edit'])->middleware('permission:edit students')->name('edit')->where('id', '[0-9]+');
         Route::put('/{id}',        [StudentController::class, 'update'])->middleware('permission:edit students')->name('update')->where('id', '[0-9]+');
         Route::delete('/{id}',     [StudentController::class, 'destroy'])->middleware('permission:delete students')->name('destroy')->where('id', '[0-9]+');
+        Route::post('/{id}/mark-admission-paid', [StudentController::class, 'markAdmissionFeePaid'])->name('mark-admission-paid')->where('id', '[0-9]+');
         Route::get('/{id}/tc',     [StudentController::class, 'showTCForm'])->name('tc.form')->where('id', '[0-9]+');
         Route::post('/{id}/tc',    [StudentController::class, 'generateTC'])->name('tc')->where('id', '[0-9]+');
         Route::get('/{id}/id-card',[StudentController::class, 'singleIdCard'])->name('id-card.single')->where('id', '[0-9]+');

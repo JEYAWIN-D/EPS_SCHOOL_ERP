@@ -913,12 +913,16 @@ class AdmissionController extends Controller
                 'payment_date' => $amountCollected > 0 ? $paymentDate : null,
             ];
         } elseif ($paymentTerms === '2_terms') {
-            // Kit amounts added directly to Term 1; remaining tuition fees, etc. divided evenly
-            $remT1 = (float)round($remainingFees / 2, 2);
-            $remT2 = (float)round($remainingFees - $remT1, 2);
+            // Formula: 100% KIT, T1(50% Term fee), TRANSPORT(50%) in Term 1; T2(50% Term fee), TRANSPORT(50%) in Term 2
+            $academicTermFee = max(0, $totalFee - $totalKitFee - $transportFee);
+            $t1TermFee = (float)round($academicTermFee / 2, 2);
+            $t2TermFee = max(0, (float)round($academicTermFee - $t1TermFee, 2));
 
-            $t1Amount = (float)round($totalKitFee + $remT1, 2);
-            $t2Amount = $remT2;
+            $t1Transport = (float)round($transportFee / 2, 2);
+            $t2Transport = max(0, (float)round($transportFee - $t1Transport, 2));
+
+            $t1Amount = (float)round($totalKitFee + $t1TermFee + $t1Transport, 2);
+            $t2Amount = max(0, (float)round($totalFee - $t1Amount, 2));
 
             $t1Paid = min($amountCollected, $t1Amount);
             $t1Pending = max(0, $t1Amount - $t1Paid);
@@ -954,15 +958,22 @@ class AdmissionController extends Controller
                 'payment_date' => $t2Paid > 0 ? $paymentDate : null,
             ];
         } else { // 3_terms
-            // Official 3 terms: Term 1 (T1 fee + Material fee + Admission fee), Term 2 (T2 fee), Term 3 (T3 fee)
-            $facilityShare   = round(($aspFee + $transportFee) / 3, 2);
+            // Formula: 100% KIT, T1, TRANSPORT(50%) in Term 1; T2, TRANSPORT(50%) in Term 2; T3 in Term 3
+            $academicTermFee = max(0, $totalFee - $totalKitFee - $transportFee);
+            $aspShare = round($aspFee / 3, 2);
             $concessionShare = round($concessionAmount / 3, 2);
 
-            $baseT1   = $term1Fee + $materialFee + $admissionFee;
-            $t1Amount = max(0, (float)round($baseT1 + $totalKitFee + $facilityShare - $concessionShare, 2));
+            $baseT1 = (float)($term1Fee + $materialFee + $admissionFee);
+            $baseT2 = (float)$term2Fee;
 
-            $baseT2   = $term2Fee;
-            $t2Amount = max(0, (float)round($baseT2 + $facilityShare - $concessionShare, 2));
+            $t1TermFee = max(0, round($baseT1 + $aspShare - $concessionShare, 2));
+            $t2TermFee = max(0, round($baseT2 + $aspShare - $concessionShare, 2));
+
+            $t1Transport = (float)round($transportFee / 2, 2);
+            $t2Transport = max(0, (float)round($transportFee - $t1Transport, 2));
+
+            $t1Amount = (float)round($totalKitFee + $t1TermFee + $t1Transport, 2);
+            $t2Amount = (float)round($t2TermFee + $t2Transport, 2);
 
             // Remaining balance assigned to Term 3 to guarantee exact total sum
             $t3Amount = max(0, (float)round($totalFee - ($t1Amount + $t2Amount), 2));

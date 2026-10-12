@@ -1948,4 +1948,110 @@ class StudentController extends Controller
 
         return (string)$num;
     }
+
+    /**
+     * Verify payment receipt and mark student admission / term fee as paid.
+     * Updates student paid amount, pending amount, payment status, terms schedule,
+     * and records FeePayment transaction in the database.
+     */
+    public function markAdmissionFeePaid(Request $request, int $id)
+    {
+        $this->assertStudentInScope($request, $id);
+        $student = Student::findOrFail($id);
+
+        $validated = $request->validate([
+            'amount_received' => 'required|numeric|min:1',
+            'payment_mode'    => 'required|string',
+            'payment_account' => 'nullable|string',
+            'payment_date'    => 'required|date',
+            'transaction_id'  => 'nullable|string|max:100',
+            'term_number'     => 'nullable|integer',
+            'notes'           => 'nullable|string|max:500',
+        ]);
+
+        return DB::transaction(function () use ($student, $validated) {
+            $amount = (float)$validated['amount_received'];
+            $terms = is_array($student->admission_fee_terms) ? $student->admission_fee_terms : [];
+            $rem = $amount;
+            $termNamePaid = 'Admission Balance';
+
+            if (!empty($validated['term_number'])) {
+                // Apply to specific term
+                foreach ($terms as &$t) {
+                    if (($t['term_number'] ?? null) == $validated['term_number']) {
+                        $pendingInTerm = max(0, (float)($t['pending'] ?? ((float)$t['amount'] - (float)($t['paid'] ?? 0))));
+                        $paidThis = min($rem, $pendingInTerm);
+                        $t['paid'] = round((float)($t['paid'] ?? 0) + $paidThis, 2);
+                        $t['pending'] = max(0, round((float)($t['amount'] ?? 0) - (float)$t['paid'], 2));
+                        $t['status'] = $t['pending'] <= 0 ? 'paid' : ($t['paid'] > 0 ? 'partially_paid' : 'pending');
+                        $t['payment_mode'] = $validated['payment_mode'];
+                        $t['payment_date'] = $validated['payment_date'];
+                        $termNamePaid = $t['name'] ?? ('Term ' . $validated['term_number']);
+                        $rem -= $paidThis;
+                        break;
+                    }
+                }
+            } else {
+                // Apply sequentially across pending terms
+                foreach ($terms as &$t) {
+                    if ($rem <= 0) break;
+                    $pendingInTerm = max(0, (float)($t['pending'] ?? ((float)$t['amount'] - (float)($t['paid'] ?? 0))));
+                    if ($pendingInTerm > 0) {
+                        $paidThis = min($rem, $pendingInTerm);
+                        $t['paid'] = round((float)($t['paid'] ?? 0) + $paidThis, 2);
+                        $t['pending'] = max(0, round((float)($t['amount'] ?? 0) - (float)$t['paid'], 2));
+                        $t['status'] = $t['pending'] <= 0 ? 'paid' : ($t['paid'] > 0 ? 'partially_paid' : 'pending');
+                        $t['payment_mode'] = $validated['payment_mode'];
+                        $t['payment_date'] = $validated['payment_date'];
+                        $termNamePaid = $t['name'] ?? 'Admission Fee Schedule';
+                        $rem -= $paidThis;
+                    }
+                }
+            }
+
+            $currentPaid = (float)($student->admission_paid_amount ?? 0);
+            $newPaidTotal = round($currentPaid + $amount, 2);
+            $totalAdmissionFee = (float)($student->total_admission_fee ?? $newPaidTotal);
+            $newPendingTotal = max(0, round($totalAdmissionFee - $newPaidTotal, 2));
+            $newStatus = $newPendingTotal <= 0 ? 'paid' : 'partially_paid';
+
+            $student->admission_paid_amount = $newPaidTotal;
+            $student->admission_pending_amount = $newPendingTotal;
+            $student->payment_status = $newStatus;
+            $student->admission_fee_terms = $terms;
+            $student->save();
+
+            // Record FeePayment entry
+            $currentYear = AcademicYear::current();
+            $enrollment = $student->currentEnrollment;
+            $feePaymentMode = strtolower($validated['payment_mode']) === 'upi' ? 'upi' : 'cash';
+            $paymentAccount = $validated['payment_account'] ?? ($feePaymentMode === 'upi' ? 'upi' : 'cash_box_1');
+
+            $payment = \App\Models\FeePayment::create([
+                'student_id'       => $student->id,
+                'enrollment_id'    => $enrollment?->id,
+                'academic_year_id' => $enrollment?->academic_year_id ?? $currentYear?->id,
+                'receipt_number'   => 'REC-' . date('Ymd') . '-' . str_pad(rand(1, 9999), 4, '0', STR_PAD_LEFT),
+                'payment_date'     => $validated['payment_date'],
+                'amount'           => $amount,
+                'amount_paid'      => $amount,
+                'total_paid'       => $amount,
+                'payment_mode'     => $feePaymentMode,
+                'payment_account'  => $paymentAccount,
+                'term_name'        => $termNamePaid,
+                'transaction_id'   => $validated['transaction_id'] ?? null,
+                'remarks'          => $validated['notes'] ?: 'Fee payment verified & marked as paid at desk',
+                'collected_by'     => Auth::id(),
+            ]);
+
+            AuditLog::record('admission_fee_payment_collected', $student, [], [
+                'student_id'      => $student->id,
+                'amount_received' => $amount,
+                'receipt_number'  => $payment->receipt_number,
+                'new_status'      => $newStatus,
+            ]);
+
+            return back()->with('success', 'Fee payment of ₹' . number_format($amount, 2) . ' verified and recorded successfully! Receipt #' . $payment->receipt_number . '. Student status updated to ' . ($newStatus === 'paid' ? 'Paid' : 'Partially Paid') . '.');
+        });
+    }
 }

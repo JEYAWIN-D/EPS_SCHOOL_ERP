@@ -1440,8 +1440,29 @@
   {{-- ========================================================================= --}}
   {{-- 4. FULL WIDTH: FINANCIAL & ADMISSION FEE SCHEDULE                         --}}
   {{-- ========================================================================= --}}
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
-    <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+  <div id="fee-payment-section" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6"
+       x-data="{
+         payModalOpen: false,
+         selectedTermNo: null,
+         selectedTermName: 'Full Pending Balance',
+         amountToPay: {{ (float)($student->admission_pending_amount ?? 0) }},
+         maxPending: {{ (float)($student->admission_pending_amount ?? 0) }},
+         payMode: 'UPI',
+         payAccount: 'upi',
+         payDate: '{{ date("Y-m-d") }}',
+         upiTrx: '',
+         notes: '',
+         verifiedConfirm: false,
+         openPayModal(termNo, termName, pendingAmt) {
+           this.selectedTermNo = termNo;
+           this.selectedTermName = termName || (termNo ? ('Term ' + termNo) : 'Full Pending Balance');
+           this.amountToPay = pendingAmt;
+           this.maxPending = pendingAmt;
+           this.verifiedConfirm = false;
+           this.payModalOpen = true;
+         }
+       }">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
       <div class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -1452,11 +1473,27 @@
         </div>
       </div>
 
-      @if($student->payment_terms)
-      <span class="px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-blue-50 text-blue-700 border border-blue-200">
-        {{ str_replace('_', ' ', strtoupper($student->payment_terms)) }}
-      </span>
-      @endif
+      <div class="flex items-center gap-2.5 flex-wrap">
+        @if((float)($student->admission_pending_amount ?? 0) > 0)
+          <button type="button"
+                  @click="openPayModal(null, 'Full Pending Balance', {{ (float)$student->admission_pending_amount }})"
+                  class="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-[#8C2826] hover:bg-[#731E1C] text-white transition shadow-2xs flex items-center gap-1.5 cursor-pointer">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <span>Receive Payment (₹{{ number_format($student->admission_pending_amount, 2) }})</span>
+          </button>
+        @else
+          <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+            <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            All Fees Paid
+          </span>
+        @endif
+
+        @if($student->payment_terms)
+        <span class="px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+          {{ str_replace('_', ' ', strtoupper($student->payment_terms)) }}
+        </span>
+        @endif
+      </div>
     </div>
 
     @if($student->total_admission_fee > 0 || !empty($student->admission_fee_terms))
@@ -1514,15 +1551,23 @@
               <th class="py-2.5 px-3.5">Due Date</th>
               <th class="py-2.5 px-3.5 text-center">Status</th>
               <th class="py-2.5 px-3.5">Payment Mode / Date</th>
+              <th class="py-2.5 px-3.5 text-right">Action</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 font-medium">
             @foreach($student->admission_fee_terms as $term)
+              @php
+                $tAmt     = (float)($term['amount'] ?? 0);
+                $tPaid    = (float)($term['paid'] ?? 0);
+                $tPending = (float)($term['pending'] ?? max(0, $tAmt - $tPaid));
+                $tNum     = $term['term_number'] ?? $loop->iteration;
+                $tName    = $term['name'] ?? ('Term ' . $tNum);
+              @endphp
               <tr class="hover:bg-slate-50/60 transition">
-                <td class="py-3 px-3.5 font-bold text-slate-900">{{ $term['name'] ?? ('Term ' . ($term['term_number'] ?? $loop->iteration)) }}</td>
-                <td class="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹{{ number_format($term['amount'] ?? 0, 2) }}</td>
-                <td class="py-3 px-3.5 text-right font-mono font-bold text-emerald-600">₹{{ number_format($term['paid'] ?? 0, 2) }}</td>
-                <td class="py-3 px-3.5 text-right font-mono font-bold text-amber-600">₹{{ number_format($term['pending'] ?? 0, 2) }}</td>
+                <td class="py-3 px-3.5 font-bold text-slate-900">{{ $tName }}</td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹{{ number_format($tAmt, 2) }}</td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-emerald-600">₹{{ number_format($tPaid, 2) }}</td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-amber-600">₹{{ number_format($tPending, 2) }}</td>
                 <td class="py-3 px-3.5 font-mono text-slate-600">
                   {{ !empty($term['due_date']) ? \Carbon\Carbon::parse($term['due_date'])->format('d-m-Y') : '—' }}
                 </td>
@@ -1540,13 +1585,28 @@
                   </span>
                 </td>
                 <td class="py-3 px-3.5 font-xs text-slate-600">
-                  @if(($term['paid'] ?? 0) > 0 && !empty($term['payment_mode']))
+                  @if($tPaid > 0 && !empty($term['payment_mode']))
                     <span class="font-bold text-slate-800">{{ $term['payment_mode'] }}</span>
                     <span class="text-slate-400 font-mono text-[11px] block">
                       {{ !empty($term['payment_date']) ? \Carbon\Carbon::parse($term['payment_date'])->format('d-m-Y') : '' }}
                     </span>
                   @else
                     <span class="text-slate-400">—</span>
+                  @endif
+                </td>
+                <td class="py-3 px-3.5 text-right">
+                  @if($tPending > 0)
+                    <button type="button"
+                            @click="openPayModal({{ $tNum }}, '{{ $tName }}', {{ $tPending }})"
+                            class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-[#8C2826] hover:bg-[#731E1C] text-white transition shadow-2xs inline-flex items-center gap-1 cursor-pointer">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                      <span>Mark Paid (₹{{ number_format($tPending, 2) }})</span>
+                    </button>
+                  @else
+                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                      Paid
+                    </span>
                   @endif
                 </td>
               </tr>
@@ -1560,6 +1620,117 @@
     @else
     <p class="text-xs text-slate-400 italic">No admission fee payment details recorded for this student.</p>
     @endif
+
+    {{-- Verify & Mark as Paid Modal --}}
+    <div x-show="payModalOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+      <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" @click="payModalOpen = false"></div>
+
+      <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-7 space-y-5"
+             @click.stop>
+          <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              </div>
+              <div>
+                <h3 class="text-base font-black text-slate-900 tracking-tight">Verify Payment &amp; Mark as Paid</h3>
+                <p class="text-xs text-slate-500 font-medium">Record verified fee receipt in school accounts</p>
+              </div>
+            </div>
+            <button type="button" @click="payModalOpen = false" class="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <form action="{{ route('students.mark-admission-paid', $student->id) }}" method="POST" class="space-y-4">
+            @csrf
+            <input type="hidden" name="term_number" :value="selectedTermNo">
+
+            {{-- Summary Target Pill --}}
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between text-xs">
+              <span class="text-slate-600 font-medium">Payment Target:</span>
+              <span class="font-extrabold text-slate-900" x-text="selectedTermName"></span>
+            </div>
+
+            {{-- Amount Received Field --}}
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-xs font-bold text-slate-800">Amount Received &amp; Verified (₹) <span class="text-rose-500">*</span></label>
+                <span class="text-[11px] text-slate-500 font-semibold">Max Pending: ₹<span x-text="Number(maxPending).toLocaleString('en-IN')"></span></span>
+              </div>
+              <input type="number" step="0.01" min="1" :max="maxPending" name="amount_received" x-model="amountToPay" required
+                     class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-base font-bold text-slate-900 tabular-nums bg-white">
+            </div>
+
+            {{-- Payment Mode --}}
+            <div class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-800">Payment Destination / Mode <span class="text-rose-500">*</span></label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" @click="payMode = 'UPI'; payAccount = 'upi'"
+                        :class="payAccount === 'upi' ? 'bg-purple-50 text-purple-700 border-purple-300 ring-2 ring-purple-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+                        class="p-2.5 rounded-xl border text-center font-bold text-xs transition cursor-pointer">
+                  UPI Digital
+                </button>
+                <button type="button" @click="payMode = 'Cash'; payAccount = 'cash_box_1'"
+                        :class="payAccount === 'cash_box_1' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 ring-2 ring-emerald-100' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+                        class="p-2.5 rounded-xl border text-center font-bold text-xs transition cursor-pointer">
+                  Cash (Box 1)
+                </button>
+                <button type="button" @click="payMode = 'Cash'; payAccount = 'cash_box_2'"
+                        :class="payAccount === 'cash_box_2' ? 'bg-[#FFF5F5] text-[#8C2826] border-[#FECACA] ring-2 ring-[#FEE2E2]' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+                        class="p-2.5 rounded-xl border text-center font-bold text-xs transition cursor-pointer">
+                  Accounts Vault
+                </button>
+              </div>
+              <input type="hidden" name="payment_mode" :value="payMode">
+              <input type="hidden" name="payment_account" :value="payAccount">
+            </div>
+
+            {{-- UPI Reference if applicable --}}
+            <div x-show="payAccount === 'upi'" x-transition class="space-y-1">
+              <label class="block text-xs font-bold text-slate-800">UPI Transaction Ref / UTR Number</label>
+              <input type="text" name="transaction_id" x-model="upiTrx" placeholder="e.g. 202604018274 or UTR No."
+                     class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-900">
+            </div>
+
+            {{-- Date & Notes --}}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-1">Receipt Date <span class="text-rose-500">*</span></label>
+                <input type="date" name="payment_date" x-model="payDate" required
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-800 mb-1">Remarks (Optional)</label>
+                <input type="text" name="notes" x-model="notes" placeholder="e.g. Paid at desk, verified"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800">
+              </div>
+            </div>
+
+            {{-- Verification Checkbox --}}
+            <label class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-slate-100 flex items-start gap-3 cursor-pointer select-none transition">
+              <input type="checkbox" x-model="verifiedConfirm" required class="w-4 h-4 text-[#8C2826] rounded border-slate-300 focus:ring-[#8C2826] mt-0.5">
+              <span class="text-xs text-slate-700 leading-snug">
+                I confirm that the amount has been physically received or verified in the respective bank/cash account.
+              </span>
+            </label>
+
+            {{-- Submit Button --}}
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+              <button type="button" @click="payModalOpen = false" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+                Cancel
+              </button>
+              <button type="submit" :disabled="!verifiedConfirm || amountToPay <= 0"
+                      class="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-[#8C2826] hover:bg-[#731E1C] disabled:bg-slate-300 disabled:cursor-not-allowed text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <span>Confirm &amp; Mark as Paid</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 
   {{-- ========================================================================= --}}

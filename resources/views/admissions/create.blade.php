@@ -608,41 +608,77 @@
   get grandTotal() {
     return Math.max(0, this.subTotal - this.concessionAmount);
   },
-  get remainingFeesTotal() {
-    return Math.max(0, this.grandTotal - this.totalKitFee);
+  // Net Academic / School Term Fee (excluding Kit and Transport)
+  get academicTermFee() {
+    return Math.max(0, this.grandTotal - this.totalKitFee - this.transportFee);
   },
 
-  // Term amounts calculations: follows official Term 1, Term 2, Term 3 fee breakdown
+  // ── 2 TERMS FORMULA:
+  // 100% Kit, T1(50% Term fee), Transport(50%) in Term 1
+  // T2(50% Term fee), Transport(50%) in Term 2
+  get terms2T1Amount() {
+    let t1TermFee = Math.round(this.academicTermFee / 2);
+    let t1Transport = Math.round(this.transportFee / 2);
+    return Math.max(0, this.totalKitFee + t1TermFee + t1Transport);
+  },
+  get terms2T2Amount() {
+    return Math.max(0, this.grandTotal - this.terms2T1Amount);
+  },
+
+  // ── 3 TERMS FORMULA:
+  // Term 1: 100% Kit, T1 Term Fee, Transport (50%)
+  // Term 2: T2 Term Fee, Transport (50%)
+  // Term 3: T3 Term Fee (0% Transport, 0% Kit)
+  get terms3T1Amount() {
+    let baseT1 = Number(this.activeFeeSchedule?.term1_fee || Math.round(this.academicTermFee / 3)) + this.admissionFeeTotal;
+    let aspShare = Math.round(this.aspFeeTotal / 3);
+    let discShare = Math.round(this.concessionAmount / 3);
+    let t1TermFee = Math.max(0, baseT1 + aspShare - discShare);
+    let t1Transport = Math.round(this.transportFee / 2);
+    return Math.max(0, this.totalKitFee + t1TermFee + t1Transport);
+  },
+  get terms3T2Amount() {
+    let baseT2 = Number(this.activeFeeSchedule?.term2_fee || Math.round(this.academicTermFee / 3));
+    let aspShare = Math.round(this.aspFeeTotal / 3);
+    let discShare = Math.round(this.concessionAmount / 3);
+    let t2TermFee = Math.max(0, baseT2 + aspShare - discShare);
+    let t2Transport = this.transportFee - Math.round(this.transportFee / 2);
+    return Math.max(0, t2TermFee + t2Transport);
+  },
+  get terms3T3Amount() {
+    return Math.max(0, this.grandTotal - (this.terms3T1Amount + this.terms3T2Amount));
+  },
+
+  // Dynamic getters according to selected paymentTerms:
   get term1Amount() {
     if (this.paymentTerms === 'single') return this.grandTotal;
-    if (this.paymentTerms === '2_terms') {
-      let remT1 = Math.round(this.remainingFeesTotal / 2);
-      return this.totalKitFee + remT1;
-    }
-    if (this.paymentTerms === '3_terms') {
-      let baseT1 = Number(this.activeFeeSchedule?.term1_fee || 0) + this.admissionFeeTotal;
-      let facilityShare = Math.round((this.aspFeeTotal + this.transportFee) / 3);
-      let discShare = Math.round(this.concessionAmount / 3);
-      return Math.max(0, baseT1 + this.totalKitFee + facilityShare - discShare);
-    }
+    if (this.paymentTerms === '2_terms') return this.terms2T1Amount;
+    if (this.paymentTerms === '3_terms') return this.terms3T1Amount;
     return this.grandTotal;
   },
   get term2Amount() {
     if (this.paymentTerms === 'single') return 0;
-    if (this.paymentTerms === '2_terms') return this.grandTotal - this.term1Amount;
-    if (this.paymentTerms === '3_terms') {
-      let baseT2 = Number(this.activeFeeSchedule?.term2_fee || 0);
-      let facilityShare = Math.round((this.aspFeeTotal + this.transportFee) / 3);
-      let discShare = Math.round(this.concessionAmount / 3);
-      return Math.max(0, baseT2 + facilityShare - discShare);
-    }
+    if (this.paymentTerms === '2_terms') return this.terms2T2Amount;
+    if (this.paymentTerms === '3_terms') return this.terms3T2Amount;
     return 0;
   },
   get term3Amount() {
-    if (this.paymentTerms === '3_terms') {
-      return Math.max(0, this.grandTotal - (this.term1Amount + this.term2Amount));
-    }
+    if (this.paymentTerms === '3_terms') return this.terms3T3Amount;
     return 0;
+  },
+
+  paymentOptionPreset: 'term1',
+  selectCollectionPreset(preset) {
+    this.paymentOptionPreset = preset;
+    if (preset === 'admission_only') {
+      this.userAmountCollected = this.admissionFeeTotal;
+    } else if (preset === 'term1') {
+      this.userAmountCollected = this.term1Amount;
+    } else if (preset === 'full') {
+      this.userAmountCollected = this.grandTotal;
+    } else if (preset === 'pay_later') {
+      this.userAmountCollected = 0;
+    }
   },
 
   get amountCollected() {
@@ -657,7 +693,12 @@
   },
   get paymentStatus() {
     if (this.amountCollected >= this.grandTotal && this.grandTotal > 0) return 'Paid';
-    if (this.amountCollected > 0) return 'Partially Paid';
+    if (this.amountCollected > 0) {
+      if (this.admissionFeeTotal > 0 && Math.abs(this.amountCollected - this.admissionFeeTotal) < 1) {
+        return 'Admission Fee Only (Balance Pending)';
+      }
+      return 'Partially Paid';
+    }
     return 'Pending';
   },
 
@@ -3144,8 +3185,11 @@
                 <span class="text-xs font-extrabold text-slate-900">2 Terms</span>
                 <input type="radio" name="payment_terms" value="2_terms" x-model="paymentTerms" class="w-4 h-4 text-[#8C2826] focus:ring-[#8C2826]">
               </div>
-              <p class="text-[11px] text-slate-500 font-medium">100% Kit + 50% tuition in T1, 50% in T2</p>
-              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(term1Amount) + ' (T1) &bull; ' + formatMoney(term2Amount) + ' (T2)'"></p>
+              <p class="text-[11px] text-slate-500 font-medium leading-relaxed">
+                <span class="font-bold text-slate-700">T1:</span> 100% Kit + 50% Term fee + 50% Transport<br>
+                <span class="font-bold text-slate-700">T2:</span> 50% Term fee + 50% Transport
+              </p>
+              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(terms2T1Amount) + ' (T1) &bull; ' + formatMoney(terms2T2Amount) + ' (T2)'"></p>
             </label>
 
             <label class="p-5 rounded-2xl border transition cursor-pointer flex flex-col justify-between space-y-3 select-none"
@@ -3154,8 +3198,11 @@
                 <span class="text-xs font-extrabold text-slate-900">3 Terms</span>
                 <input type="radio" name="payment_terms" value="3_terms" x-model="paymentTerms" class="w-4 h-4 text-[#8C2826] focus:ring-[#8C2826]">
               </div>
-              <p class="text-[11px] text-slate-500 font-medium">Official 3 Terms: April (T1), August (T2), December (T3)</p>
-              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(term1Amount) + ' (T1) &bull; ' + formatMoney(term2Amount) + ' (T2) &bull; ' + formatMoney(term3Amount) + ' (T3)'"></p>
+              <p class="text-[11px] text-slate-500 font-medium leading-relaxed">
+                <span class="font-bold text-slate-700">T1:</span> 100% Kit + T1 + 50% Transport<br>
+                <span class="font-bold text-slate-700">T2:</span> T2 + 50% Transport &bull; <span class="font-bold text-slate-700">T3:</span> T3
+              </p>
+              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(terms3T1Amount) + ' (T1) &bull; ' + formatMoney(terms3T2Amount) + ' (T2) &bull; ' + formatMoney(terms3T3Amount) + ' (T3)'"></p>
             </label>
           </div>
         </div>
@@ -3272,6 +3319,60 @@
             <input type="text" id="transaction_id" name="transaction_id" x-model="upiRefNo" placeholder="e.g. 202612345678 or UPI UTR No."
                    class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition outline-none tracking-wider">
             <p class="text-[11px] text-slate-500 font-medium">This transaction ID will be stored with the student fee receipt and matched in Account Management.</p>
+          </div>
+
+          {{-- Payment Collection Preset Options --}}
+          <div class="space-y-2 pt-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-bold text-slate-800 uppercase tracking-wider">Payment Collection Option Today</label>
+              <span class="text-[11px] font-semibold text-slate-500">Quick selection presets</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {{-- Preset 1: Admission Fee Only --}}
+              <button type="button" @click="selectCollectionPreset('admission_only')"
+                      :class="paymentOptionPreset === 'admission_only' ? 'bg-[#FFF5F5] border-[#8C2826] text-[#8C2826] ring-2 ring-[#FEE2E2]' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'"
+                      class="p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer shadow-2xs">
+                <span class="text-[11px] font-bold block">Admission Fee Only</span>
+                <span class="text-xs font-extrabold text-[#8C2826] mt-1 tabular-nums" x-text="formatMoney(admissionFeeTotal)"></span>
+                <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Pay remaining later</span>
+              </button>
+
+              {{-- Preset 2: Term 1 --}}
+              <button type="button" @click="selectCollectionPreset('term1')"
+                      :class="paymentOptionPreset === 'term1' ? 'bg-[#FFF5F5] border-[#8C2826] text-[#8C2826] ring-2 ring-[#FEE2E2]' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'"
+                      class="p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer shadow-2xs">
+                <span class="text-[11px] font-bold block">Term 1 Amount</span>
+                <span class="text-xs font-extrabold text-[#8C2826] mt-1 tabular-nums" x-text="formatMoney(term1Amount)"></span>
+                <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Standard Term 1</span>
+              </button>
+
+              {{-- Preset 3: Full Grand Total --}}
+              <button type="button" @click="selectCollectionPreset('full')"
+                      :class="paymentOptionPreset === 'full' ? 'bg-[#FFF5F5] border-[#8C2826] text-[#8C2826] ring-2 ring-[#FEE2E2]' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'"
+                      class="p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer shadow-2xs">
+                <span class="text-[11px] font-bold block">Full Annual Fee</span>
+                <span class="text-xs font-extrabold text-[#8C2826] mt-1 tabular-nums" x-text="formatMoney(grandTotal)"></span>
+                <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">100% paid today</span>
+              </button>
+
+              {{-- Preset 4: Pay Later (₹0) --}}
+              <button type="button" @click="selectCollectionPreset('pay_later')"
+                      :class="paymentOptionPreset === 'pay_later' ? 'bg-[#FFF5F5] border-[#8C2826] text-[#8C2826] ring-2 ring-[#FEE2E2]' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'"
+                      class="p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer shadow-2xs">
+                <span class="text-[11px] font-bold block">Pay Later (₹0)</span>
+                <span class="text-xs font-extrabold text-slate-700 mt-1 tabular-nums">₹0.00</span>
+                <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Collect at later date</span>
+              </button>
+            </div>
+
+            {{-- Informative banner when Admission Fee Only is chosen --}}
+            <div x-show="paymentOptionPreset === 'admission_only'" x-transition class="p-3.5 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900 shadow-2xs">
+              <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <div>
+                <strong class="font-bold">Admission Fee Only Selected:</strong>
+                <span> Collecting only the admission fee of <strong class="tabular-nums" x-text="formatMoney(admissionFeeTotal)"></strong> today. The remaining balance of <strong class="tabular-nums text-[#8C2826]" x-text="formatMoney(pendingAmount)"></strong> will be recorded as pending in the database and can be verified and collected later from the student profile.</span>
+              </div>
+            </div>
           </div>
 
           {{-- Payment Date & Amount Row --}}
