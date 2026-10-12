@@ -52,8 +52,8 @@ Route::get('/visitor-card/verify/{token}', [\App\Http\Controllers\Public\Visitor
 // ── Public Gate Visitor Pass QR Verification (no auth) ────
 Route::get('/gate/verify/{token}', [\App\Http\Controllers\Admin\GateController::class, 'verifyPass'])->name('gate.verify');
 
-// ── Authenticated routes ──────────────────────────────────
-Route::middleware(['auth'])->group(function () {
+// ── Authenticated Administrative ERP routes ───────────────────
+Route::middleware(['auth', 'staff.access'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

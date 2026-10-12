@@ -856,12 +856,14 @@
               </div>
               @error('admin_pin')<p class="field-error" style="text-align: center; margin-top: 0.4rem;">{{ $message }}</p>@enderror
 
+              @if(app()->environment('local', 'testing'))
               <div style="margin-top: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
                 <span style="font-size: 0.72rem; color: #64748b;">Dev Default:</span>
                 <button type="button" @click="pin = '1122'" style="font-size: 0.72rem; font-weight: 700; color: #8c2826; background: #fdf5f6; border: 1px solid #f5ccd0; border-radius: 0.4rem; padding: 0.15rem 0.45rem; cursor: pointer;">
                   1122 (Click to auto-fill)
                 </button>
               </div>
+              @endif
             </div>
 
             <!-- Verify PIN & Access Portal Button -->
@@ -1063,7 +1065,7 @@ function authLoginForm() {
     loading: false,
     role: 'admin',
     email: '{{ old('email', 'admin@schoolerp.in') }}',
-    pin: '{{ old('admin_pin', '1122') }}',
+    pin: '{{ old('admin_pin', app()->environment('local', 'testing') ? '1122' : '') }}',
     isEmailAdmin() {
       const e = (this.email || '').trim().toLowerCase();
       return e === 'admin@schoolerp.in' || e.startsWith('admin@') || e.startsWith('owner@') || e.startsWith('schooladmin@');

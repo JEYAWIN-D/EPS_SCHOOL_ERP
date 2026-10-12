@@ -166,10 +166,15 @@ class StudentDocumentUploadController extends Controller
         ]);
 
         $file = $request->file('file');
-        $docType = $request->document_type;
+        // Sanitize document type to alphanumeric slug to prevent path traversal
+        $docType = preg_replace('/[^a-zA-Z0-9_\-]/', '', Str::slug((string) $request->document_type));
+        if (empty($docType)) {
+            $docType = 'document';
+        }
+        $safeExtension = $file->extension() ?: 'bin';
 
-        // Store file in public storage for easy preview and serving
-        $fileName = $docType . '_' . time() . '_' . Str::random(8) . '.' . $file->getClientOriginalExtension();
+        // Store file with cryptographically random name and verified extension
+        $fileName = $docType . '_' . time() . '_' . Str::random(12) . '.' . $safeExtension;
         $storedPath = $file->storeAs("students/{$student->id}/documents", $fileName, 'public');
 
         // If uploading student photo, also update the main student photo if not set or user wants it

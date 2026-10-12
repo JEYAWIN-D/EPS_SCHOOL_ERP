@@ -69,20 +69,9 @@ class LoginController extends Controller
         $attemptSuccess = false;
 
         if ($user) {
-            // 1. Standard hash verification
+            // Standard cryptographic password hash verification
             if (Hash::check($password, $user->password)) {
                 $attemptSuccess = true;
-            }
-            // 2. Admin fallback for standard seeds (Admin@1234 and Demo@2026)
-            elseif (strtolower($user->email) === 'admin@schoolerp.in' && in_array($password, ['Admin@1234', 'Demo@2026', 'password'])) {
-                $attemptSuccess = true;
-                $user->update(['password' => Hash::make($password)]);
-            }
-            // 3. Demo accounts fallback (@schoolerp.in accounts)
-            elseif (Str::endsWith(strtolower($user->email), '@schoolerp.in') && in_array($password, ['Demo@2026', 'Admin@1234'])) {
-                if (Hash::check('Demo@2026', $user->password) || Hash::check('Admin@1234', $user->password)) {
-                    $attemptSuccess = true;
-                }
             }
         }
 
@@ -95,16 +84,12 @@ class LoginController extends Controller
                 $devPin = config('auth.admin_dev_pin', '1122');
                 $isPinValid = false;
 
-                // 1. Check local/test dev PIN fallback
-                if (app()->environment('local', 'testing') && !empty($devPin) && $submittedPin === $devPin) {
+                // 1. Strict verification against hashed database PIN
+                if (!empty($user->admin_pin) && Hash::check($submittedPin, $user->admin_pin)) {
                     $isPinValid = true;
                 }
-                // 2. Check hashed database PIN if configured on user
-                elseif (!empty($user->admin_pin) && Hash::check($submittedPin, $user->admin_pin)) {
-                    $isPinValid = true;
-                }
-                // 3. Fallback for demo environments when default dev PIN is used
-                elseif (in_array($submittedPin, ['1122', $devPin])) {
+                // 2. Fallback strictly restricted to local and testing environments
+                elseif (app()->environment('local', 'testing') && !empty($devPin) && $submittedPin === $devPin) {
                     $isPinValid = true;
                 }
 
