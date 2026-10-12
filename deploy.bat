@@ -46,7 +46,7 @@ if defined GIT_CHANGES (
 
 :: Step 5: Push to GitHub
 echo.
-echo [5/5] Pushing to GitHub (origin/main)...
+echo [5/6] Pushing to GitHub (origin/main)...
 git push origin main
 if %ERRORLEVEL% NEQ 0 (
     echo [WARNING] Git push failed. Please check network connection or remote credentials.
@@ -54,9 +54,20 @@ if %ERRORLEVEL% NEQ 0 (
     echo [SUCCESS] Git push completed successfully!
 )
 
+:: Step 6: Update Live VPS Server
+echo.
+echo [6/6] Syncing and updating live server (eps.dasatech.in)...
+ssh root@187.127.150.113 "/var/www/dasa-eps-school/deploy_server.sh"
+if %ERRORLEVEL% NEQ 0 (
+    echo [WARNING] Server sync failed. You can run /var/www/dasa-eps-school/deploy_server.sh manually on the VPS.
+) else (
+    echo [SUCCESS] Live server updated successfully!
+)
+
 echo.
 echo ========================================================
 echo        Deployment process finished successfully!
+echo        Live URL: https://eps.dasatech.in
 echo ========================================================
 echo.
 pause
