@@ -35,6 +35,18 @@ class PeriodReportController extends Controller
             return (int) $user->employee->id;
         }
 
+        $byUserId = Employee::where('user_id', $user->id)->value('id');
+        if ($byUserId) {
+            return (int) $byUserId;
+        }
+
+        if (!empty($user->username)) {
+            $byCode = Employee::where('employee_code', $user->username)->value('id');
+            if ($byCode) {
+                return (int) $byCode;
+            }
+        }
+
         // Fallback: match by email in Employee record
         $emp = Employee::where('official_email', $user->email)
             ->orWhere('personal_email', $user->email)

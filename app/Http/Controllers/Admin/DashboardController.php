@@ -579,8 +579,16 @@ class DashboardController extends Controller
                     ->orderBy('c.name')->orderBy('t.start_time')
                     ->get();
 
-                $todayDay = now()->format('l');
-                $myScheduleToday = $myClasses->filter(fn($r) => strtolower($r->day_of_week) === strtolower($todayDay));
+                $todayDay = strtolower(now()->format('l'));
+                $todayShort = strtolower(now()->format('D'));
+                $isoDay = (int) now()->dayOfWeekIso;
+                $myScheduleToday = $myClasses->filter(function ($r) use ($todayDay, $todayShort, $isoDay) {
+                    if (is_numeric($r->day_of_week)) {
+                        return (int) $r->day_of_week === $isoDay;
+                    }
+                    $dow = strtolower((string) $r->day_of_week);
+                    return $dow === $todayDay || $dow === $todayShort;
+                });
             } catch (\Exception $e) {}
         }
 

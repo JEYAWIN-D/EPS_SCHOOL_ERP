@@ -28,8 +28,9 @@ return new class extends Migration {
             $table->date('purchase_date')->nullable();
             $table->string('location')->nullable();
             $table->boolean('is_available')->default(true);
-            $table->foreign('category_id')->references('id')->on('book_categories')->nullOnDelete();
-            $table->fullText(['title', 'author']);
+            if (\Illuminate\Support\Facades\DB::getDriverName() !== 'sqlite') {
+                $table->fullText(['title', 'author']);
+            }
             $table->timestamps();
         });
 

@@ -44,16 +44,44 @@ class ScopeToUser
 
         // ── Teachers: scope to their assigned classes/sections ─────
         if ($user->hasAnyRole(['class_teacher', 'subject_teacher', 'teacher', 'hod'])) {
-            if ($user->employee_id) {
+            $scope['is_scoped'] = true;
+            $empId = $user->employee_id ?? $user->employee?->id ?? DB::table('employees')->where('user_id', $user->id)->value('id');
+
+            if ($empId) {
+                $scope['scope_employee_id'] = $empId;
                 $currentYearId = \App\Models\AcademicYear::current()?->id;
-                $rows = DB::table('teacher_subject_allocations')
-                    ->where('employee_id', $user->employee_id)
-                    ->when($currentYearId, fn($q) => $q->where('academic_year_id', $currentYearId))
+
+                // 1. Teacher subject allocations
+                $subjectRows = DB::table('teacher_subject_allocations')
+                    ->where('employee_id', $empId)
+                    ->when($currentYearId, fn($q) => $q->where(function($sq) use ($currentYearId) {
+                        $sq->where('academic_year_id', $currentYearId)
+                           ->orWhereNull('academic_year_id');
+                    }))
                     ->get(['class_id', 'section_id']);
 
-                $scope['scope_class_ids']   = $rows->pluck('class_id')->unique()->filter()->values()->toArray();
-                $scope['scope_section_ids'] = $rows->pluck('section_id')->unique()->filter()->values()->toArray();
-                $scope['is_scoped']         = count($scope['scope_class_ids']) > 0;
+                // 2. Class teacher assignments
+                $ctaRows = DB::table('staff_class_teacher_assignments')
+                    ->where('employee_id', $empId)
+                    ->where('is_current', true)
+                    ->when($currentYearId, fn($q) => $q->where(function($sq) use ($currentYearId) {
+                        $sq->where('academic_year_id', $currentYearId)
+                           ->orWhereNull('academic_year_id');
+                    }))
+                    ->get(['class_id', 'section_id']);
+
+                $allClassIds = $subjectRows->pluck('class_id')
+                    ->concat($ctaRows->pluck('class_id'))
+                    ->unique()->filter()->values()->toArray();
+
+                $allSectionIds = $subjectRows->pluck('section_id')
+                    ->concat($ctaRows->pluck('section_id'))
+                    ->unique()->filter()->values()->toArray();
+
+                $scope['scope_class_ids']   = $allClassIds;
+                $scope['scope_section_ids'] = $allSectionIds;
+                $scope['scope_class_teacher_class_ids']   = $ctaRows->pluck('class_id')->unique()->filter()->values()->toArray();
+                $scope['scope_class_teacher_section_ids'] = $ctaRows->pluck('section_id')->unique()->filter()->values()->toArray();
             }
         }
 

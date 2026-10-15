@@ -69,38 +69,41 @@
       </tr></thead>
       <tbody>
         @forelse($vehicles as $v)
-          <tr class="tr hover:bg-slate-50/70">
-            <td class="td">
-              <a href="{{ route('transport.vehicle.show', $v->id) }}" class="font-mono font-bold text-indigo-600 hover:underline block text-sm">
+          <tr class="tr hover:bg-blue-50/30 transition-colors duration-150">
+            <td class="td font-medium">
+              <a href="{{ route('transport.vehicle.show', $v->id) }}"
+                 class="inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-950 border border-amber-300 hover:bg-amber-100 transition shadow-xs"
+                 title="View vehicle details">
+                <svg class="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
                 {{ $v->vehicle_number }}
               </a>
-              <span class="text-[11px] text-slate-500 font-medium">{{ ucfirst($v->vehicle_type ?? 'Van') }}</span>
+              <span class="text-xs text-slate-600 font-semibold block mt-1">{{ ucfirst($v->vehicle_type ?? 'Van') }}</span>
             </td>
             <td class="td">
-              <span class="font-semibold text-slate-800 block">{{ $v->make }}</span>
-              <span class="text-slate-500 text-[11px]">{{ $v->model }}</span>
+              <span class="font-bold text-slate-900 block text-xs">{{ $v->make }}</span>
+              <span class="text-slate-600 text-xs font-medium">{{ $v->model }}</span>
             </td>
             <td class="td">
               @if($v->route)
-                <span class="font-bold text-slate-800 block truncate max-w-[200px]" title="{{ $v->route->route_name }}">
+                <span class="font-bold text-slate-900 block truncate max-w-[200px] text-xs" title="{{ $v->route->route_name }}">
                   {{ $v->route->route_name }}
                 </span>
-                <span class="text-[11px] text-slate-500">{{ $v->route->stops->count() }} stops &bull; {{ $v->route->distance_km }} km</span>
+                <span class="text-xs text-slate-600 font-medium">{{ $v->route->stops->count() }} stops &bull; {{ $v->route->distance_km }} km</span>
               @else
-                <span class="text-slate-400 italic">Unassigned</span>
+                <span class="text-slate-500 italic text-xs font-medium bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block">Unassigned</span>
               @endif
             </td>
             <td class="td">
-              <div class="space-y-0.5">
-                <span class="font-bold text-slate-900 block">{{ $v->effective_capacity }} Seats</span>
+              <div class="space-y-1">
+                <span class="font-extrabold text-slate-900 block text-xs">{{ $v->effective_capacity }} Seats</span>
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[11px] text-slate-500">{{ $v->allotments->count() }} allocated</span>
+                  <span class="text-xs text-slate-600 font-medium">{{ $v->allotments->count() }} allocated</span>
                   @if($v->available_seats > 0)
-                    <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
                       {{ $v->available_seats }} vacant
                     </span>
                   @else
-                    <span class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-300">
                       Full
                     </span>
                   @endif
@@ -109,46 +112,58 @@
             </td>
             <td class="td">
               @if($v->driver_name)
-                <span class="font-semibold text-slate-800 block">{{ $v->driver_name }}</span>
+                <span class="font-bold text-slate-900 block text-xs">{{ $v->driver_name }}</span>
                 @if($v->driver_mobile)
-                  <a href="tel:{{ $v->driver_mobile }}" class="text-[11px] text-indigo-600 hover:underline">📞 {{ $v->driver_mobile }}</a>
+                  <a href="tel:{{ $v->driver_mobile }}" class="text-xs text-slate-700 hover:text-indigo-700 font-medium inline-flex items-center gap-1 mt-0.5">
+                    📞 {{ $v->driver_mobile }}
+                  </a>
                 @endif
               @else
-                <span class="text-slate-400 italic">No driver</span>
+                <span class="text-slate-500 italic text-xs">No driver</span>
               @endif
             </td>
             <td class="td">
               @if($v->attendant_name)
-                <span class="font-semibold text-slate-800 block">{{ $v->attendant_name }}</span>
+                <span class="font-bold text-slate-900 block text-xs">{{ $v->attendant_name }}</span>
                 @if($v->attendant_mobile)
-                  <a href="tel:{{ $v->attendant_mobile }}" class="text-[11px] text-indigo-600 hover:underline">📞 {{ $v->attendant_mobile }}</a>
+                  <a href="tel:{{ $v->attendant_mobile }}" class="text-xs text-slate-700 hover:text-indigo-700 font-medium inline-flex items-center gap-1 mt-0.5">
+                    📞 {{ $v->attendant_mobile }}
+                  </a>
                 @endif
               @else
-                <span class="text-slate-400 italic">No attendant</span>
+                <span class="text-slate-500 italic text-xs">No attendant</span>
               @endif
             </td>
             <td class="td">
-              <a href="{{ route('transport.vehicle.show', $v->id) }}" class="inline-flex items-center gap-1 text-slate-700 hover:text-indigo-600 font-medium">
-                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <a href="{{ route('transport.vehicle.show', $v->id) }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300 transition shadow-xs">
+                <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 <span>{{ $v->documents->count() }} file{{ $v->documents->count() == 1 ? '' : 's' }}</span>
               </a>
             </td>
-            <td class="td">
-              <span class="{{ $v->is_active ? 'badge-green' : 'badge-red' }} text-[10px]">
-                {{ $v->is_active ? 'Active' : 'Inactive' }}
-              </span>
+            <td class="td whitespace-nowrap">
+              @if($v->is_active)
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Active
+                </span>
+              @else
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300">
+                  <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                  Inactive
+                </span>
+              @endif
             </td>
             <td class="td text-right whitespace-nowrap">
               <div class="flex items-center justify-end gap-1.5">
-                <a href="{{ route('transport.vehicle.show', $v->id) }}" class="btn-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200">
+                <a href="{{ route('transport.vehicle.show', $v->id) }}" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-300 shadow-xs transition">
                   View Van
                 </a>
-                <a href="{{ route('transport.vehicle.edit', $v->id) }}" class="btn-xs text-slate-600 hover:text-indigo-600">
+                <a href="{{ route('transport.vehicle.edit', $v->id) }}" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-300 shadow-xs transition">
                   Edit
                 </a>
                 <form method="POST" action="{{ route('transport.vehicle.destroy', $v->id) }}" class="inline" onsubmit="return confirm('Delete vehicle {{ $v->vehicle_number }}?');">
                   @csrf @method('DELETE')
-                  <button type="submit" class="btn-xs text-rose-600 hover:text-rose-800">
+                  <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-900 border border-rose-300 shadow-xs transition">
                     Delete
                   </button>
                 </form>

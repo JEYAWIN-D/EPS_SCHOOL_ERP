@@ -76,6 +76,36 @@ class AttendanceController extends Controller
     public function mark(Request $request)
     {
         $classes  = Classes::activeCached();
+
+        // Enforce user scoping for teachers & class teachers
+        if ($request->is_scoped) {
+            $allowedClassIds = array_map('intval', $request->scope_class_ids ?? []);
+
+            if ($request->filled('class_id') && !in_array((int)$request->class_id, $allowedClassIds)) {
+                abort(403, 'Unauthorized access: you are not assigned as class teacher or teacher for this class.');
+            }
+
+            $classes = $classes->whereIn('id', $allowedClassIds);
+
+            if ($classes->isEmpty()) {
+                return view('attendance.mark', [
+                    'classes'           => collect(),
+                    'sections'          => collect(),
+                    'students'          => collect(),
+                    'existing'          => collect(),
+                    'classId'           => null,
+                    'sectionId'         => null,
+                    'selectedClass'     => null,
+                    'selectedSection'   => null,
+                    'date'              => $request->date ?? today()->toDateString(),
+                    'unassignedTeacher' => true,
+                    'isSunday'          => false,
+                    'isHoliday'         => false,
+                    'holidayName'       => null,
+                ]);
+            }
+        }
+
         $sections = collect();
         $students = collect();
         $existing = collect();
@@ -183,6 +213,13 @@ class AttendanceController extends Controller
             'date'      => 'required|date|before_or_equal:today',
             'attendance' => 'required|array',
         ]);
+
+        if ($request->is_scoped) {
+            $allowedClassIds = array_map('intval', $request->scope_class_ids ?? []);
+            if (!in_array((int) $request->class_id, $allowedClassIds)) {
+                abort(403, 'Unauthorized access: you cannot submit attendance for classes outside your assignment.');
+            }
+        }
 
         // Holiday / Sunday Lock Check
         $date        = $request->date;
@@ -1518,5 +1555,146 @@ class AttendanceController extends Controller
 
         $filename = 'staff-attendance-monthly-' . $month . '.xlsx';
         return Excel::download(new ArrayExport($rows), $filename);
+    }
+
+    /**
+     * List attendance correction requests (Audit & Approval).
+     */
+    public function corrections(Request $request)
+    {
+        $user = Auth::user();
+        $isElevated = $user && $user->hasAnyRole(['super_admin', 'admin', 'principal', 'hr_manager']);
+
+        $query = \App\Models\AttendanceCorrection::with(['student', 'employee', 'requester', 'approver'])
+            ->latest();
+
+        if (!$isElevated) {
+            $query->where('requested_by', $user->id);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('attendance_type', $request->type);
+        }
+
+        $corrections = $query->paginate(20)->withQueryString();
+
+        return view('attendance.corrections', compact('corrections', 'isElevated'));
+    }
+
+    /**
+     * Submit an attendance correction request.
+     */
+    public function storeCorrection(Request $request)
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'attendance_type'      => 'required|in:student,staff',
+            'attendance_record_id' => 'required|integer',
+            'new_status'           => 'required|in:present,absent,late,half_day,leave,on_duty',
+            'reason'               => 'required|string|max:500',
+        ]);
+
+        $oldStatus = 'unknown';
+        $studentId = null;
+        $employeeId = null;
+
+        if ($validated['attendance_type'] === 'student') {
+            $record = AttendanceRecord::findOrFail($validated['attendance_record_id']);
+
+            if ($request->is_scoped) {
+                $allowedClassIds = array_map('intval', $request->scope_class_ids ?? []);
+                if (!in_array((int) $record->class_id, $allowedClassIds)) {
+                    abort(403, 'Unauthorized: You are not authorized to request corrections for this student.');
+                }
+            }
+
+            $oldStatus = $record->status;
+            $studentId = $record->student_id;
+        } else {
+            $employeeId = $request->employee_id ?? $user->employee_id;
+        }
+
+        $correction = \App\Models\AttendanceCorrection::create([
+            'attendance_record_id' => $validated['attendance_record_id'],
+            'student_id'           => $studentId,
+            'employee_id'          => $employeeId,
+            'attendance_type'      => $validated['attendance_type'],
+            'requested_by'         => $user->id,
+            'old_status'           => $oldStatus,
+            'new_status'           => $validated['new_status'],
+            'reason'               => $validated['reason'],
+            'status'               => 'pending',
+        ]);
+
+        return back()->with('success', 'Attendance correction request submitted for administrative approval.');
+    }
+
+    /**
+     * Review (approve / reject) an attendance correction request.
+     */
+    public function reviewCorrection(Request $request, int $id)
+    {
+        $user = Auth::user();
+        if (!$user->hasAnyRole(['super_admin', 'admin', 'principal', 'hr_manager'])) {
+            abort(403, 'Unauthorized: Administrative role required to review attendance corrections.');
+        }
+
+        $validated = $request->validate([
+            'action' => 'required|in:approve,reject',
+            'notes'  => 'nullable|string|max:500',
+        ]);
+
+        $correction = \App\Models\AttendanceCorrection::findOrFail($id);
+
+        if ($correction->status !== 'pending') {
+            return back()->with('error', 'This correction request has already been processed.');
+        }
+
+        DB::transaction(function () use ($correction, $validated, $user) {
+            $now = now();
+            if ($validated['action'] === 'approve') {
+                $correction->update([
+                    'status'      => 'approved',
+                    'approved_by' => $user->id,
+                    'approved_at' => $now,
+                    'notes'       => $validated['notes'],
+                ]);
+
+                // Update underlying student attendance record
+                if ($correction->attendance_type === 'student' && $correction->attendance_record_id) {
+                    AttendanceRecord::where('id', $correction->attendance_record_id)->update([
+                        'status'     => $correction->new_status,
+                        'remark'     => 'Correction approved: ' . ($validated['notes'] ?: $correction->reason),
+                        'updated_at' => $now,
+                    ]);
+                }
+
+                \App\Models\AuditLog::create([
+                    'user_id'    => $user->id,
+                    'action'     => 'ATTENDANCE_CORRECTION_APPROVED',
+                    'model_type' => 'AttendanceCorrection',
+                    'model_id'   => $correction->id,
+                    'old_values' => ['status' => $correction->old_status],
+                    'new_values' => ['status' => $correction->new_status, 'notes' => $validated['notes']],
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                ]);
+            } else {
+                $correction->update([
+                    'status'      => 'rejected',
+                    'approved_by' => $user->id,
+                    'approved_at' => $now,
+                    'notes'       => $validated['notes'],
+                ]);
+            }
+        });
+
+        $statusText = $validated['action'] === 'approve' ? 'approved and updated' : 'rejected';
+        return back()->with('success', "Attendance correction request has been {$statusText}.");
     }
 }

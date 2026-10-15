@@ -22,6 +22,14 @@ class EnsureStaffUser
             return redirect()->route('login');
         }
 
+        // Enforce forced password change on first login
+        if ($user->must_change_password && !$request->routeIs('password.force_change*') && !$request->routeIs('logout')) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Password change required before proceeding.'], 403);
+            }
+            return redirect()->route('password.force_change')->with('warning', 'Please change your temporary password before accessing the system.');
+        }
+
         // If the user has a student or parent role and lacks any staff/administrative role,
         // prevent access to internal administrative routes.
         $isPurePortalUser = $user->hasAnyRole(['parent', 'student']) && 
@@ -30,7 +38,8 @@ class EnsureStaffUser
                 'accountant', 'teacher', 'class_teacher', 'subject_teacher', 'hod',
                 'librarian', 'transport_manager', 'warden', 'hr_manager',
                 'receptionist', 'inventory_manager', 'event_coordinator',
-                'alumni_coordinator', 'itadmin'
+                'alumni_coordinator', 'itadmin', 'security_guard',
+                'warehouse_manager', 'staff', 'correspondent', 'correspondant'
             ]);
 
         if ($isPurePortalUser) {

@@ -55,10 +55,11 @@ class LoginController extends Controller
             ])->withInput($request->only('email'));
         }
 
-        // Look up user by email (case-insensitive for PostgreSQL) or mobile
+        // Look up user by email (case-insensitive for PostgreSQL), username (Employee ID), or mobile
         $cleanMobile = preg_replace('/[^0-9]/', '', $rawInput);
         $user = User::where(function ($q) use ($rawInput, $cleanMobile) {
             $q->whereRaw('LOWER(email) = ?', [strtolower($rawInput)])
+              ->orWhereRaw('LOWER(username) = ?', [strtolower($rawInput)])
               ->orWhere('mobile', $rawInput);
 
             if (!empty($cleanMobile) && strlen($cleanMobile) >= 10) {
@@ -114,12 +115,54 @@ class LoginController extends Controller
             $user->update(['last_login_at' => now()]);
             $request->session()->regenerate();
 
+            if ($user->must_change_password) {
+                return redirect()->route('password.force_change')
+                    ->with('warning', 'Temporary credentials detected. Please change your password to continue.');
+            }
+
             return redirect()->intended($this->portalRedirect());
         }
 
         RateLimiter::hit($throttleKey, 60);
 
         return back()->withErrors(['email' => 'Invalid credentials. Please try again.'])->withInput($request->only('email'));
+    }
+
+    public function showForceChangePassword()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.force-change-password', compact('user'));
+    }
+
+    public function forceChangePassword(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $request->validate([
+            'current_password' => ['nullable', 'string'],
+            'password'         => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+        ]);
+
+        // If user submitted current password, verify it
+        if ($request->filled('current_password')) {
+            if (!Hash::check($request->input('current_password'), $user->password)) {
+                return back()->withErrors(['current_password' => 'The provided current password does not match our records.']);
+            }
+        }
+
+        $user->update([
+            'password'             => Hash::make($request->input('password')),
+            'must_change_password' => false,
+        ]);
+
+        return redirect($this->portalRedirect())->with('success', 'Password successfully updated. Welcome to School ERP!');
     }
 
     public function logout(Request $request)

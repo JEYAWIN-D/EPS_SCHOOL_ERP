@@ -93,12 +93,30 @@ class TransportController extends Controller
     public function routes(Request $request)
     {
         $showInactive = $request->boolean('show_inactive');
-        $routes = TransportRoute::withCount('allotments')
-            ->with('vehicle')
-            ->when($request->search, fn($q, $v) => $q->where('route_name', 'like', "%$v%"))
-            ->when(!$showInactive, fn($q) => $q->where('is_active', true))
-            ->paginate(20)->withQueryString();
-        return view('transport.routes', compact('routes', 'showInactive'));
+        $search = $request->query('search');
+
+        $routesQuery = TransportRoute::withCount('allotments')
+            ->with(['vehicle', 'stops'])
+            ->when($search, function ($q, $v) {
+                $q->where(function ($sub) use ($v) {
+                    $sub->where('route_name', 'like', "%{$v}%")
+                        ->orWhere('route_number', 'like', "%{$v}%")
+                        ->orWhere('from_location', 'like', "%{$v}%")
+                        ->orWhere('to_location', 'like', "%{$v}%")
+                        ->orWhereHas('vehicle', fn($vq) => $vq->where('vehicle_number', 'like', "%{$v}%"));
+                });
+            })
+            ->when(!$showInactive, fn($q) => $q->where('is_active', true));
+
+        $stats = [
+            'total_routes'    => TransportRoute::count(),
+            'active_routes'   => TransportRoute::where('is_active', true)->count(),
+            'assigned_buses'  => TransportRoute::whereNotNull('vehicle_id')->distinct('vehicle_id')->count('vehicle_id'),
+            'total_stops'     => \App\Models\TransportStop::count(),
+        ];
+
+        $routes = $routesQuery->paginate(20)->withQueryString();
+        return view('transport.routes', compact('routes', 'showInactive', 'stats'));
     }
 
     public function toggleRoute(int $id)

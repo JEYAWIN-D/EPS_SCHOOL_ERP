@@ -48,7 +48,11 @@ class StudentController extends Controller
         }
 
         // Teacher scoping (restricted to assigned classes)
-        if (!empty($request->scope_class_ids)) {
+        if ($request->is_scoped && empty($request->scope_student_ids)) {
+            if (empty($request->scope_class_ids)) {
+                abort(403, 'Unauthorized access: you have no assigned classes.');
+            }
+
             $isInClass = DB::table('student_enrollments')
                 ->where('student_id', $studentId)
                 ->where('status', 'active')
@@ -97,9 +101,13 @@ class StudentController extends Controller
             ->when($request->filled('status') && $request->status !== 'all', fn($q) => $q->where('status', $request->status))
             ->when(!$request->has('status'), fn($q) => $q->where('status', 'active'))
             // ScopeToUser: restrict class_teachers/subject_teachers to their assigned classes
-            ->when($request->is_scoped && !empty($request->scope_class_ids),
-                fn($q) => $q->whereHas('currentEnrollment', fn($q) => $q->whereIn('class_id', $request->scope_class_ids))
-            );
+            ->when($request->is_scoped && empty($request->scope_student_ids), function($q) use ($request) {
+                if (!empty($request->scope_class_ids)) {
+                    $q->whereHas('currentEnrollment', fn($sq) => $sq->whereIn('class_id', $request->scope_class_ids));
+                } else {
+                    $q->whereRaw('1 = 0');
+                }
+            });
 
         // Sorting
         switch ($sort) {

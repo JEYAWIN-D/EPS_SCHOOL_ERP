@@ -125,12 +125,19 @@ class AcademicController extends Controller
 
         $previousReports = collect();
         if ($authEmployeeId) {
-            $previousReports = \App\Models\PeriodReport::with(['subject', 'class', 'section'])
-                ->where('teacher_id', $authEmployeeId)
-                ->orderBy('date', 'desc')
-                ->orderBy('id', 'desc')
-                ->take(50)
-                ->get();
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('period_reports')) {
+                    $previousReports = \App\Models\PeriodReport::with(['subject', 'class', 'section'])
+                        ->where('teacher_id', $authEmployeeId)
+                        ->orderBy('date', 'desc')
+                        ->orderBy('id', 'desc')
+                        ->take(50)
+                        ->get();
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Could not load period reports: ' . $e->getMessage());
+                $previousReports = collect();
+            }
         }
 
         $formattedPreviousReports = $previousReports->map(function ($r) {
@@ -793,22 +800,23 @@ class AcademicController extends Controller
 
     public function teacherAllocation(Request $request)
     {
-        $teachers       = Employee::where('employee_type', 'teaching')->where('is_active', true)->orderBy('first_name')->get();
+        $teachers       = Employee::where('employee_type', 'teaching')->where('is_active', true)->with(['eligibleTeachingLevels'])->orderBy('first_name')->get();
         $subjects       = Subject::where('is_active', true)->orderBy('name')->get();
-        $classes        = Classes::active()->get();
+        $classes        = Classes::active()->with('teachingLevel')->get();
         $sections       = Section::orderBy('name')->get();
+        $teachingLevels = \App\Models\TeachingLevel::where('is_active', true)->orderBy('sort_order')->get();
         $academicYears  = AcademicYear::orderByDesc('start_date')->get();
         $currentYear    = AcademicYear::current();
         $filterYearId   = $request->academic_year_id ?? $currentYear?->id;
 
-        $allocations = TeacherSubjectAllocation::with(['employee', 'subject', 'class', 'section', 'academicYear'])
+        $allocations = TeacherSubjectAllocation::with(['employee', 'subject', 'class.teachingLevel', 'section', 'academicYear'])
             ->when($filterYearId, fn($q) => $q->where('academic_year_id', $filterYearId))
             ->when($request->teacher_id, fn($q, $v) => $q->where('employee_id', $v))
             ->when($request->class_id,   fn($q, $v) => $q->where('class_id', $v))
             ->latest()->paginate(25)->withQueryString();
 
         return view('academics.teacher-allocation', compact(
-            'teachers', 'subjects', 'classes', 'sections',
+            'teachers', 'subjects', 'classes', 'sections', 'teachingLevels',
             'allocations', 'academicYears', 'filterYearId'
         ));
     }
@@ -833,16 +841,41 @@ class AcademicController extends Controller
 
     public function saveAllocation(Request $request)
     {
-        $request->validate(['employee_id' => 'required|exists:employees,id', 'subject_id' => 'required|exists:subjects,id', 'class_id' => 'required|exists:classes,id']);
+        $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'subject_id'  => 'required|exists:subjects,id',
+            'class_id'    => 'required|exists:classes,id',
+            'section_id'  => 'nullable|exists:sections,id',
+        ]);
+
+        $employee = Employee::findOrFail($request->employee_id);
+        $class = Classes::with('teachingLevel')->findOrFail($request->class_id);
         $currentYear = AcademicYear::current();
+
+        // Section 14: Check teaching level eligibility if configured
+        if ($class->teaching_level_id && !$employee->isEligibleForLevel($class->teaching_level_id)) {
+            $levelName = $class->teachingLevel?->name ?? 'this teaching level';
+            return back()->with('error', "Teacher {$employee->full_name} is not approved or eligible for {$levelName}. Please update teacher eligibility under HR / Teaching Assignments first.")->withInput();
+        }
+
+        // Section 14: Check workload limit if configured
+        if ($employee->max_weekly_periods) {
+            $allocatedCount = TeacherSubjectAllocation::where('employee_id', $employee->id)
+                ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
+                ->count();
+            if ($allocatedCount >= $employee->max_weekly_periods) {
+                return back()->with('error', "Cannot allocate: Teacher {$employee->full_name} has reached maximum weekly workload ({$employee->max_weekly_periods} periods/allocations).")->withInput();
+            }
+        }
+
         TeacherSubjectAllocation::firstOrCreate([
-            'employee_id' => $request->employee_id,
-            'subject_id'  => $request->subject_id,
-            'class_id'    => $request->class_id,
-            'section_id'  => $request->section_id ?? null,
+            'employee_id'      => $request->employee_id,
+            'subject_id'       => $request->subject_id,
+            'class_id'         => $request->class_id,
+            'section_id'       => $request->section_id ?? null,
             'academic_year_id' => $currentYear?->id,
         ]);
-        return back()->with('success', 'Teacher assigned.');
+        return back()->with('success', "Teaching assignment saved for {$employee->full_name}.");
     }
 
     public function deleteAllocation(int $id)
@@ -1672,5 +1705,151 @@ class AcademicController extends Controller
         return view('academics.homework-calendar', compact(
             'classes', 'subjects', 'calendar', 'month', 'year', 'classId', 'start'
         ));
+    }
+
+    /**
+     * Dedicated Class Management Dashboard for Assigned Class Teachers (Section 8).
+     */
+    public function myClass(Request $request)
+    {
+        $user = Auth::user();
+        $isElevated = $user && $user->hasAnyRole(['super_admin', 'admin', 'principal', 'vice_principal']);
+        $authEmployeeId = \App\Http\Controllers\Admin\PeriodReportController::resolveAuthEmployeeId();
+        $currentYear = AcademicYear::current();
+
+        $assignment = null;
+        if ($authEmployeeId) {
+            $assignment = \App\Models\StaffClassTeacherAssignment::with(['class', 'section'])
+                ->where('employee_id', $authEmployeeId)
+                ->where('is_current', true)
+                ->when($currentYear, fn($q) => $q->where(function($sq) use ($currentYear) {
+                    $sq->where('academic_year_id', $currentYear->id)
+                       ->orWhereNull('academic_year_id');
+                }))
+                ->first();
+        }
+
+        $allClasses = Classes::active()->get();
+        $classId = null;
+        $sectionId = null;
+
+        if ($assignment) {
+            $classId = $assignment->class_id;
+            $sectionId = $assignment->section_id;
+        } elseif ($isElevated) {
+            $classId = $request->class_id ?: $allClasses->first()?->id;
+            $sectionId = $request->section_id;
+        }
+
+        $class = $classId ? Classes::with('teachingLevel')->find($classId) : null;
+        $section = $sectionId ? Section::find($sectionId) : null;
+
+        $students = collect();
+        $todayAttendance = [
+            'present' => 0,
+            'absent'  => 0,
+            'late'    => 0,
+            'leave'   => 0,
+            'total'   => 0,
+            'is_marked' => false,
+        ];
+        $timetable = collect();
+        $recentHomework = collect();
+
+        if ($class) {
+            // Students in class
+            $enrollments = \App\Models\StudentEnrollment::with(['student'])
+                ->where('class_id', $class->id)
+                ->when($sectionId, fn($q) => $q->where('section_id', $sectionId))
+                ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
+                ->where('status', 'active')
+                ->get();
+
+            $studentIds = $enrollments->pluck('student_id')->filter()->unique();
+
+            // Today's attendance
+            $todayRecords = \App\Models\AttendanceRecord::whereIn('student_id', $studentIds)
+                ->whereDate('date', today())
+                ->get();
+
+            if ($todayRecords->isNotEmpty()) {
+                $todayAttendance['is_marked'] = true;
+                $todayAttendance['present'] = $todayRecords->where('status', 'present')->count();
+                $todayAttendance['absent']  = $todayRecords->where('status', 'absent')->count();
+                $todayAttendance['late']    = $todayRecords->where('status', 'late')->count();
+                $todayAttendance['leave']   = $todayRecords->where('status', 'leave')->count();
+                $todayAttendance['total']   = $todayRecords->count();
+            }
+
+            $students = $enrollments->map(function ($e) use ($todayRecords) {
+                $st = $e->student;
+                if ($st) {
+                    $st->roll = $e->roll_number;
+                    $st->today_status = $todayRecords->firstWhere('student_id', $st->id)?->status ?? 'unmarked';
+                }
+                return $st;
+            })->filter()->values();
+
+            // Weekly Timetable for this class
+            $timetable = \App\Models\Timetable::with(['subject', 'teacher'])
+                ->where('class_id', $class->id)
+                ->when($sectionId, fn($q) => $q->where('section_id', $sectionId))
+                ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
+                ->orderBy('day_of_week')->orderBy('period_number')
+                ->get()->groupBy('day_of_week');
+
+            // Recent homework
+            $recentHomework = \App\Models\Homework::with(['subject', 'createdBy'])
+                ->where('class_id', $class->id)
+                ->when($sectionId, fn($q) => $q->where('section_id', $sectionId))
+                ->latest()
+                ->take(5)
+                ->get();
+        }
+
+        return view('academics.my-class', compact(
+            'assignment', 'class', 'section', 'students', 'todayAttendance',
+            'timetable', 'recentHomework', 'isElevated', 'allClasses', 'classId', 'sectionId'
+        ));
+    }
+
+    /**
+     * Update teacher teaching level eligibility & workload limits (Section 14).
+     */
+    public function saveTeacherEligibility(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id'        => 'required|exists:employees,id',
+            'teaching_levels'    => 'nullable|array',
+            'teaching_levels.*'  => 'exists:teaching_levels,id',
+            'max_weekly_periods' => 'nullable|integer|min:1|max:60',
+            'notes'              => 'nullable|string|max:500',
+        ]);
+
+        $employee = Employee::findOrFail($validated['employee_id']);
+
+        DB::transaction(function () use ($employee, $validated, $request) {
+            $employee->update([
+                'max_weekly_periods' => $validated['max_weekly_periods'] ?? $employee->max_weekly_periods,
+                'approved_teaching_levels' => $validated['teaching_levels'] ?? [],
+            ]);
+
+            // Sync TeacherLevelEligibility table
+            \App\Models\TeacherLevelEligibility::where('employee_id', $employee->id)->delete();
+            if (!empty($validated['teaching_levels'])) {
+                foreach ($validated['teaching_levels'] as $levelId) {
+                    \App\Models\TeacherLevelEligibility::create([
+                        'employee_id'       => $employee->id,
+                        'teaching_level_id' => $levelId,
+                        'is_approved'       => true,
+                        'approved_by'       => Auth::id(),
+                        'approved_at'       => now(),
+                        'notes'             => $validated['notes'] ?? 'Updated via Academic Management',
+                    ]);
+                }
+            }
+        });
+
+        return back()->with('success', "Teaching level eligibility and workload updated for {$employee->full_name}.");
     }
 }

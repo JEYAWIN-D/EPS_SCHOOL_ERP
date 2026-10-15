@@ -5,6 +5,7 @@
 @section('content')
 <div class="max-w-5xl mx-auto space-y-6" x-data="{
   category: '{{ old('employee_type', $employee->employee_type ?? 'teaching') }}',
+  maritalStatus: '{{ old('marital_status', $employee->marital_status ?? 'Single') }}',
   validateForm(e) {
     const form = e.target;
     if (!form.checkValidity()) {
@@ -254,21 +255,63 @@
           @error('nationality')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="religion">
+        {{-- RELIGION DROPDOWN --}}
+        <div x-data="{
+          selectedRel: '{{ in_array(old('religion', $employee->religion ?? 'Hindu'), ['Hindu', 'Christian', 'Muslim', 'Sikh', 'Jain', 'Buddhist', 'Parsi', 'Jewish']) ? old('religion', $employee->religion ?? 'Hindu') : (old('religion', $employee->religion) ? 'Other' : 'Hindu') }}',
+          customRel: '{{ !in_array(old('religion', $employee->religion ?? 'Hindu'), ['Hindu', 'Christian', 'Muslim', 'Sikh', 'Jain', 'Buddhist', 'Parsi', 'Jewish', '']) ? old('religion', $employee->religion ?? '') : '' }}',
+          get effectiveRel() { return this.selectedRel === 'Other' ? this.customRel : this.selectedRel; }
+        }">
+          <label class="label text-xs font-semibold" for="religion_select">
             RELIGION <span class="text-rose-500 font-bold">*</span>
           </label>
-          <input type="text" id="religion" name="religion" value="{{ old('religion', $employee->religion) }}" required
-                 class="input @error('religion') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="Enter religion">
+          <select id="religion_select" x-model="selectedRel"
+                  class="select @error('religion') border-rose-500 ring-2 ring-rose-200 @enderror">
+            <option value="">-- Select Religion --</option>
+            <option value="Hindu">Hindu</option>
+            <option value="Christian">Christian</option>
+            <option value="Muslim">Muslim</option>
+            <option value="Sikh">Sikh</option>
+            <option value="Jain">Jain</option>
+            <option value="Buddhist">Buddhist</option>
+            <option value="Parsi">Parsi</option>
+            <option value="Jewish">Jewish</option>
+            <option value="Other">Other (Custom Religion)</option>
+          </select>
+          <div x-show="selectedRel === 'Other'" class="mt-1.5" style="display:none">
+            <input type="text" x-model="customRel" placeholder="Type custom religion..." class="input text-xs">
+          </div>
+          <input type="hidden" name="religion" :value="effectiveRel">
           @error('religion')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="caste">
+        {{-- CASTE DROPDOWN --}}
+        <div x-data="{
+          selectedCaste: '{{ in_array(old('caste', $employee->caste ?? $employee->category ?? 'General'), ['General', 'OBC', 'BC', 'BCM', 'MBC', 'DNC', 'SC', 'SCA', 'ST', 'EWS']) ? old('caste', $employee->caste ?? $employee->category ?? 'General') : (old('caste', $employee->caste ?? $employee->category) ? 'Other' : 'General') }}',
+          customCaste: '{{ !in_array(old('caste', $employee->caste ?? $employee->category ?? 'General'), ['General', 'OBC', 'BC', 'BCM', 'MBC', 'DNC', 'SC', 'SCA', 'ST', 'EWS', '']) ? old('caste', $employee->caste ?? $employee->category ?? '') : '' }}',
+          get effectiveCaste() { return this.selectedCaste === 'Other' ? this.customCaste : this.selectedCaste; }
+        }">
+          <label class="label text-xs font-semibold" for="caste_select">
             CASTE <span class="text-rose-500 font-bold">*</span>
           </label>
-          <input type="text" id="caste" name="caste" value="{{ old('caste', $employee->caste ?? $employee->category) }}" required
-                 class="input @error('caste') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="Enter caste">
+          <select id="caste_select" x-model="selectedCaste"
+                  class="select @error('caste') border-rose-500 ring-2 ring-rose-200 @enderror">
+            <option value="">-- Select Caste / Category --</option>
+            <option value="General">General (OC / Open)</option>
+            <option value="OBC">OBC (Other Backward Class)</option>
+            <option value="BC">BC (Backward Class)</option>
+            <option value="BCM">BCM (Backward Class Muslim)</option>
+            <option value="MBC">MBC (Most Backward Community)</option>
+            <option value="DNC">DNC (De-notified Community)</option>
+            <option value="SC">SC (Scheduled Caste)</option>
+            <option value="SCA">SCA (Scheduled Caste Arunthathiyar)</option>
+            <option value="ST">ST (Scheduled Tribe)</option>
+            <option value="EWS">EWS (Economically Weaker Section)</option>
+            <option value="Other">Other (Custom Caste)</option>
+          </select>
+          <div x-show="selectedCaste === 'Other'" class="mt-1.5" style="display:none">
+            <input type="text" x-model="customCaste" placeholder="Type custom caste / category..." class="input text-xs">
+          </div>
+          <input type="hidden" name="caste" :value="effectiveCaste">
           @error('caste')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
@@ -276,37 +319,51 @@
           <label class="label text-xs font-semibold" for="marital_status">
             MARITAL STATUS <span class="text-rose-500 font-bold">*</span>
           </label>
-          <select id="marital_status" name="marital_status" required class="select @error('marital_status') border-rose-500 ring-2 ring-rose-200 @enderror">
+          <select id="marital_status" name="marital_status" x-model="maritalStatus" required class="select @error('marital_status') border-rose-500 ring-2 ring-rose-200 @enderror">
             <option value="">-- Select Status --</option>
             <option value="Single" @selected(old('marital_status', $employee->marital_status)==='Single')>Single</option>
             <option value="Married" @selected(old('marital_status', $employee->marital_status)==='Married')>Married</option>
           </select>
+          <p class="text-[11px] text-slate-400 mt-1" x-show="maritalStatus !== 'Married'">Children count is not required for single staff.</p>
           @error('marital_status')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
+        {{-- Children count fields: ONLY needed & visible for Married staff --}}
+        <div x-show="maritalStatus === 'Married'" @if(old('marital_status', $employee->marital_status ?? 'Single') !== 'Married') style="display:none" @endif>
           <label class="label text-xs font-semibold" for="number_of_children">
             NUMBER OF CHILDREN <span class="text-rose-500 font-bold">*</span>
           </label>
-          <input type="number" id="number_of_children" name="number_of_children" value="{{ old('number_of_children', $employee->number_of_children ?? 0) }}" required min="0" max="20"
+          <input type="number" id="number_of_children" name="number_of_children"
+                 value="{{ old('number_of_children', $employee->number_of_children ?? 0) }}"
+                 :required="maritalStatus === 'Married'"
+                 :disabled="maritalStatus !== 'Married'"
+                 min="0" max="20"
                  class="input @error('number_of_children') border-rose-500 ring-2 ring-rose-200 @enderror">
           @error('number_of_children')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
+        <div x-show="maritalStatus === 'Married'" @if(old('marital_status', $employee->marital_status ?? 'Single') !== 'Married') style="display:none" @endif>
           <label class="label text-xs font-semibold" for="children_male">
             MALE <span class="text-rose-500 font-bold">*</span>
           </label>
-          <input type="number" id="children_male" name="children_male" value="{{ old('children_male', $employee->children_male ?? 0) }}" required min="0" max="20"
+          <input type="number" id="children_male" name="children_male"
+                 value="{{ old('children_male', $employee->children_male ?? 0) }}"
+                 :required="maritalStatus === 'Married'"
+                 :disabled="maritalStatus !== 'Married'"
+                 min="0" max="20"
                  class="input @error('children_male') border-rose-500 ring-2 ring-rose-200 @enderror">
           @error('children_male')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
+        <div x-show="maritalStatus === 'Married'" @if(old('marital_status', $employee->marital_status ?? 'Single') !== 'Married') style="display:none" @endif>
           <label class="label text-xs font-semibold" for="children_female">
             FEMALE <span class="text-rose-500 font-bold">*</span>
           </label>
-          <input type="number" id="children_female" name="children_female" value="{{ old('children_female', $employee->children_female ?? 0) }}" required min="0" max="20"
+          <input type="number" id="children_female" name="children_female"
+                 value="{{ old('children_female', $employee->children_female ?? 0) }}"
+                 :required="maritalStatus === 'Married'"
+                 :disabled="maritalStatus !== 'Married'"
+                 min="0" max="20"
                  class="input @error('children_female') border-rose-500 ring-2 ring-rose-200 @enderror">
           @error('children_female')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
@@ -327,13 +384,37 @@
           @error('photo')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div class="sm:col-span-3">
+        <div class="sm:col-span-2">
           <label class="label text-xs font-semibold" for="address">
-            ADDRESS <span class="text-rose-500 font-bold">*</span>
+            CURRENT RESIDENTIAL ADDRESS <span class="text-rose-500 font-bold">*</span>
           </label>
           <textarea id="address" name="address" rows="2" required
-                    class="input @error('address') border-rose-500 ring-2 ring-rose-200 @enderror">{{ old('address', $employee->address ?? $employee->residential_address) }}</textarea>
+                    class="w-full rounded-xl border border-slate-300 p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 min-h-[72px] resize-y leading-relaxed @error('address') border-rose-500 ring-2 ring-rose-200 @enderror"
+                    placeholder="Door No, Building, Street Name, Area / Locality, City / Town">{{ old('address', $employee->address ?? $employee->residential_address) }}</textarea>
           @error('address')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="pincode">
+            POSTAL PIN CODE <span class="text-rose-500 font-bold">*</span>
+          </label>
+          <input type="text" id="pincode" name="pincode" value="{{ old('pincode', $employee->pincode) }}" maxlength="6"
+                 pattern="[1-9][0-9]{5}" required
+                 @input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 6)"
+                 class="input font-mono font-bold text-slate-800 tracking-wider @error('pincode') border-rose-500 ring-2 ring-rose-200 @enderror"
+                 placeholder="e.g. 638001">
+          <span class="text-[10px] text-slate-400 mt-1 block">6-digit postal code</span>
+          @error('pincode')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div class="sm:col-span-3">
+          <label class="label text-xs font-semibold" for="permanent_address">
+            PERMANENT ADDRESS <span class="text-slate-400 font-normal">(Optional, if different from current address)</span>
+          </label>
+          <textarea id="permanent_address" name="permanent_address" rows="2"
+                    class="w-full rounded-xl border border-slate-300 p-3 text-xs text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 min-h-[64px] resize-y leading-relaxed @error('permanent_address') border-rose-500 ring-2 ring-rose-200 @enderror"
+                    placeholder="Permanent address / native place (optional)">{{ old('permanent_address', $employee->permanent_address ?? $employee->address) }}</textarea>
+          @error('permanent_address')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
       </div>
     </div>
@@ -348,106 +429,440 @@
         <span class="text-[11px] text-slate-400 font-medium">Job assignment &amp; appointment details</span>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <label class="label text-xs font-semibold" for="employee_code">
-            EMPLOYEE ID <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <input type="text" id="employee_code" name="employee_code" value="{{ old('employee_code', $employee->employee_code) }}" required
-                 class="input font-mono font-bold text-indigo-700 bg-indigo-50/30 @error('employee_code') border-rose-500 ring-2 ring-rose-200 @enderror">
-          @error('employee_code')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+    {{-- SECTION B — EMPLOYMENT DETAILS --}}
+    @php
+      $standardDesignations = [
+        'Leadership & Academic Administration' => [
+          'Principal', 'Vice Principal', 'Headmistress / Headmaster', 'Academic Coordinator',
+          'Examination Controller', 'Administrative Officer (AO)', 'HR Manager', 'Accountant',
+          'Front Office / Receptionist', 'Office Assistant / Clerk'
+        ],
+        'Senior Secondary Faculty (PGT - Grades XI & XII)' => [
+          'PGT Mathematics', 'PGT Physics', 'PGT Chemistry', 'PGT Biology',
+          'PGT Computer Science', 'PGT English', 'PGT Commerce & Accountancy', 'PGT Economics',
+          'Senior Subject Teacher', 'Senior Teacher'
+        ],
+        'Secondary & Middle School Faculty (TGT - Grades VI–X)' => [
+          'TGT Mathematics', 'TGT Science', 'TGT English', 'TGT Social Science',
+          'TGT Tamil', 'TGT Hindi', 'Junior Subject Teacher', 'Middle School Teacher'
+        ],
+        'Primary & Foundational Faculty (PRT & KG)' => [
+          'PRT / Primary Teacher', 'Foundational Stage Teacher', 'Kindergarten / Nursery Teacher'
+        ],
+        'Specialized & Co-Curricular Faculty' => [
+          'Physical Education Teacher (PET)', 'Librarian', 'Art & Craft Teacher',
+          'Music & Dance Instructor', 'Computer Lab Instructor', 'Science Lab Assistant', 'Student Counselor'
+        ],
+        'Support & Operations Staff' => [
+          'Bus Driver', 'Transport Attendant', 'Housekeeping Staff', 'Kindergarten Caretaker', 'Campus Security Guard'
+        ]
+      ];
+      $flatDesigs = [];
+      foreach ($standardDesignations as $grp => $items) {
+        foreach ($items as $it) { $flatDesigs[] = $it; }
+      }
+
+      $standardDepartments = [
+        'Academic Wings & Disciplines' => [
+          'Academics', 'Mathematics', 'Sciences', 'English & Languages',
+          'Tamil Department', 'Hindi Department', 'Social Sciences',
+          'Computer Science & IT', 'Commerce & Economics', 'Physical Education & Sports',
+          'Arts, Crafts & Performing Arts'
+        ],
+        'School Stages & Wings' => [
+          'Kindergarten & Pre-Primary', 'Primary Wing (Grades I–V)',
+          'Middle School (Grades VI–VIII)', 'Secondary & Senior Secondary (Grades IX–XII)'
+        ],
+        'Administration & Campus Operations' => [
+          'School Administration', 'Human Resources', 'Accounts & Finance',
+          'Examination Cell', 'Library & Information', 'Health & Student Counseling',
+          'Transport & Logistics', 'Housekeeping & Maintenance', 'Security & Campus Safety', 'Hostel & Residential Wing'
+        ]
+      ];
+      $flatDepts = [];
+      foreach ($standardDepartments as $grp => $items) {
+        foreach ($items as $it) { $flatDepts[] = $it; }
+      }
+
+      $standardPayScales = [
+        'Level 1 (₹18,000–₹25,000) — Support & Operations Staff',
+        'Level 2 (₹19,900–₹32,000) — Junior Clerical & Office Staff',
+        'Level 4 (₹25,500–₹40,000) — Pre-Primary / KG / Assistant Faculty',
+        'Level 6 (PB-2 ₹35,400–₹58,000 GP 4200) — PRT / Primary Teachers',
+        'Level 7 (PB-2 ₹44,900–₹72,000 GP 4600) — TGT / Secondary Teachers',
+        'Level 8 (PB-2 ₹47,600–₹85,000 GP 4800) — PGT / Senior Secondary Faculty',
+        'Level 9 (PB-2 ₹53,100–₹98,000 GP 5400) — Senior Subject Faculty / Coordinator',
+        'Level 10 (PB-3 ₹56,100–₹1,15,000 GP 5400) — Vice Principal / AO',
+        'Level 12 (PB-3 ₹78,800–₹1,50,000 GP 7600) — Principal / Director',
+        'Consolidated Monthly Package (Fixed / Contractual)'
+      ];
+
+      $currDesigVal = old('designation', $employee->designation);
+      $desigIsStandard = in_array($currDesigVal, $flatDesigs);
+      $currDeptVal = old('department', $employee->department ?? 'Academics');
+      $deptIsStandard = in_array($currDeptVal, $flatDepts);
+      $currPayVal = old('pay_scale', $employee->pay_scale ?? 'Level 8 (PB-2 ₹47,600–₹85,000 GP 4800)');
+      $payIsStandard = in_array($currPayVal, $standardPayScales);
+    @endphp
+
+    <div class="card p-6 space-y-6 border border-slate-200/80 shadow-sm bg-white rounded-2xl" x-data="{
+      empStatus: '{{ old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type ?? 'Permanent') }}',
+      firstAppt: '{{ old('first_appointment_date', $employee->first_appointment_date?->format('Y-m-d')) }}',
+      doj: '{{ old('joining_date', $employee->joining_date?->format('Y-m-d')) }}',
+      selectedDesig: '{{ $desigIsStandard ? $currDesigVal : ($currDesigVal ? 'Other' : 'Senior Subject Teacher') }}',
+      customDesig: '{{ !$desigIsStandard ? $currDesigVal : '' }}',
+      selectedDept: '{{ $deptIsStandard ? $currDeptVal : ($currDeptVal ? 'Other' : 'Academics') }}',
+      customDept: '{{ !$deptIsStandard ? $currDeptVal : '' }}',
+      selectedPay: '{{ $payIsStandard ? $currPayVal : ($currPayVal ? 'Other' : 'Level 8 (PB-2 ₹47,600–₹85,000 GP 4800)') }}',
+      customPay: '{{ !$payIsStandard ? $currPayVal : '' }}',
+      get effectiveDesig() { return this.selectedDesig === 'Other' ? this.customDesig : this.selectedDesig; },
+      get effectiveDept() { return this.selectedDept === 'Other' ? this.customDept : this.selectedDept; },
+      get effectivePay() { return this.selectedPay === 'Other' ? this.customPay : this.selectedPay; },
+      get calculatedExp() {
+        if (!this.doj) return '';
+        const start = new Date(this.doj);
+        const now = new Date();
+        if (isNaN(start.getTime()) || start > now) return '0 Years 0 Months';
+        let years = now.getFullYear() - start.getFullYear();
+        let months = now.getMonth() - start.getMonth();
+        if (now.getDate() < start.getDate()) months--;
+        if (months < 0) { years--; months += 12; }
+        if (years < 0) { years = 0; months = 0; }
+        const yText = years === 1 ? 'Year' : 'Years';
+        const mText = months === 1 ? 'Month' : 'Months';
+        return `${years} ${yText} ${months} ${mText}`;
+      },
+      get calculatedOverallExp() {
+        if (!this.firstAppt) return '';
+        const start = new Date(this.firstAppt);
+        const now = new Date();
+        if (isNaN(start.getTime()) || start > now) return '0 Years 0 Months';
+        let years = now.getFullYear() - start.getFullYear();
+        let months = now.getMonth() - start.getMonth();
+        if (now.getDate() < start.getDate()) months--;
+        if (months < 0) { years--; months += 12; }
+        if (years < 0) { years = 0; months = 0; }
+        const yText = years === 1 ? 'Year' : 'Years';
+        const mText = months === 1 ? 'Month' : 'Months';
+        return `${years} ${yText} ${months} ${mText}`;
+      },
+      syncOverall() {
+        if (!this.firstAppt) return;
+        const start = new Date(this.firstAppt);
+        const now = new Date();
+        if (isNaN(start.getTime()) || start > now) return;
+        let years = now.getFullYear() - start.getFullYear();
+        let months = now.getMonth() - start.getMonth();
+        if (now.getDate() < start.getDate()) months--;
+        if (months < 0) { years--; months += 12; }
+        if (years < 0) { years = 0; months = 0; }
+        const yInp = document.getElementById('experience_years');
+        const mInp = document.getElementById('experience_months');
+        if (yInp) yInp.value = years;
+        if (mInp) mInp.value = months;
+      }
+    }">
+      {{-- Section Header --}}
+      <div class="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-bold text-sm flex items-center justify-center shadow-md shadow-indigo-100">
+            B
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-800 text-base tracking-tight flex items-center gap-2">
+              SECTION B — EMPLOYMENT DETAILS
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Job role, designation, department, service timeline &amp; compensation terms</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+            <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+            <span x-text="category === 'teaching' ? 'Teaching Faculty' : (category === 'non_teaching' ? 'Non-Teaching Staff' : 'Operational Staff')"></span>
+          </span>
+        </div>
+      </div>
+
+      {{-- SUB-CARD 1: Role, Designation & Department --}}
+      <div class="p-4 rounded-xl border border-slate-200/70 bg-slate-50/40 space-y-3">
+        <div class="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          1. Role, Designation &amp; Department
         </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="designation">
-            DESIGNATION <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <input type="text" id="designation" name="designation" value="{{ old('designation', $employee->designation) }}" required list="designation-suggestions"
-                 class="input @error('designation') border-rose-500 ring-2 ring-rose-200 @enderror">
-          <datalist id="designation-suggestions">
-            @if(isset($designations))
-              @foreach($designations as $d)
-                <option value="{{ $d->name }}"></option>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {{-- EMPLOYEE ID --}}
+          <div>
+            <label class="label text-xs font-semibold" for="employee_code">
+              EMPLOYEE ID <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <div class="relative">
+              <input type="text" id="employee_code" name="employee_code" value="{{ old('employee_code', $employee->employee_code) }}" required
+                     class="input font-mono font-bold text-indigo-700 bg-indigo-50/50 pl-8 @error('employee_code') border-rose-500 ring-2 ring-rose-200 @enderror">
+              <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">#</span>
+            </div>
+            @error('employee_code')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- DESIGNATION DROPDOWN --}}
+          <div>
+            <label class="label text-xs font-semibold" for="designation_select">
+              DESIGNATION <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <select id="designation_select" x-model="selectedDesig" required
+                    class="select text-xs @error('designation') border-rose-500 ring-2 ring-rose-200 @enderror">
+              <option value="">-- Select Standard Designation --</option>
+              @foreach($standardDesignations as $grpName => $items)
+                <optgroup label="{{ $grpName }}">
+                  @foreach($items as $desigItem)
+                    <option value="{{ $desigItem }}">{{ $desigItem }}</option>
+                  @endforeach
+                </optgroup>
               @endforeach
-            @endif
-          </datalist>
-          @error('designation')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
-        </div>
+              <option value="Other">-- Other (Enter Custom Designation) --</option>
+            </select>
+            <div x-show="selectedDesig === 'Other'" class="mt-2" style="display:none">
+              <input type="text" x-model="customDesig" placeholder="Type custom designation name..."
+                     class="input text-xs font-medium border-indigo-300 bg-indigo-50/30">
+            </div>
+            <input type="hidden" name="designation" :value="effectiveDesig">
+            @error('designation')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="department">
-            Department <span class="text-slate-400 font-normal">(Optional)</span>
-          </label>
-          <input type="text" id="department" name="department" value="{{ old('department', $employee->department) }}" list="department-suggestions"
-                 class="input @error('department') border-rose-500 ring-2 ring-rose-200 @enderror">
-          <datalist id="department-suggestions">
-            @if(isset($departments))
-              @foreach($departments as $dept)
-                <option value="{{ $dept->name }}"></option>
+          {{-- DEPARTMENT DROPDOWN --}}
+          <div>
+            <label class="label text-xs font-semibold" for="department_select">
+              Department <span class="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <select id="department_select" x-model="selectedDept"
+                    class="select text-xs @error('department') border-rose-500 ring-2 ring-rose-200 @enderror">
+              <option value="">-- Select School Department --</option>
+              @foreach($standardDepartments as $grpName => $items)
+                <optgroup label="{{ $grpName }}">
+                  @foreach($items as $deptItem)
+                    <option value="{{ $deptItem }}">{{ $deptItem }}</option>
+                  @endforeach
+                </optgroup>
               @endforeach
-            @endif
-          </datalist>
-          @error('department')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+              <option value="Other">-- Other (Enter Custom Department) --</option>
+            </select>
+            <div x-show="selectedDept === 'Other'" class="mt-2" style="display:none">
+              <input type="text" x-model="customDept" placeholder="Type custom department name..."
+                     class="input text-xs font-medium border-indigo-300 bg-indigo-50/30">
+            </div>
+            <input type="hidden" name="department" :value="effectiveDept">
+            @error('department')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+        </div>
+      </div>
+
+      {{-- SUB-CARD 2: Appointment Timeline & Work Experience --}}
+      <div class="p-4 rounded-xl border border-slate-200/70 bg-slate-50/40 space-y-3">
+        <div class="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          2. Appointment Timeline &amp; Work Experience
         </div>
 
-        <div x-data="{
-          doj: '{{ old('joining_date', $employee->joining_date?->format('Y-m-d')) }}',
-          get calculatedExp() {
-            if (!this.doj) return '';
-            const start = new Date(this.doj);
-            const now = new Date();
-            if (isNaN(start.getTime()) || start > now) return '0 Years 0 Months';
-            let years = now.getFullYear() - start.getFullYear();
-            let months = now.getMonth() - start.getMonth();
-            if (now.getDate() < start.getDate()) months--;
-            if (months < 0) { years--; months += 12; }
-            if (years < 0) { years = 0; months = 0; }
-            const yText = years === 1 ? 'Year' : 'Years';
-            const mText = months === 1 ? 'Month' : 'Months';
-            return `${years} ${yText} ${months} ${mText}`;
-          }
-        }">
-          <label class="label text-xs font-semibold" for="joining_date">
-            DOJ (Date of Joining) <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <input type="date" id="joining_date" name="joining_date" x-model="doj" required
-                 class="input @error('joining_date') border-rose-500 ring-2 ring-rose-200 @enderror">
-          <p class="text-[11px] font-semibold text-indigo-600 mt-1 flex items-center gap-1" x-show="calculatedExp">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>Experience: <strong x-text="calculatedExp"></strong> (auto-calculated from DOJ)</span>
-          </p>
-          @error('joining_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {{-- DOJ --}}
+          <div>
+            <label class="label text-xs font-semibold" for="joining_date">
+              DOJ (Date of Joining) <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <input type="date" id="joining_date" name="joining_date" x-model="doj" required
+                   class="input @error('joining_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            <p class="text-[11px] font-semibold text-indigo-600 mt-1.5 flex items-center gap-1" x-show="calculatedExp">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Tenure: <strong x-text="calculatedExp"></strong> (auto-calculated from DOJ)</span>
+            </p>
+            @error('joining_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- DATE OF FIRST APPOINTMENT AS TEACHER --}}
+          <div x-show="category === 'teaching'">
+            <label class="label text-xs font-semibold" for="first_appointment_date">
+              DATE OF FIRST APPOINTMENT AS TEACHER <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <input type="date" id="first_appointment_date" name="first_appointment_date" x-model="firstAppt"
+                   @change="syncOverall()"
+                   :required="category === 'teaching'" :disabled="category !== 'teaching'"
+                   class="input @error('first_appointment_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            <p class="text-[11px] font-semibold text-emerald-600 mt-1.5 flex items-center gap-1" x-show="calculatedOverallExp">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Experience: <strong x-text="calculatedOverallExp"></strong> (from First Appointment)</span>
+            </p>
+            @error('first_appointment_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- OVERALL WORK EXPERIENCE --}}
+          <div>
+            <label class="label text-xs font-semibold" for="experience_years">
+              OVERALL WORK EXPERIENCE <span class="text-slate-400 font-normal">(Years &amp; Months)</span>
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <input type="number" id="experience_years" name="experience_years" value="{{ old('experience_years', $employee->experience_years) }}" min="0" max="60"
+                       class="input text-xs font-mono font-bold text-indigo-700 bg-indigo-50/30" placeholder="Years (e.g. 5)">
+                <span class="text-[10px] text-slate-400 block mt-0.5">Total Years</span>
+              </div>
+              <div>
+                <input type="number" id="experience_months" name="experience_months" value="{{ old('experience_months', $employee->experience_months ?? 0) }}" min="0" max="11"
+                       class="input text-xs font-mono font-bold text-indigo-700 bg-indigo-50/30" placeholder="Months (0–11)">
+                <span class="text-[10px] text-slate-400 block mt-0.5">Total Months</span>
+              </div>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">Auto-populated from First Appointment Date or entered manually.</p>
+            @error('experience_years')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+        </div>
+      </div>
+
+      {{-- SUB-CARD 3: Contract Terms, Tenure & Milestones --}}
+      <div class="p-4 rounded-xl border border-slate-200/70 bg-slate-50/40 space-y-3">
+        <div class="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          3. Employment Contract, Tenure &amp; Service Milestones
         </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="first_appointment_date">
-            DATE OF FIRST APPOINTMENT AS TEACHER <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <input type="date" id="first_appointment_date" name="first_appointment_date" value="{{ old('first_appointment_date', $employee->first_appointment_date?->format('Y-m-d')) }}" required
-                 class="input @error('first_appointment_date') border-rose-500 ring-2 ring-rose-200 @enderror">
-          @error('first_appointment_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {{-- CURRENT EMPLOYMENT STATUS --}}
+          <div>
+            <label class="label text-xs font-semibold" for="current_employment_status">
+              CURRENT EMPLOYMENT STATUS <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <select id="current_employment_status" name="current_employment_status" x-model="empStatus" required
+                    class="select text-xs font-medium @error('current_employment_status') border-rose-500 ring-2 ring-rose-200 @enderror">
+              <option value="Permanent" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type ?? 'Permanent')==='Permanent')>Permanent (Confirmed Regular)</option>
+              <option value="Probation" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Probation')>Probation (Assessment Period)</option>
+              <option value="Contractual" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Contractual')>Contractual (Fixed-Term Contract)</option>
+              <option value="Temporary" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Temporary')>Temporary / Ad-Hoc</option>
+              <option value="Part-Time" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Part-Time')>Part-Time / Visiting Faculty</option>
+              <option value="Other" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Other')>Other</option>
+            </select>
+            @error('current_employment_status')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- PROBATION DATES (Shown when status is Probation) --}}
+          <div x-show="empStatus === 'Probation'" style="display:none">
+            <label class="label text-xs font-semibold" for="probation_start_date">
+              Probation Start Date <span class="text-amber-600 font-bold">*</span>
+            </label>
+            <input type="date" id="probation_start_date" name="probation_start_date" value="{{ old('probation_start_date', $employee->probation_start_date?->format('Y-m-d')) }}"
+                   class="input border-amber-300 bg-amber-50/20 @error('probation_start_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            @error('probation_start_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          <div x-show="empStatus === 'Probation'" style="display:none">
+            <label class="label text-xs font-semibold" for="probation_end_date">
+              Probation Completion Date <span class="text-amber-600 font-bold">*</span>
+            </label>
+            <input type="date" id="probation_end_date" name="probation_end_date" value="{{ old('probation_end_date', $employee->probation_end_date?->format('Y-m-d')) }}"
+                   class="input border-amber-300 bg-amber-50/20 @error('probation_end_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            @error('probation_end_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- CONTRACT END DATE (Shown for Contractual / Temporary) --}}
+          <div x-show="empStatus === 'Contractual' || empStatus === 'Temporary'" style="display:none">
+            <label class="label text-xs font-semibold" for="contract_end_date">
+              Contract End Date <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <input type="date" id="contract_end_date" name="contract_end_date" value="{{ old('contract_end_date', $employee->contract_end_date?->format('Y-m-d')) }}"
+                   class="input @error('contract_end_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            @error('contract_end_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- CONFIRMATION DATE --}}
+          <div>
+            <label class="label text-xs font-semibold" for="confirmation_date">
+              Confirmation Date <span class="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <input type="date" id="confirmation_date" name="confirmation_date" value="{{ old('confirmation_date', $employee->confirmation_date?->format('Y-m-d')) }}"
+                   class="input @error('confirmation_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            @error('confirmation_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- LAST PROMOTION DATE --}}
+          <div>
+            <label class="label text-xs font-semibold" for="last_promotion_date">
+              Last Promotion Date <span class="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <input type="date" id="last_promotion_date" name="last_promotion_date" value="{{ old('last_promotion_date', $employee->last_promotion_date?->format('Y-m-d')) }}"
+                   class="input @error('last_promotion_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+            @error('last_promotion_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+        </div>
+      </div>
+
+      {{-- SUB-CARD 4: Compensation & Hierarchy --}}
+      <div class="p-4 rounded-xl border border-slate-200/70 bg-slate-50/40 space-y-3">
+        <div class="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
+          <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          4. Compensation &amp; Reporting Hierarchy
         </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="current_employment_status">
-            CURRENT EMPLOYMENT STATUS <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <select id="current_employment_status" name="current_employment_status" required
-                  class="select @error('current_employment_status') border-rose-500 ring-2 ring-rose-200 @enderror">
-            <option value="">-- Select Status --</option>
-            <option value="Permanent" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Permanent')>Permanent</option>
-            <option value="Temporary" @selected(old('current_employment_status', $employee->current_employment_status ?? $employee->employment_type)==='Temporary')>Temporary</option>
-          </select>
-          @error('current_employment_status')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
-        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+          {{-- PRESENT PAY SCALE DROPDOWN --}}
+          <div>
+            <label class="label text-xs font-semibold" for="pay_scale_select">
+              Present Pay Scale <span class="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <select id="pay_scale_select" x-model="selectedPay"
+                    class="select text-xs @error('pay_scale') border-rose-500 ring-2 ring-rose-200 @enderror">
+              <option value="">-- Select Standard Pay Scale --</option>
+              @foreach($standardPayScales as $pScale)
+                <option value="{{ $pScale }}">{{ $pScale }}</option>
+              @endforeach
+              <option value="Other">-- Other (Enter Custom Pay Scale) --</option>
+            </select>
+            <div x-show="selectedPay === 'Other'" class="mt-2" style="display:none">
+              <input type="text" x-model="customPay" placeholder="Type custom pay scale (e.g. PB-2 9300-34800 GP 4600)..."
+                     class="input text-xs font-medium border-indigo-300 bg-indigo-50/30">
+            </div>
+            <input type="hidden" name="pay_scale" :value="effectivePay">
+            @error('pay_scale')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="basic_salary">
-            Basic Monthly Salary (₹) <span class="text-slate-400 font-normal">(Optional)</span>
+          {{-- BASIC MONTHLY SALARY --}}
+          <div>
+            <label class="label text-xs font-semibold" for="basic_salary">
+              Basic Monthly Salary (₹) <span class="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <div class="relative">
+              <input type="number" id="basic_salary" name="basic_salary" value="{{ old('basic_salary', $employee->basic_salary) }}" min="0" step="0.01"
+                     class="input pl-8 @error('basic_salary') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. 35000">
+              <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">₹</span>
+            </div>
+            @error('basic_salary')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+
+          {{-- REPORTING MANAGER --}}
+          <div>
+            <label class="label text-xs font-semibold" for="manager_id">
+              Reporting Manager <span class="text-slate-400 font-normal">(Optional)</span>
+            </label>
+            <select id="manager_id" name="manager_id" class="select text-xs @error('manager_id') border-rose-500 ring-2 ring-rose-200 @enderror">
+              <option value="">-- No Reporting Manager / Self --</option>
+              @if(isset($managers))
+                @foreach($managers as $mgr)
+                  <option value="{{ $mgr->id }}" @selected(old('manager_id', $employee->manager_id) == $mgr->id)>
+                    {{ $mgr->full_name }} ({{ $mgr->employee_code }} — {{ $mgr->designation }})
+                  </option>
+                @endforeach
+              @endif
+            </select>
+            @error('manager_id')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          </div>
+        </div>
+      </div>
+    </div>
+
+        <div x-show="category === 'teaching'">
+          <label class="label text-xs font-semibold" for="lab_subjects">
+            Practical / Lab Subjects <span class="text-slate-400 font-normal">(Optional)</span>
           </label>
-          <input type="number" id="basic_salary" name="basic_salary" value="{{ old('basic_salary', $employee->basic_salary) }}" min="0" step="0.01"
-                 class="input @error('basic_salary') border-rose-500 ring-2 ring-rose-200 @enderror">
-          @error('basic_salary')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+          <input type="text" id="lab_subjects" name="lab_subjects" value="{{ old('lab_subjects', $employee->lab_subjects) }}"
+                 class="input @error('lab_subjects') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. Physics Lab">
+          @error('lab_subjects')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
       </div>
     </div>
@@ -489,6 +904,42 @@
                  class="input font-mono @error('epf_no') border-rose-500 ring-2 ring-rose-200 @enderror">
           @error('epf_no')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="uan_no">
+            UAN Number <span class="text-slate-400 font-normal">(EPF UAN, Optional)</span>
+          </label>
+          <input type="text" id="uan_no" name="uan_no" value="{{ old('uan_no', $employee->uan_no) }}"
+                 class="input font-mono @error('uan_no') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="12-digit UAN">
+          @error('uan_no')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="esi_no">
+            ESI Number <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="esi_no" name="esi_no" value="{{ old('esi_no', $employee->esi_no) }}"
+                 class="input font-mono @error('esi_no') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="17-digit ESI Number">
+          @error('esi_no')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="professional_tax_no">
+            Professional Tax Number <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="professional_tax_no" name="professional_tax_no" value="{{ old('professional_tax_no', $employee->professional_tax_no) }}"
+                 class="input font-mono @error('professional_tax_no') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. PT-TN-2024-001">
+          @error('professional_tax_no')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="passport_no">
+            Passport Number <span class="text-slate-400 font-normal">(If applicable)</span>
+          </label>
+          <input type="text" id="passport_no" name="passport_no" value="{{ old('passport_no', $employee->passport_no) }}"
+                 class="input font-mono uppercase @error('passport_no') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. Z1234567">
+          @error('passport_no')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
       </div>
     </div>
 
@@ -502,7 +953,7 @@
         <span class="text-[11px] text-slate-400 font-medium">Employee contact &amp; emergency contact person</span>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label class="label text-xs font-semibold" for="official_email">
             EMAIL ID <span class="text-rose-500 font-bold">*</span>
@@ -519,6 +970,15 @@
           <input type="tel" id="mobile" name="mobile" value="{{ old('mobile', $employee->mobile) }}" required maxlength="10"
                  class="input font-mono @error('mobile') border-rose-500 ring-2 ring-rose-200 @enderror">
           @error('mobile')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="alternate_phone">
+            Alternate Telephone Number <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="tel" id="alternate_phone" name="alternate_phone" value="{{ old('alternate_phone', $employee->alternate_phone) }}" maxlength="10"
+                 class="input font-mono @error('alternate_phone') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="10-digit secondary telephone">
+          @error('alternate_phone')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
       </div>
 
@@ -676,6 +1136,33 @@
           <input type="number" id="academic_year_of_passing" name="academic_year_of_passing" value="{{ old('academic_year_of_passing', $employee->academic_year_of_passing) }}" required min="1960" max="{{ date('Y') + 1 }}"
                  class="input font-mono @error('academic_year_of_passing') border-rose-500 ring-2 ring-rose-200 @enderror">
           @error('academic_year_of_passing')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="major_subject">
+            Major Subject / Specialization <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="major_subject" name="major_subject" value="{{ old('major_subject', $employee->major_subject) }}"
+                 class="input @error('major_subject') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. Mathematics / Physics">
+          @error('major_subject')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="minor_subject">
+            Minor Subject <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="minor_subject" name="minor_subject" value="{{ old('minor_subject', $employee->minor_subject) }}"
+                 class="input @error('minor_subject') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. Statistics / Chemistry">
+          @error('minor_subject')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div class="sm:col-span-3">
+          <label class="label text-xs font-semibold" for="special_skills">
+            Special Skills / Certifications &amp; Supporting Competencies <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="special_skills" name="special_skills" value="{{ old('special_skills', $employee->special_skills) }}"
+                 class="input @error('special_skills') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. Smart Board Certified, Vedic Math Trainer, Robotics, First Aid">
+          @error('special_skills')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
       </div>
     </div>
@@ -882,32 +1369,152 @@
     </div>
 
     {{-- SECTION J — ADDITIONAL QUALIFICATION / TRAINING --}}
-    <div class="card p-5 space-y-4">
-      <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
-          <span class="w-6 h-6 rounded-full bg-slate-800 text-white text-xs font-bold flex items-center justify-center">J</span>
-          SECTION J — ADDITIONAL QUALIFICATION / TRAINING
-        </h3>
-        <span class="text-[11px] text-slate-400 font-medium">Post-recruitment credentials and pre-recruitment workshops</span>
+    <div class="card p-6 space-y-5 bg-gradient-to-b from-white to-slate-50/50 border border-slate-200/80 shadow-sm rounded-2xl"
+         x-data="{
+           setQualPreset(val) {
+             const el = document.getElementById('additional_qual_after_recruitment');
+             if (el) {
+               el.value = el.value && el.value !== 'None / Not Applicable' ? el.value + '; ' + val : val;
+               el.dispatchEvent(new Event('input'));
+             }
+           },
+           setTrainingPreset(val) {
+             const el = document.getElementById('training_attended_before_recruitment');
+             if (el) {
+               el.value = el.value && el.value !== 'None / Not Applicable' ? el.value + '; ' + val : val;
+               el.dispatchEvent(new Event('input'));
+             }
+           }
+         }">
+      <div class="border-b border-slate-200/70 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 text-white text-xs font-black flex items-center justify-center shadow-md shadow-indigo-100">J</span>
+          <div>
+            <h3 class="font-bold text-slate-900 text-sm tracking-wide">
+              SECTION J — ADDITIONAL QUALIFICATION &amp; TRAINING
+            </h3>
+            <p class="text-[11px] text-slate-500 font-medium">Post-recruitment credentials, CBSE capacity building, and specialized teacher workshops</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Optional • Non-blocking
+          </span>
+        </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label class="label text-xs font-semibold" for="additional_qual_after_recruitment">
-            ADDITIONAL QUALIFICATION OBTAINED AFTER RECRUITMENT <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <textarea id="additional_qual_after_recruitment" name="additional_qual_after_recruitment" rows="3" required
-                    class="input @error('additional_qual_after_recruitment') border-rose-500 ring-2 ring-rose-200 @enderror">{{ old('additional_qual_after_recruitment', $employee->additional_qual_after_recruitment) }}</textarea>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {{-- Column 1: Additional Qualification --}}
+        <div class="bg-white rounded-xl p-4 border border-slate-200/90 shadow-sm space-y-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <label class="block text-xs font-bold text-slate-800 uppercase tracking-wide" for="additional_qual_after_recruitment">
+                Additional Qualification Obtained After Recruitment
+              </label>
+              <p class="text-[11px] text-slate-500 mt-0.5">Degrees, Diplomas, PGDCA, or specialized certifications acquired during service</p>
+            </div>
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">Optional</span>
+          </div>
+
+          {{-- Quick Presets --}}
+          <div class="flex items-center flex-wrap gap-1.5 pt-1">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Quick Fill:</span>
+            <button type="button" @click="setQualPreset('None / Not Applicable')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition">None / Not Applicable</button>
+            <button type="button" @click="setQualPreset('PGDCA (Computer Applications)')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition">PGDCA</button>
+            <button type="button" @click="setQualPreset('M.Ed / M.Phil Degree')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition">M.Ed / M.Phil</button>
+            <button type="button" @click="setQualPreset('Special Education Diploma')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition">Special Ed</button>
+          </div>
+
+          <textarea id="additional_qual_after_recruitment" name="additional_qual_after_recruitment" rows="4"
+                    class="w-full rounded-xl border border-slate-300 bg-slate-50/50 p-3.5 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition min-h-[105px] resize-y leading-relaxed @error('additional_qual_after_recruitment') border-rose-500 ring-2 ring-rose-200 @enderror"
+                    placeholder="e.g. Completed PGDCA from Bharathiar University in 2023; Certified in Google for Education">{{ old('additional_qual_after_recruitment', $employee->additional_qual_after_recruitment ?? 'None / Not Applicable') }}</textarea>
           @error('additional_qual_after_recruitment')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
 
-        <div>
-          <label class="label text-xs font-semibold" for="training_attended_before_recruitment">
-            TRAINING PROGRAMME ATTENDED BEFORE RECRUITMENT <span class="text-rose-500 font-bold">*</span>
-          </label>
-          <textarea id="training_attended_before_recruitment" name="training_attended_before_recruitment" rows="3" required
-                    class="input @error('training_attended_before_recruitment') border-rose-500 ring-2 ring-rose-200 @enderror">{{ old('training_attended_before_recruitment', $employee->training_attended_before_recruitment) }}</textarea>
+        {{-- Column 2: Training Programme --}}
+        <div class="bg-white rounded-xl p-4 border border-slate-200/90 shadow-sm space-y-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <label class="block text-xs font-bold text-slate-800 uppercase tracking-wide" for="training_attended_before_recruitment">
+                Training Programme Attended Before Recruitment
+              </label>
+              <p class="text-[11px] text-slate-500 mt-0.5">CBSE capacity-building programmes, pedagogy workshops, or orientation courses</p>
+            </div>
+            <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">Optional</span>
+          </div>
+
+          {{-- Quick Presets --}}
+          <div class="flex items-center flex-wrap gap-1.5 pt-1">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Quick Fill:</span>
+            <button type="button" @click="setTrainingPreset('None / Not Applicable')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition">None / Not Applicable</button>
+            <button type="button" @click="setTrainingPreset('CBSE Capacity Building Programme (CBP)')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition">CBSE CBP</button>
+            <button type="button" @click="setTrainingPreset('NEP 2020 Pedagogical Workshop')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition">NEP 2020</button>
+            <button type="button" @click="setTrainingPreset('FLN & Foundational Literacy Training')" class="px-2 py-0.5 text-[11px] font-medium rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition">FLN</button>
+          </div>
+
+          <textarea id="training_attended_before_recruitment" name="training_attended_before_recruitment" rows="4"
+                    class="w-full rounded-xl border border-slate-300 bg-slate-50/50 p-3.5 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition min-h-[105px] resize-y leading-relaxed @error('training_attended_before_recruitment') border-rose-500 ring-2 ring-rose-200 @enderror"
+                    placeholder="e.g. Attended 5-day CBSE Capacity Building Programme on Experiential Learning; DIKSHA NISHTHA 2.0 module certified">{{ old('training_attended_before_recruitment', $employee->training_attended_before_recruitment ?? 'None / Not Applicable') }}</textarea>
           @error('training_attended_before_recruitment')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+      </div>
+    </div>
+
+    {{-- SECTION K — SALARY INCREMENTS & NOMINEE BENEFICIARY DETAILS (Headings 7 & 11) --}}
+    <div class="card p-5 space-y-4">
+      <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+          <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center">K</span>
+          SECTION K — SALARY INCREMENTS &amp; NOMINEE BENEFICIARY DETAILS
+        </h3>
+        <span class="text-[11px] text-slate-400 font-medium">Annual increment settings and statutory PF nominee info</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="label text-xs font-semibold" for="annual_increment">
+            Annual Increment Amount (₹) <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="number" id="annual_increment" name="annual_increment" value="{{ old('annual_increment', $employee->annual_increment) }}" min="0" step="0.01"
+                 class="input font-mono @error('annual_increment') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. 1500">
+          @error('annual_increment')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="increment_effective_date">
+            Increment Effective Date <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="date" id="increment_effective_date" name="increment_effective_date" value="{{ old('increment_effective_date', $employee->increment_effective_date?->format('Y-m-d')) }}"
+                 class="input @error('increment_effective_date') border-rose-500 ring-2 ring-rose-200 @enderror">
+          @error('increment_effective_date')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="nominee_share">
+            Nominee Contribution Share (%) <span class="text-slate-400 font-normal">(Default 100%)</span>
+          </label>
+          <input type="number" id="nominee_share" name="nominee_share" value="{{ old('nominee_share', $employee->nominee_share ?? 100) }}" min="1" max="100"
+                 class="input font-mono @error('nominee_share') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="100">
+          @error('nominee_share')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="nominee_name">
+            Nominee Full Name <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="nominee_name" name="nominee_name" value="{{ old('nominee_name', $employee->nominee_name) }}"
+                 class="input @error('nominee_name') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="Full name of beneficiary">
+          @error('nominee_name')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
+        </div>
+
+        <div>
+          <label class="label text-xs font-semibold" for="nominee_relationship">
+            Nominee Relationship <span class="text-slate-400 font-normal">(Optional)</span>
+          </label>
+          <input type="text" id="nominee_relationship" name="nominee_relationship" value="{{ old('nominee_relationship', $employee->nominee_relationship) }}"
+                 class="input @error('nominee_relationship') border-rose-500 ring-2 ring-rose-200 @enderror" placeholder="e.g. Spouse, Son, Mother">
+          @error('nominee_relationship')<p class="text-xs text-rose-600 font-semibold mt-1">{{ $message }}</p>@enderror
         </div>
       </div>
     </div>

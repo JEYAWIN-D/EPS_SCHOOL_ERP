@@ -59,7 +59,7 @@
           <div class="text-right">
             @if($hostel->warden_name)
             @if($hostel->warden_id)
-            <a href="{{ route('employees.show', $hostel->warden_id) }}" class="font-medium text-indigo-600 hover:underline">{{ $hostel->warden_name }}</a>
+            <a href="{{ route('hr.employees.show', $hostel->warden_id) }}" class="font-medium text-indigo-600 hover:underline">{{ $hostel->warden_name }}</a>
             @else
             <p class="font-medium text-slate-700">{{ $hostel->warden_name }}</p>
             @endif

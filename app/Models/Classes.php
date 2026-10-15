@@ -9,9 +9,14 @@ class Classes extends Model
 {
     protected $table = 'classes';
 
-    protected $fillable = ['name', 'numeric_value', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'numeric_value', 'sort_order', 'is_active', 'teaching_level_id', 'description'];
 
     protected $casts = ['is_active' => 'boolean'];
+
+    public function teachingLevel(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(TeachingLevel::class, 'teaching_level_id');
+    }
 
     public function sections(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
