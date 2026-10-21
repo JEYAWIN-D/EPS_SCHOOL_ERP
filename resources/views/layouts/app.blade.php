@@ -185,6 +185,16 @@
       @endcan
       @endcanany
 
+      {{-- ACCESS CONTROL (RBAC) --}}
+      @if(auth()->user()?->isSuperAdmin() || auth()->user()?->hasAnyRole(['super_admin', 'admin']) || auth()->user()?->can('manage rbac'))
+      <p class="nav-group-label">ACCESS CONTROL (RBAC)</p>
+      <x-nav-item route="rbac.users.index" icon="users" label="User Accounts" :active="str_starts_with($currentRoute, 'rbac.users')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="rbac.roles.index" icon="identification" label="Role Management" :active="str_starts_with($currentRoute, 'rbac.roles')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="rbac.matrix.index" icon="shield-check" label="Permission Matrix" :active="str_starts_with($currentRoute, 'rbac.matrix')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="rbac.config.targets" icon="cog-6-tooth" label="Account Targets" :active="str_starts_with($currentRoute, 'rbac.config')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="rbac.audit.index" icon="document-text" label="RBAC Audit Log" :active="str_starts_with($currentRoute, 'rbac.audit')" :open="$sidebarOpen ?? true" />
+      @endif
+
       {{-- SYSTEM --}}
       @canany(['view reports','view audit logs','manage settings'])
       <p class="nav-group-label">SYSTEM</p>

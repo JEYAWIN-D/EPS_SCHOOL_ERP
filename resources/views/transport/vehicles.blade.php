@@ -1,87 +1,183 @@
 @extends('layouts.app')
-@section('title', 'Vehicles')
+@section('title', 'Van & Fleet Management')
 @section('content')
 <div class="space-y-6">
-  <div class="flex items-center justify-between">
-    <h1 class="page-title">Vehicles</h1>
-    <a href="{{ route('transport.vehicles.create') }}" class="btn btn-primary">Add Vehicle</a>
+  <div class="flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <h1 class="page-title">Van &amp; Fleet Management</h1>
+      <p class="text-xs text-slate-500 mt-1">Manage school vans, seating capacities, vehicle documents, drivers, and attendants.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="{{ route('transport.routes') }}" class="btn btn-secondary btn-sm">Manage Routes</a>
+      <a href="{{ route('transport.documents') }}" class="btn btn-secondary btn-sm">All Documents</a>
+      <a href="{{ route('transport.vehicles.create') }}" class="btn btn-primary btn-sm flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Add Vehicle
+      </a>
+    </div>
   </div>
+
+  @if(session('success'))
+    <div class="alert-success">{{ session('success') }}</div>
+  @endif
+  @if($errors->any())
+    <div class="alert-warning">
+      <ul class="list-disc list-inside">
+        @foreach($errors->all() as $err)
+          <li>{{ $err }}</li>
+        @endforeach
+      </ul>
+    </div>
+  @endif
 
   @php $overdueCount = $vehicles->filter(fn($v) => $v->next_service_overdue)->count(); @endphp
   @if($overdueCount > 0)
-  <div class="alert-warning">
-    <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-    </svg>
-    <strong>{{ $overdueCount }} vehicle{{ $overdueCount > 1 ? 's' : '' }}</strong> have overdue scheduled service. Check the Service Due column below and book maintenance.
-  </div>
+    <div class="alert-warning">
+      <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+      <strong>{{ $overdueCount }} vehicle{{ $overdueCount > 1 ? 's' : '' }}</strong> have overdue scheduled service.
+    </div>
   @endif
 
+  {{-- Search Bar --}}
+  <div class="card p-4">
+    <form method="GET" action="{{ route('transport.vehicles') }}" class="flex items-center gap-3">
+      <div class="relative flex-1">
+        <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by vehicle #, driver name, nanny/attendant, or model..." class="input pl-9 text-xs">
+      </div>
+      <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+      @if(request('search'))
+        <a href="{{ route('transport.vehicles') }}" class="text-xs text-slate-500 hover:text-slate-800">Clear</a>
+      @endif
+    </form>
+  </div>
+
   <div class="table-wrap">
-    <table class="w-full">
+    <table class="w-full text-xs">
       <thead><tr>
-        <th class="th">Vehicle #</th><th class="th">Type</th><th class="th">Make/Model</th>
-        <th class="th">Capacity</th><th class="th">Driver</th><th class="th">Route</th>
-        <th class="th">GPRS Status</th>
-        <th class="th">Next Service</th><th class="th">Status</th><th class="th">Actions</th>
+        <th class="th">Van / Vehicle</th>
+        <th class="th">Make &amp; Model</th>
+        <th class="th">Assigned Route</th>
+        <th class="th">Seating Capacity</th>
+        <th class="th">Driver Details</th>
+        <th class="th">Nanny / Attendant</th>
+        <th class="th">Documents</th>
+        <th class="th">Status</th>
+        <th class="th text-right">Actions</th>
       </tr></thead>
       <tbody>
         @forelse($vehicles as $v)
-          <tr class="tr">
-            <td class="td font-mono font-semibold text-blue-600">{{ $v->vehicle_number }}</td>
-            <td class="td">{{ $v->vehicle_type }}</td>
-            <td class="td">{{ $v->make }} {{ $v->model }}</td>
-            <td class="td">{{ $v->capacity ?: $v->seating_capacity }}</td>
-            <td class="td">{{ $v->driver_name ?? '—' }}</td>
-            <td class="td">{{ $v->route?->route_name ?? '—' }}</td>
+          <tr class="tr hover:bg-blue-50/30 transition-colors duration-150">
+            <td class="td font-medium">
+              <a href="{{ route('transport.vehicle.show', $v->id) }}"
+                 class="inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-950 border border-amber-300 hover:bg-amber-100 transition shadow-xs"
+                 title="View vehicle details">
+                <svg class="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                {{ $v->vehicle_number }}
+              </a>
+              <span class="text-xs text-slate-600 font-semibold block mt-1">{{ ucfirst($v->vehicle_type ?? 'Van') }}</span>
+            </td>
             <td class="td">
-              @if($v->gps_enabled)
-                @if($v->gps_status === 'online')
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    {{ $v->current_speed_kmh > 0 ? 'In Transit (' . $v->current_speed_kmh . ' km/h)' : 'Online / Idle' }}
-                  </span>
-                  @if($v->current_location_name)
-                    <div class="text-[11px] text-slate-500 truncate max-w-[140px] mt-0.5" title="{{ $v->current_location_name }}">{{ $v->current_location_name }}</div>
+              <span class="font-bold text-slate-900 block text-xs">{{ $v->make }}</span>
+              <span class="text-slate-600 text-xs font-medium">{{ $v->model }}</span>
+            </td>
+            <td class="td">
+              @if($v->route)
+                <span class="font-bold text-slate-900 block truncate max-w-[200px] text-xs" title="{{ $v->route->route_name }}">
+                  {{ $v->route->route_name }}
+                </span>
+                <span class="text-xs text-slate-600 font-medium">{{ $v->route->stops->count() }} stops &bull; {{ $v->route->distance_km }} km</span>
+              @else
+                <span class="text-slate-500 italic text-xs font-medium bg-slate-100 px-2 py-0.5 rounded border border-slate-200 inline-block">Unassigned</span>
+              @endif
+            </td>
+            <td class="td">
+              <div class="space-y-1">
+                <span class="font-extrabold text-slate-900 block text-xs">{{ $v->effective_capacity }} Seats</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs text-slate-600 font-medium">{{ $v->allotments->count() }} allocated</span>
+                  @if($v->available_seats > 0)
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                      {{ $v->available_seats }} vacant
+                    </span>
+                  @else
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-300">
+                      Full
+                    </span>
                   @endif
-                @else
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                    Standby / Parked
-                  </span>
+                </div>
+              </div>
+            </td>
+            <td class="td">
+              @if($v->driver_name)
+                <span class="font-bold text-slate-900 block text-xs">{{ $v->driver_name }}</span>
+                @if($v->driver_mobile)
+                  <a href="tel:{{ $v->driver_mobile }}" class="text-xs text-slate-700 hover:text-indigo-700 font-medium inline-flex items-center gap-1 mt-0.5">
+                    📞 {{ $v->driver_mobile }}
+                  </a>
                 @endif
               @else
-                <span class="text-xs text-slate-400">Not Installed</span>
+                <span class="text-slate-500 italic text-xs">No driver</span>
               @endif
             </td>
             <td class="td">
-              @if($v->next_service_date)
-                <span class="{{ $v->next_service_overdue ? 'text-red-600 font-semibold' : 'text-slate-600' }}">
-                  {{ \Carbon\Carbon::parse($v->next_service_date)->format('d M Y') }}
-                  @if($v->next_service_overdue)
-                    <br><span class="badge-red text-xs">Overdue</span>
-                  @elseif(\Carbon\Carbon::parse($v->next_service_date)->diffInDays(now()) <= 14)
-                    <br><span class="badge-amber text-xs">Due Soon</span>
-                  @endif
-                </span>
+              @if($v->attendant_name)
+                <span class="font-bold text-slate-900 block text-xs">{{ $v->attendant_name }}</span>
+                @if($v->attendant_mobile)
+                  <a href="tel:{{ $v->attendant_mobile }}" class="text-xs text-slate-700 hover:text-indigo-700 font-medium inline-flex items-center gap-1 mt-0.5">
+                    📞 {{ $v->attendant_mobile }}
+                  </a>
+                @endif
               @else
-                <span class="text-slate-300">—</span>
+                <span class="text-slate-500 italic text-xs">No attendant</span>
               @endif
             </td>
-            <td class="td"><span class="{{ $v->is_active ? 'badge-green' : 'badge-red' }}">{{ $v->is_active ? 'Active' : 'Inactive' }}</span></td>
-            <td class="td whitespace-nowrap">
-              <a href="{{ route('transport.tracking') }}" class="btn-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 mr-1.5 inline-flex items-center gap-1">
-                <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
-                Track
+            <td class="td">
+              <a href="{{ route('transport.vehicle.show', $v->id) }}" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300 transition shadow-xs">
+                <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>{{ $v->documents->count() }} file{{ $v->documents->count() == 1 ? '' : 's' }}</span>
               </a>
-              <a href="{{ route('transport.vehicle.edit', $v->id) }}" class="btn-xs text-indigo-600">Edit</a>
+            </td>
+            <td class="td whitespace-nowrap">
+              @if($v->is_active)
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Active
+                </span>
+              @else
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-300">
+                  <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                  Inactive
+                </span>
+              @endif
+            </td>
+            <td class="td text-right whitespace-nowrap">
+              <div class="flex items-center justify-end gap-1.5">
+                <a href="{{ route('transport.vehicle.show', $v->id) }}" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-300 shadow-xs transition">
+                  View Van
+                </a>
+                <a href="{{ route('transport.vehicle.edit', $v->id) }}" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-slate-300 shadow-xs transition">
+                  Edit
+                </a>
+                <form method="POST" action="{{ route('transport.vehicle.destroy', $v->id) }}" class="inline" onsubmit="return confirm('Delete vehicle {{ $v->vehicle_number }}?');">
+                  @csrf @method('DELETE')
+                  <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-900 border border-rose-300 shadow-xs transition">
+                    Delete
+                  </button>
+                </form>
+              </div>
             </td>
           </tr>
         @empty
-          <tr><td colspan="10" class="td text-center py-10 text-slate-400">No vehicles added.</td></tr>
+          <tr><td colspan="9" class="td text-center py-10 text-slate-400">No vehicles matching your query.</td></tr>
         @endforelse
       </tbody>
     </table>
   </div>
+  @if($vehicles->hasPages())
+    <div class="text-sm mt-3">{{ $vehicles->links() }}</div>
+  @endif
 </div>
 @endsection

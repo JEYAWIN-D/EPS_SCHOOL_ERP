@@ -738,9 +738,9 @@
 
           <!-- STEP 1: Credentials Section (Email & Password) -->
           <div x-show="step === 'credentials'">
-            <!-- Email or Mobile -->
+            <!-- Email or Mobile or Employee ID -->
             <div class="field-group">
-              <label class="field-label" for="email-field">Email Address or Mobile ID</label>
+              <label class="field-label" for="email-field">Email Address, Employee ID, or Mobile</label>
               <div class="input-box">
                 <input
                   id="email-field"
@@ -750,7 +750,7 @@
                   required
                   autofocus
                   class="field-input"
-                  placeholder="name@schoolerp.in or mobile number"
+                  placeholder="e.g. EPSS9790, name@schoolerp.in, or mobile"
                 >
                 <div class="input-icon">
                   <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"/></svg>
@@ -767,7 +767,6 @@
                   id="pass-field"
                   :type="show ? 'text' : 'password'"
                   name="password"
-                  value="Admin@1234"
                   required
                   class="field-input"
                   style="padding-right: 2.75rem;"
@@ -786,6 +785,9 @@
                   <svg x-show="!show" style="width:1.15rem;height:1.15rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                   <svg x-show="show"  style="width:1.15rem;height:1.15rem" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
                 </button>
+              </div>
+              <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.35rem; line-height: 1.35;">
+                Staff first-time login: Enter your Employee ID (e.g. <span style="font-weight: 600; color: #8c2826;">EPSS9790</span>) and your Date of Birth in DDMMYYYY format (e.g. <span style="font-weight: 600; color: #8c2826;">15091998</span>).
               </div>
             </div>
 
@@ -856,12 +858,14 @@
               </div>
               @error('admin_pin')<p class="field-error" style="text-align: center; margin-top: 0.4rem;">{{ $message }}</p>@enderror
 
+              @if(app()->environment('local', 'testing'))
               <div style="margin-top: 0.65rem; display: flex; align-items: center; justify-content: center; gap: 0.4rem;">
                 <span style="font-size: 0.72rem; color: #64748b;">Dev Default:</span>
                 <button type="button" @click="pin = '1122'" style="font-size: 0.72rem; font-weight: 700; color: #8c2826; background: #fdf5f6; border: 1px solid #f5ccd0; border-radius: 0.4rem; padding: 0.15rem 0.45rem; cursor: pointer;">
                   1122 (Click to auto-fill)
                 </button>
               </div>
+              @endif
             </div>
 
             <!-- Verify PIN & Access Portal Button -->
@@ -1061,16 +1065,16 @@ function authLoginForm() {
   return {
     step: '{{ $errors->has('admin_pin') ? 'pin' : 'credentials' }}',
     loading: false,
-    role: 'admin',
-    email: '{{ old('email', 'admin@schoolerp.in') }}',
-    pin: '{{ old('admin_pin', '1122') }}',
+    role: '{{ old('email') ? 'other' : 'admin' }}',
+    email: '{{ old('email', '') }}',
+    pin: '{{ old('admin_pin', app()->environment('local', 'testing') ? '1122' : '') }}',
     isEmailAdmin() {
       const e = (this.email || '').trim().toLowerCase();
       return e === 'admin@schoolerp.in' || e.startsWith('admin@') || e.startsWith('owner@') || e.startsWith('schooladmin@');
     },
     handleSubmit(e) {
       if (this.step === 'credentials') {
-        const isAdmin = this.role === 'admin' || this.isEmailAdmin();
+        const isAdmin = this.isEmailAdmin();
         if (isAdmin) {
           e.preventDefault();
           this.step = 'pin';

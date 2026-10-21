@@ -129,6 +129,7 @@
       @can('view academics')
       <x-nav-item route="classes.index"     icon="academic-class"          label="Classes"     :active="str_starts_with($currentRoute, 'classes')"     :open="$sidebarOpen ?? true" />
       <x-nav-item route="academics.index"   icon="academic-cap"            label="Academics"   :active="str_starts_with($currentRoute, 'academics')"   :open="$sidebarOpen ?? true" />
+      <x-nav-item route="staff-timetable.index" icon="calendar"            label="Staff Timetable" :active="str_starts_with($currentRoute, 'staff-timetable') || $currentRoute === 'my-timetable'" :open="$sidebarOpen ?? true" />
       @endcan
       @can('view attendance')
       <x-nav-item route="attendance.index"  icon="calendar-days"           label="Attendance"  :active="str_starts_with($currentRoute, 'attendance')"  :open="$sidebarOpen ?? true" />

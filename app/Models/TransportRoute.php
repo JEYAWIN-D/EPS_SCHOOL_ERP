@@ -30,6 +30,17 @@ class TransportRoute extends Model
 
     public function allotments(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(TransportAllotment::class, 'route_id');
+        return $this->hasMany(TransportAllotment::class, 'route_id')->where('is_active', true);
+    }
+
+    public function getOccupiedSeatsAttribute(): int
+    {
+        return $this->allotments()->count();
+    }
+
+    public function getAvailableSeatsAttribute(): int
+    {
+        $cap = $this->vehicle ? $this->vehicle->effective_capacity : 0;
+        return max(0, $cap - $this->occupied_seats);
     }
 }

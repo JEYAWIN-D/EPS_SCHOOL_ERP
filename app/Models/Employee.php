@@ -10,6 +10,7 @@ class Employee extends Model
     use SoftDeletes;
 
     protected $fillable = [
+        'user_id',
         'employee_code', 'first_name', 'last_name',
         'gender', 'dob', 'mobile', 'personal_email', 'official_email', 'email', 'address', 'residential_address',
         'photo', 'aadhaar_no', 'aadhaar_number', 'pan_no', 'pan_number',
@@ -17,7 +18,8 @@ class Employee extends Model
         'joining_date', 'employment_type', 'status', 'employee_type', 'is_active',
         'bank_name', 'bank_account_no', 'bank_account_number', 'bank_ifsc', 'bank_branch', 'pf_account_no', 'esi_no',
         'basic_salary', 'hra', 'ta', 'gross_salary',
-        'qualification', 'experience_years',
+        'qualification', 'experience_years', 'experience_months', 'kg_experience_years',
+        'qualified_subjects', 'approved_teaching_levels', 'secondary_subject_expertise', 'higher_sec_subject_expertise', 'max_weekly_periods',
         'emergency_contact_name', 'emergency_contact_mobile',
         'driver_name', 'driver_mobile', 'license_number', 'license_expiry',
         'assigned_vehicle', 'assigned_block', 'shift_timing',
@@ -36,34 +38,54 @@ class Employee extends Model
         'other_qual_1_name', 'other_qual_1_university', 'other_qual_1_medium', 'other_qual_1_institution', 'other_qual_1_percentage', 'other_qual_1_year_of_passing',
         'other_qual_2_name', 'other_qual_2_university', 'other_qual_2_medium', 'other_qual_2_institution', 'other_qual_2_percentage', 'other_qual_2_year_of_passing',
         'additional_qual_after_recruitment', 'training_attended_before_recruitment',
+        // 13 Staff Data Collection Headings additions
+        'alternate_phone', 'permanent_address', 'pincode',
+        'pay_scale', 'last_promotion_date', 'contract_end_date', 'confirmation_date',
+        'probation_start_date', 'probation_end_date',
+        'major_subject', 'minor_subject', 'special_skills',
+        'preferred_teaching_level', 'lab_subjects',
+        'uan_no', 'professional_tax_no', 'passport_no',
+        'annual_increment', 'increment_effective_date',
+        'nominee_name', 'nominee_relationship', 'nominee_share',
     ];
 
     protected $casts = [
-        'dob'                     => 'date',
-        'joining_date'            => 'date',
-        'first_appointment_date'  => 'date',
-        'previous_from_date'      => 'date',
-        'previous_to_date'        => 'date',
-        'license_expiry'          => 'date',
-        'basic_salary'            => 'decimal:2',
-        'hra'                     => 'decimal:2',
-        'ta'                      => 'decimal:2',
-        'gross_salary'            => 'decimal:2',
-        'academic_percentage'     => 'decimal:2',
-        'professional_percentage' => 'decimal:2',
-        'other_qual_1_percentage' => 'decimal:2',
-        'other_qual_2_percentage' => 'decimal:2',
-        'number_of_children'      => 'integer',
-        'children_male'           => 'integer',
-        'children_female'         => 'integer',
-        'academic_year_of_passing'=> 'integer',
+        'dob'                      => 'date',
+        'joining_date'             => 'date',
+        'first_appointment_date'   => 'date',
+        'previous_from_date'       => 'date',
+        'previous_to_date'         => 'date',
+        'license_expiry'           => 'date',
+        'last_promotion_date'      => 'date',
+        'contract_end_date'        => 'date',
+        'confirmation_date'        => 'date',
+        'probation_start_date'     => 'date',
+        'probation_end_date'       => 'date',
+        'increment_effective_date' => 'date',
+        'basic_salary'             => 'decimal:2',
+        'hra'                      => 'decimal:2',
+        'ta'                       => 'decimal:2',
+        'gross_salary'             => 'decimal:2',
+        'annual_increment'         => 'decimal:2',
+        'nominee_share'            => 'decimal:2',
+        'academic_percentage'      => 'decimal:2',
+        'professional_percentage'  => 'decimal:2',
+        'other_qual_1_percentage'  => 'decimal:2',
+        'other_qual_2_percentage'  => 'decimal:2',
+        'number_of_children'       => 'integer',
+        'children_male'            => 'integer',
+        'children_female'          => 'integer',
+        'academic_year_of_passing' => 'integer',
         'professional_year_of_passing' => 'integer',
-        'other_qual_1_year_of_passing' => 'integer',
-        'other_qual_2_year_of_passing' => 'integer',
-        'is_active'               => 'boolean',
-        'aadhaar_no'              => \App\Casts\EncryptedStringResilient::class,
-        'pan_no'                  => \App\Casts\EncryptedStringResilient::class,
-        'bank_account_no'         => \App\Casts\EncryptedStringResilient::class,
+        'experience_months'        => 'integer',
+        'kg_experience_years'      => 'integer',
+        'max_weekly_periods'       => 'integer',
+        'qualified_subjects'       => 'array',
+        'approved_teaching_levels' => 'array',
+        'is_active'                => 'boolean',
+        'aadhaar_no'               => \App\Casts\EncryptedStringResilient::class,
+        'pan_no'                   => \App\Casts\EncryptedStringResilient::class,
+        'bank_account_no'          => \App\Casts\EncryptedStringResilient::class,
     ];
 
     public function getFullNameAttribute(): string
@@ -193,6 +215,64 @@ class Employee extends Model
         return "Experience: {$duration}";
     }
 
+    /**
+     * Calculate overall career work experience breakdown from first appointment date (or joining date).
+     */
+    public function getOverallExperienceBreakdownAttribute(): ?array
+    {
+        $startDate = $this->first_appointment_date ?? $this->joining_date;
+        if (!$startDate) {
+            return null;
+        }
+
+        $start = \Carbon\Carbon::parse($startDate)->startOfDay();
+        $now = \Carbon\Carbon::now()->startOfDay();
+
+        if ($start->greaterThan($now)) {
+            return ['years' => 0, 'months' => 0, 'days' => 0];
+        }
+
+        $diff = $start->diff($now);
+
+        return [
+            'years'  => (int) $diff->y,
+            'months' => (int) $diff->m,
+            'days'   => (int) $diff->d,
+        ];
+    }
+
+    /**
+     * Overall experience duration string, e.g. "5 Years 8 Months".
+     */
+    public function getOverallExperienceDurationAttribute(): string
+    {
+        $breakdown = $this->overall_experience_breakdown;
+        if ($breakdown === null) {
+            $y = (int) ($this->attributes['experience_years'] ?? 0);
+            $m = (int) ($this->attributes['experience_months'] ?? 0);
+            if ($y > 0 || $m > 0) {
+                return "{$y} " . ($y === 1 ? 'Year' : 'Years') . " {$m} " . ($m === 1 ? 'Month' : 'Months');
+            }
+            return '—';
+        }
+
+        $years = $breakdown['years'];
+        $months = $breakdown['months'];
+        $yLabel = $years === 1 ? 'Year' : 'Years';
+        $mLabel = $months === 1 ? 'Month' : 'Months';
+
+        return "{$years} {$yLabel} {$months} {$mLabel}";
+    }
+
+    /**
+     * Full formatted overall experience string, e.g. "Overall Experience: 5 Years 8 Months".
+     */
+    public function getOverallExperienceFormattedAttribute(): string
+    {
+        $duration = $this->overall_experience_duration;
+        return $duration === '—' ? 'Overall Experience: —' : "Overall Experience: {$duration}";
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
@@ -248,9 +328,57 @@ class Employee extends Model
         return $this->hasMany(EmployeeExperience::class);
     }
 
+    public function familyMembers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeFamilyMember::class);
+    }
+
+    public function certifications(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeCertification::class);
+    }
+
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeDocument::class);
+    }
+
+    public function appraisals(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeAppraisal::class);
+    }
+
+    public function careerHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EmployeeCareerHistory::class)->orderByDesc('effective_date');
+    }
+
     public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function teachingLevelEligibilities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TeacherLevelEligibility::class);
+    }
+
+    public function eligibleTeachingLevels(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(TeachingLevel::class, 'teacher_level_eligibilities')->wherePivot('is_approved', true);
+    }
+
+    public function teacherSubjectAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TeacherSubjectAllocation::class, 'employee_id');
+    }
+
+    public function isEligibleForLevel(string|int $level): bool
+    {
+        if (is_numeric($level)) {
+            return $this->teachingLevelEligibilities()->where('teaching_level_id', $level)->where('is_approved', true)->exists();
+        }
+        return $this->eligibleTeachingLevels()->where('code', $level)->exists();
     }
 
     public function classTeacherAssignments(): \Illuminate\Database\Eloquent\Relations\HasMany
@@ -265,6 +393,11 @@ class Employee extends Model
     {
         return $this->hasOne(StaffClassTeacherAssignment::class, 'employee_id')
             ->where('is_current', true);
+    }
+
+    public function getNameAttribute(): string
+    {
+        return $this->full_name;
     }
 
     public function getClassTeacherBadgeAttribute(): ?string

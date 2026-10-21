@@ -12,10 +12,14 @@ class StaffClassTeacherAssignment extends Model
     protected $fillable = [
         'employee_id',
         'class_id',
+        'section_id',
+        'academic_year_id',
         'assigned_at',
         'ended_at',
         'is_current',
         'assigned_by',
+        'approval_status',
+        'notes',
     ];
 
     protected $casts = [
@@ -32,6 +36,16 @@ class StaffClassTeacherAssignment extends Model
     public function class(): BelongsTo
     {
         return $this->belongsTo(Classes::class, 'class_id');
+    }
+
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(Section::class, 'section_id');
+    }
+
+    public function academicYear(): BelongsTo
+    {
+        return $this->belongsTo(AcademicYear::class, 'academic_year_id');
     }
 
     public function assignedBy(): BelongsTo

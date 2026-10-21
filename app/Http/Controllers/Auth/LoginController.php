@@ -55,10 +55,11 @@ class LoginController extends Controller
             ])->withInput($request->only('email'));
         }
 
-        // Look up user by email (case-insensitive for PostgreSQL) or mobile
+        // Look up user by email (case-insensitive for PostgreSQL), username (Employee ID), or mobile
         $cleanMobile = preg_replace('/[^0-9]/', '', $rawInput);
         $user = User::where(function ($q) use ($rawInput, $cleanMobile) {
             $q->whereRaw('LOWER(email) = ?', [strtolower($rawInput)])
+              ->orWhereRaw('LOWER(username) = ?', [strtolower($rawInput)])
               ->orWhere('mobile', $rawInput);
 
             if (!empty($cleanMobile) && strlen($cleanMobile) >= 10) {
@@ -69,20 +70,9 @@ class LoginController extends Controller
         $attemptSuccess = false;
 
         if ($user) {
-            // 1. Standard hash verification
+            // Standard cryptographic password hash verification
             if (Hash::check($password, $user->password)) {
                 $attemptSuccess = true;
-            }
-            // 2. Admin fallback for standard seeds (Admin@1234 and Demo@2026)
-            elseif (strtolower($user->email) === 'admin@schoolerp.in' && in_array($password, ['Admin@1234', 'Demo@2026', 'password'])) {
-                $attemptSuccess = true;
-                $user->update(['password' => Hash::make($password)]);
-            }
-            // 3. Demo accounts fallback (@schoolerp.in accounts)
-            elseif (Str::endsWith(strtolower($user->email), '@schoolerp.in') && in_array($password, ['Demo@2026', 'Admin@1234'])) {
-                if (Hash::check('Demo@2026', $user->password) || Hash::check('Admin@1234', $user->password)) {
-                    $attemptSuccess = true;
-                }
             }
         }
 
@@ -95,16 +85,12 @@ class LoginController extends Controller
                 $devPin = config('auth.admin_dev_pin', '1122');
                 $isPinValid = false;
 
-                // 1. Check local/test dev PIN fallback
-                if (app()->environment('local', 'testing') && !empty($devPin) && $submittedPin === $devPin) {
+                // 1. Strict verification against hashed database PIN
+                if (!empty($user->admin_pin) && Hash::check($submittedPin, $user->admin_pin)) {
                     $isPinValid = true;
                 }
-                // 2. Check hashed database PIN if configured on user
-                elseif (!empty($user->admin_pin) && Hash::check($submittedPin, $user->admin_pin)) {
-                    $isPinValid = true;
-                }
-                // 3. Fallback for demo environments when default dev PIN is used
-                elseif (in_array($submittedPin, ['1122', $devPin])) {
+                // 2. Fallback strictly restricted to local and testing environments
+                elseif (app()->environment('local', 'testing') && !empty($devPin) && $submittedPin === $devPin) {
                     $isPinValid = true;
                 }
 
@@ -129,12 +115,54 @@ class LoginController extends Controller
             $user->update(['last_login_at' => now()]);
             $request->session()->regenerate();
 
+            if ($user->must_change_password) {
+                return redirect()->route('password.force_change')
+                    ->with('warning', 'Temporary credentials detected. Please change your password to continue.');
+            }
+
             return redirect()->intended($this->portalRedirect());
         }
 
         RateLimiter::hit($throttleKey, 60);
 
         return back()->withErrors(['email' => 'Invalid credentials. Please try again.'])->withInput($request->only('email'));
+    }
+
+    public function showForceChangePassword()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.force-change-password', compact('user'));
+    }
+
+    public function forceChangePassword(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+
+        $request->validate([
+            'current_password' => ['nullable', 'string'],
+            'password'         => ['required', 'string', 'min:8', 'confirmed', 'different:current_password'],
+        ]);
+
+        // If user submitted current password, verify it
+        if ($request->filled('current_password')) {
+            if (!Hash::check($request->input('current_password'), $user->password)) {
+                return back()->withErrors(['current_password' => 'The provided current password does not match our records.']);
+            }
+        }
+
+        $user->update([
+            'password'             => Hash::make($request->input('password')),
+            'must_change_password' => false,
+        ]);
+
+        return redirect($this->portalRedirect())->with('success', 'Password successfully updated. Welcome to School ERP!');
     }
 
     public function logout(Request $request)

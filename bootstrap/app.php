@@ -27,6 +27,7 @@ return $app
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'scope.user'         => \App\Http\Middleware\ScopeToUser::class,
             'portal.access'      => \App\Http\Middleware\CheckPortalAccess::class,
+            'staff.access'       => \App\Http\Middleware\EnsureStaffUser::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

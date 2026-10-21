@@ -1,13 +1,18 @@
 <?php
-require __DIR__ . '/../vendor/autoload.php';
-$app = require_once __DIR__ . '/../bootstrap/app.php';
-$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+require 'vendor/autoload.php';
+$app = require_once 'bootstrap/app.php';
+$k = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$k->bootstrap();
 
-$allocCount = App\Models\TeacherSubjectAllocation::count();
-echo "TOTAL TEACHER ALLOCATIONS: " . $allocCount . "\n";
-if ($allocCount > 0) {
-    $samples = App\Models\TeacherSubjectAllocation::with(['employee', 'subject', 'class', 'section'])->take(5)->get();
-    foreach ($samples as $s) {
-        echo "- Teacher: " . ($s->employee?->full_name ?? 'N/A') . " | Subject: " . ($s->subject?->name ?? 'N/A') . " | Class: " . ($s->class?->name ?? 'N/A') . " " . ($s->section?->name ?? '') . "\n";
-    }
+use Illuminate\Support\Facades\DB;
+
+$cols = DB::select("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'teacher_subject_allocations' ORDER BY ordinal_position");
+echo "Teacher Subject Allocation columns:\n";
+foreach ($cols as $c) {
+    echo "  {$c->column_name} ({$c->data_type})\n";
 }
+
+$count = DB::table('teacher_subject_allocations')->count();
+echo "Total allocations: {$count}\n";
+$sample = DB::table('teacher_subject_allocations')->first();
+echo "Sample record:\n" . json_encode($sample, JSON_PRETTY_PRINT) . "\n";

@@ -25,6 +25,11 @@ Route::get('/login',  [LoginController::class, 'showLogin'])->name('login');
 Route::post('/login', [LoginController::class, 'login'])->name('login.post');
 Route::post('/logout',[LoginController::class, 'logout'])->name('logout');
 
+Route::middleware('auth')->group(function () {
+    Route::get('/password/force-change',  [LoginController::class, 'showForceChangePassword'])->name('password.force_change');
+    Route::post('/password/force-change', [LoginController::class, 'forceChangePassword'])->name('password.force_change.post');
+});
+
 // Public enquiry form (no auth)
 Route::get('/enquiry',   [AdmissionController::class, 'enquiryForm'])->name('enquiry.form');
 Route::post('/enquiry',  [AdmissionController::class, 'submitEnquiry'])->middleware('throttle:10,1')->name('enquiry.submit');
@@ -52,8 +57,8 @@ Route::get('/visitor-card/verify/{token}', [\App\Http\Controllers\Public\Visitor
 // ── Public Gate Visitor Pass QR Verification (no auth) ────
 Route::get('/gate/verify/{token}', [\App\Http\Controllers\Admin\GateController::class, 'verifyPass'])->name('gate.verify');
 
-// ── Authenticated routes ──────────────────────────────────
-Route::middleware(['auth'])->group(function () {
+// ── Authenticated Administrative ERP routes ───────────────────
+Route::middleware(['auth', 'staff.access'])->group(function () {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
@@ -187,6 +192,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{id}/edit',       [StudentController::class, 'edit'])->middleware('permission:edit students')->name('edit')->where('id', '[0-9]+');
         Route::put('/{id}',        [StudentController::class, 'update'])->middleware('permission:edit students')->name('update')->where('id', '[0-9]+');
         Route::delete('/{id}',     [StudentController::class, 'destroy'])->middleware('permission:delete students')->name('destroy')->where('id', '[0-9]+');
+        Route::post('/{id}/mark-admission-paid', [StudentController::class, 'markAdmissionFeePaid'])->name('mark-admission-paid')->where('id', '[0-9]+');
         Route::get('/{id}/tc',     [StudentController::class, 'showTCForm'])->name('tc.form')->where('id', '[0-9]+');
         Route::post('/{id}/tc',    [StudentController::class, 'generateTC'])->name('tc')->where('id', '[0-9]+');
         Route::get('/{id}/id-card',[StudentController::class, 'singleIdCard'])->name('id-card.single')->where('id', '[0-9]+');
@@ -285,6 +291,10 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/teacher-allocation',       [AcademicController::class, 'saveAllocation'])->name('allocation.save');
         Route::delete('/teacher-allocation/{id}',[AcademicController::class, 'deleteAllocation'])->name('allocation.delete');
         Route::get('/allocation-history',        [AcademicController::class, 'allocationHistory'])->name('allocation.history');
+        // Class Teacher dedicated dashboard (Section 8)
+        Route::get('/my-class',                  [AcademicController::class, 'myClass'])->name('my-class');
+        // Teaching Level eligibility & workload (Section 14)
+        Route::post('/teacher-eligibility',      [AcademicController::class, 'saveTeacherEligibility'])->name('teacher-eligibility.save');
         // Academic year
         Route::get('/academic-year',             [AcademicController::class, 'academicYear'])->name('year');
         Route::post('/academic-year',            [AcademicController::class, 'saveAcademicYear'])->name('year.save');
@@ -335,6 +345,26 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/sections/{id}/split',              [AcademicController::class, 'splitSection'])->name('sections.split');
     });
 
+    // ── Module — Staff Timetable & Teaching Work Management ──────
+    Route::middleware('permission:view academics')->prefix('staff-timetable')->name('staff-timetable.')->group(function () {
+        Route::get('/',                                  [\App\Http\Controllers\Admin\StaffTimetableController::class, 'index'])->name('index');
+        Route::get('/my',                                [\App\Http\Controllers\Admin\StaffTimetableController::class, 'myTimetable'])->name('my');
+        Route::post('/extra-class',                      [\App\Http\Controllers\Admin\StaffTimetableController::class, 'storeExtraClass'])->name('extra-class.store');
+        Route::post('/extra-class/{id}/approve',         [\App\Http\Controllers\Admin\StaffTimetableController::class, 'approveExtraClass'])->name('extra-class.approve');
+        Route::post('/extra-class/{id}/reject',          [\App\Http\Controllers\Admin\StaffTimetableController::class, 'rejectExtraClass'])->name('extra-class.reject');
+        Route::post('/free-task',                        [\App\Http\Controllers\Admin\StaffTimetableController::class, 'storeFreePeriodTask'])->name('free-task.store');
+        Route::delete('/free-task/{id}',                 [\App\Http\Controllers\Admin\StaffTimetableController::class, 'deleteFreePeriodTask'])->name('free-task.delete');
+        Route::post('/test-reminder',                    [\App\Http\Controllers\Admin\StaffTimetableController::class, 'storeTestReminder'])->name('test-reminder.store');
+        Route::delete('/test-reminder/{id}',             [\App\Http\Controllers\Admin\StaffTimetableController::class, 'deleteTestReminder'])->name('test-reminder.delete');
+        Route::post('/duty',                             [\App\Http\Controllers\Admin\StaffTimetableController::class, 'storeDuty'])->name('duty.store');
+        Route::delete('/duty/{id}',                      [\App\Http\Controllers\Admin\StaffTimetableController::class, 'deleteDuty'])->name('duty.delete');
+        Route::get('/analytics',                         [\App\Http\Controllers\Admin\StaffTimetableController::class, 'analytics'])->name('analytics');
+        Route::get('/{teacherId}/pdf',                   [\App\Http\Controllers\Admin\StaffTimetableController::class, 'exportPdf'])->name('pdf');
+        Route::get('/api/free-staff',                    [\App\Http\Controllers\Admin\StaffTimetableController::class, 'apiFreeStaff'])->name('api.free-staff');
+        Route::get('/api/conflict-check',                [\App\Http\Controllers\Admin\StaffTimetableController::class, 'apiConflictCheck'])->name('api.conflict-check');
+    });
+    Route::get('/my-timetable', [\App\Http\Controllers\Admin\StaffTimetableController::class, 'myTimetable'])->middleware('permission:view academics')->name('my-timetable');
+
     // ── Module 4 — Attendance ─────────────────────────────
     Route::middleware(['permission:view attendance', 'scope.user'])->prefix('attendance')->name('attendance.')->group(function () {
         Route::get('/',          [AttendanceController::class, 'index'])->name('index');
@@ -373,6 +403,10 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/late-arrival',      [AttendanceController::class, 'lateArrivalReport'])->name('late-arrival');
         // Staff attendance dashboard
         Route::get('/staff/dashboard',   [AttendanceController::class, 'staffDashboard'])->name('staff.dashboard');
+        // Attendance corrections workflow
+        Route::get('/corrections',             [AttendanceController::class, 'corrections'])->name('corrections.index');
+        Route::post('/corrections',            [AttendanceController::class, 'storeCorrection'])->name('corrections.store');
+        Route::post('/corrections/{id}/review', [AttendanceController::class, 'reviewCorrection'])->name('corrections.review');
     });
 
     // ── Module 5 — Examinations ───────────────────────────
@@ -599,16 +633,16 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ── Module 6.1 — Expenses (Bifurcated: Maintenance vs Academic) ──
-    Route::prefix('expenses')->name('expenses.')->group(function () {
+    Route::middleware('permission:view fees')->prefix('expenses')->name('expenses.')->group(function () {
         Route::get('/',             [ExpenseController::class, 'index'])->name('index');
         Route::get('/academic',     [ExpenseController::class, 'academic'])->name('academic');
         Route::get('/maintenance',  [ExpenseController::class, 'maintenance'])->name('maintenance');
         Route::get('/create',       [ExpenseController::class, 'create'])->name('create');
         Route::post('/',            [ExpenseController::class, 'store'])->name('store');
         Route::get('/{expense}',    [ExpenseController::class, 'show'])->name('show');
-        Route::post('/{expense}/verify',  [ExpenseController::class, 'verify'])->name('verify');
-        Route::post('/{expense}/approve', [ExpenseController::class, 'approve'])->name('approve');
-        Route::post('/{expense}/reject',  [ExpenseController::class, 'reject'])->name('reject');
+        Route::post('/{expense}/verify',  [ExpenseController::class, 'verify'])->middleware('permission:manage fee structure')->name('verify');
+        Route::post('/{expense}/approve', [ExpenseController::class, 'approve'])->middleware('permission:manage fee structure')->name('approve');
+        Route::post('/{expense}/reject',  [ExpenseController::class, 'reject'])->middleware('permission:manage fee structure')->name('reject');
     });
 
     // ── Module 6.2 — Account Management (UPI, Cash Boxes, Financial Ledger) ──
@@ -675,6 +709,9 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/employees/{id}/qualifications/{qualId}',[HrController::class,'deleteQualification'])->name('employees.qualifications.delete');
         Route::post('/employees/{id}/experiences',             [HrController::class, 'storeExperience'])->name('employees.experiences.store');
         Route::delete('/employees/{id}/experiences/{expId}',   [HrController::class, 'deleteExperience'])->name('employees.experiences.delete');
+        // Family Details (Heading 11)
+        Route::post('/employees/{id}/family-members',           [HrController::class, 'storeFamilyMember'])->name('employees.family-members.store');
+        Route::delete('/employees/{id}/family-members/{familyId}', [HrController::class, 'deleteFamilyMember'])->name('employees.family-members.delete');
         Route::get('/payroll',        [HrController::class, 'payroll'])->name('payroll');
         Route::post('/payroll/process',[HrController::class, 'processPayroll'])->name('payroll.process');
         Route::post('/payroll/approve',[HrController::class, 'approvePayroll'])->name('payroll.approve');
@@ -866,13 +903,21 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/routes',                  [TransportController::class, 'storeRoute'])->name('routes.store');
         Route::get('/routes/{id}/edit',         [TransportController::class, 'editRoute'])->name('routes.edit');
         Route::put('/routes/{id}',              [TransportController::class, 'updateRoute'])->name('routes.update');
+        Route::delete('/routes/{id}',           [TransportController::class, 'destroyRoute'])->name('routes.destroy');
         Route::patch('/routes/{id}/toggle',     [TransportController::class, 'toggleRoute'])->name('routes.toggle');
-        // Vehicles CRUD
-        Route::get('/vehicles',       [TransportController::class, 'vehicles'])->name('vehicles');
-        Route::get('/vehicles/create',[TransportController::class,'createVehicle'])->name('vehicles.create');
-        Route::post('/vehicles',      [TransportController::class,'storeVehicle'])->name('vehicles.store');
-        Route::get('/vehicles/{id}/edit',[TransportController::class,'editVehicle'])->name('vehicle.edit');
-        Route::put('/vehicles/{id}',  [TransportController::class,'updateVehicle'])->name('vehicle.update');
+        // Vehicles CRUD & Profile
+        Route::get('/vehicles',                 [TransportController::class, 'vehicles'])->name('vehicles');
+        Route::get('/vehicles/create',          [TransportController::class, 'createVehicle'])->name('vehicles.create');
+        Route::post('/vehicles',                [TransportController::class, 'storeVehicle'])->name('vehicles.store');
+        Route::get('/vehicles/{id}',            [TransportController::class, 'showVehicle'])->name('vehicle.show');
+        Route::get('/vehicles/{id}/edit',       [TransportController::class, 'editVehicle'])->name('vehicle.edit');
+        Route::put('/vehicles/{id}',            [TransportController::class, 'updateVehicle'])->name('vehicle.update');
+        Route::delete('/vehicles/{id}',         [TransportController::class, 'destroyVehicle'])->name('vehicle.destroy');
+        // Vehicle Document Management
+        Route::post('/vehicles/{id}/documents', [TransportController::class, 'uploadDocument'])->name('vehicle.documents.store');
+        Route::get('/documents/{id}/view',      [TransportController::class, 'viewDocument'])->name('documents.view');
+        Route::get('/documents/{id}/download',  [TransportController::class, 'downloadDocument'])->name('documents.download');
+        Route::delete('/documents/{id}',        [TransportController::class, 'destroyDocument'])->name('documents.destroy');
         // Drivers
         Route::get('/drivers',                           [TransportController::class, 'drivers'])->name('drivers');
         Route::get('/drivers/create',                    [TransportController::class, 'createDriver'])->name('drivers.create');
@@ -1120,7 +1165,7 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // ── Module 15b — Official Circulars & Orders ────────────────
-    Route::prefix('circulars')->name('circulars.')->group(function () {
+    Route::middleware('permission:manage circulars')->prefix('circulars')->name('circulars.')->group(function () {
         Route::get('/',                           [\App\Http\Controllers\Admin\CircularOrderController::class, 'index'])->name('index');
         Route::get('/create',                     [\App\Http\Controllers\Admin\CircularOrderController::class, 'create'])->name('create');
         Route::post('/',                          [\App\Http\Controllers\Admin\CircularOrderController::class, 'store'])->name('store');
@@ -1157,8 +1202,8 @@ Route::middleware(['auth'])->group(function () {
             Route::patch('/{id}/checkout',[\App\Http\Controllers\Admin\GateController::class, 'checkout'])->name('checkout');
         });
 
-        // Host Approval & Rejection endpoints (accessible by authenticated staff & gatekeepers)
-        Route::middleware('auth')->group(function () {
+        // Host Approval & Rejection endpoints (accessible by authorised gatekeeper or admin)
+        Route::middleware('permission:manage gate')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\GateController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject',  [\App\Http\Controllers\Admin\GateController::class, 'reject'])->name('reject');
         });
@@ -1472,3 +1517,7 @@ Route::middleware(['auth', 'portal.access'])->prefix('portal')->name('portal.')-
     Route::post('/notices/mark-all-read', [\App\Http\Controllers\Portal\PortalController::class, 'markAllNoticesRead'])->name('notices.mark-all-read');
     Route::get('/notifications',    [\App\Http\Controllers\Portal\PortalController::class, 'notifications'])->name('notifications');
 });
+
+// ── RBAC Module Routes ──────────────────────────────────────────
+require __DIR__ . '/rbac.php';
+

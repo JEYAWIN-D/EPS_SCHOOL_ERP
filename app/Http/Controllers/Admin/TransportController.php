@@ -14,6 +14,7 @@ use App\Models\TransportAttendant;
 use App\Models\TransportRoute;
 use App\Models\TransportStop;
 use App\Models\Vehicle;
+use App\Models\VehicleDocument;
 use App\Models\VehicleFuelLog;
 use App\Models\VehicleMaintenance;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -21,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
 class TransportController extends Controller
@@ -91,12 +93,30 @@ class TransportController extends Controller
     public function routes(Request $request)
     {
         $showInactive = $request->boolean('show_inactive');
-        $routes = TransportRoute::withCount('allotments')
-            ->with('vehicle')
-            ->when($request->search, fn($q, $v) => $q->where('route_name', 'like', "%$v%"))
-            ->when(!$showInactive, fn($q) => $q->where('is_active', true))
-            ->paginate(20)->withQueryString();
-        return view('transport.routes', compact('routes', 'showInactive'));
+        $search = $request->query('search');
+
+        $routesQuery = TransportRoute::withCount('allotments')
+            ->with(['vehicle', 'stops'])
+            ->when($search, function ($q, $v) {
+                $q->where(function ($sub) use ($v) {
+                    $sub->where('route_name', 'like', "%{$v}%")
+                        ->orWhere('route_number', 'like', "%{$v}%")
+                        ->orWhere('from_location', 'like', "%{$v}%")
+                        ->orWhere('to_location', 'like', "%{$v}%")
+                        ->orWhereHas('vehicle', fn($vq) => $vq->where('vehicle_number', 'like', "%{$v}%"));
+                });
+            })
+            ->when(!$showInactive, fn($q) => $q->where('is_active', true));
+
+        $stats = [
+            'total_routes'    => TransportRoute::count(),
+            'active_routes'   => TransportRoute::where('is_active', true)->count(),
+            'assigned_buses'  => TransportRoute::whereNotNull('vehicle_id')->distinct('vehicle_id')->count('vehicle_id'),
+            'total_stops'     => \App\Models\TransportStop::count(),
+        ];
+
+        $routes = $routesQuery->paginate(20)->withQueryString();
+        return view('transport.routes', compact('routes', 'showInactive', 'stats'));
     }
 
     public function toggleRoute(int $id)
@@ -110,9 +130,23 @@ class TransportController extends Controller
     public function vehicles(Request $request)
     {
         $today    = now()->toDateString();
-        $vehicles = Vehicle::with(['route', 'maintenanceLogs' => fn($q) => $q->latest('service_date')->limit(1)])
-            ->when($request->search, fn($q, $v) => $q->where('vehicle_number', 'like', "%$v%"))
-            ->paginate(20);
+        $vehicles = Vehicle::with([
+                'route.stops',
+                'documents',
+                'allotments',
+                'attendants',
+                'maintenanceLogs' => fn($q) => $q->latest('service_date')->limit(1)
+            ])
+            ->when($request->search, function ($q, $v) {
+                $q->where('vehicle_number', 'like', "%$v%")
+                  ->orWhere('driver_name', 'like', "%$v%")
+                  ->orWhere('attendant_name', 'like', "%$v%")
+                  ->orWhere('make', 'like', "%$v%")
+                  ->orWhere('model', 'like', "%$v%");
+            })
+            ->orderBy('id')
+            ->paginate(20)
+            ->withQueryString();
 
         // Flag vehicles with overdue next service
         foreach ($vehicles as $v) {
@@ -266,21 +300,210 @@ class TransportController extends Controller
         ]);
     }
 
+    public function showVehicle(int $id)
+    {
+        $vehicle = Vehicle::with([
+            'route.stops' => fn($q) => $q->orderBy('stop_order'),
+            'documents.uploader',
+            'allotments.student',
+            'allotments.route',
+            'maintenanceLogs' => fn($q) => $q->latest('service_date')->limit(5),
+            'fuelLogs' => fn($q) => $q->latest('log_date')->limit(5),
+        ])->findOrFail($id);
+
+        $routes = TransportRoute::where('is_active', true)->orderBy('route_name')->get();
+
+        return view('transport.vehicle-show', compact('vehicle', 'routes'));
+    }
+
     public function editVehicle(int $id)
     {
-        $vehicle = Vehicle::findOrFail($id);
-        return view('transport.vehicle-edit', compact('vehicle'));
+        $vehicle = Vehicle::with(['route', 'documents'])->findOrFail($id);
+        $routes  = TransportRoute::where('is_active', true)->orderBy('route_name')->get();
+        return view('transport.vehicle-edit', compact('vehicle', 'routes'));
     }
 
     public function updateVehicle(Request $request, int $id)
     {
         $vehicle = Vehicle::findOrFail($id);
-        $vehicle->update($request->only([
-            'make', 'model', 'fitness_expiry', 'insurance_expiry', 'permit_expiry', 
-            'puc_expiry', 'tax_expiry', 'vehicle_type', 'driver_name', 'driver_mobile',
-            'gps_enabled', 'gps_device_id', 'gps_imei', 'gps_status'
-        ]));
-        return back()->with('success', 'Vehicle updated.');
+        $validated = $request->validate([
+            'vehicle_number'        => 'required|string|max:30|unique:vehicles,vehicle_number,' . $id,
+            'registration_number'   => 'nullable|string|max:30',
+            'make'                  => 'nullable|string|max:60',
+            'model'                 => 'nullable|string|max:60',
+            'seating_capacity'      => 'required|integer|min:1',
+            'vehicle_type'          => 'nullable|string',
+            'driver_name'           => 'nullable|string|max:100',
+            'driver_mobile'         => 'nullable|string|max:20',
+            'driver_license'        => 'nullable|string|max:50',
+            'driver_license_expiry' => 'nullable|date',
+            'driver_address'        => 'nullable|string',
+            'attendant_name'        => 'nullable|string|max:100',
+            'attendant_mobile'      => 'nullable|string|max:20',
+            'attendant_address'     => 'nullable|string',
+            'attendant_aadhaar'     => 'nullable|string|max:20',
+            'route_id'              => 'nullable|exists:transport_routes,id',
+            'fitness_expiry'        => 'nullable|date',
+            'insurance_expiry'      => 'nullable|date',
+            'permit_expiry'         => 'nullable|date',
+            'puc_expiry'            => 'nullable|date',
+            'tax_expiry'            => 'nullable|date',
+            'is_active'             => 'nullable|boolean',
+            'gps_enabled'           => 'nullable|boolean',
+        ]);
+
+        $validated['capacity'] = $validated['seating_capacity'];
+        $validated['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : true;
+
+        $vehicle->update($validated);
+
+        // Sync route relation
+        if ($vehicle->route_id) {
+            TransportRoute::where('id', $vehicle->route_id)->update(['vehicle_id' => $vehicle->id]);
+        }
+
+        // Sync attendant
+        if (!empty($validated['attendant_name'])) {
+            TransportAttendant::updateOrCreate(
+                ['vehicle_id' => $vehicle->id],
+                [
+                    'name'      => $validated['attendant_name'],
+                    'mobile'    => $validated['attendant_mobile'] ?? null,
+                    'aadhaar'   => $validated['attendant_aadhaar'] ?? null,
+                    'route_id'  => $vehicle->route_id,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        return redirect()->route('transport.vehicle.show', $vehicle->id)->with('success', "Vehicle {$vehicle->vehicle_number} updated successfully.");
+    }
+
+    public function destroyVehicle(int $id)
+    {
+        $vehicle = Vehicle::findOrFail($id);
+        
+        // Check if students are allotted
+        $assignedCount = TransportAllotment::where('vehicle_id', $id)->where('is_active', true)->count();
+        if ($assignedCount > 0) {
+            return back()->withErrors(['error' => "Cannot delete vehicle {$vehicle->vehicle_number} because {$assignedCount} active students are allocated to it. Reassign students first."]);
+        }
+
+        // Unlink route
+        TransportRoute::where('vehicle_id', $id)->update(['vehicle_id' => null]);
+        TransportStop::where('vehicle_id', $id)->update(['vehicle_id' => null]);
+        TransportAttendant::where('vehicle_id', $id)->delete();
+
+        // Delete documents
+        foreach ($vehicle->documents as $doc) {
+            if ($doc->file_path && Storage::disk('public')->exists($doc->file_path)) {
+                Storage::disk('public')->delete($doc->file_path);
+            }
+            $doc->delete();
+        }
+
+        $vehicle->delete();
+        return redirect()->route('transport.vehicles')->with('success', "Vehicle {$vehicle->vehicle_number} deleted successfully.");
+    }
+
+    public function destroyRoute(int $id)
+    {
+        $route = TransportRoute::findOrFail($id);
+
+        $assignedCount = TransportAllotment::where('route_id', $id)->where('is_active', true)->count();
+        if ($assignedCount > 0) {
+            return back()->withErrors(['error' => "Cannot delete route {$route->route_name} because {$assignedCount} active students are assigned to it. Reassign students first."]);
+        }
+
+        // Unlink vehicles
+        Vehicle::where('route_id', $id)->update(['route_id' => null]);
+        TransportStop::where('route_id', $id)->delete();
+        $route->delete();
+
+        return redirect()->route('transport.routes')->with('success', "Route {$route->route_name} deleted successfully.");
+    }
+
+    public function uploadDocument(Request $request, int $id)
+    {
+        $vehicle = Vehicle::findOrFail($id);
+
+        $request->validate([
+            'title'         => 'required|string|max:150',
+            'document_type' => 'required|in:rc,insurance,fitness,permit,puc,tax,driver_license,attendant_id,other',
+            'file'          => 'required|file|mimes:pdf,jpg,jpeg,png,webp,doc,docx|max:10240',
+            'issue_date'    => 'nullable|date',
+            'expiry_date'   => 'nullable|date',
+            'notes'         => 'nullable|string|max:500',
+        ]);
+
+        $file = $request->file('file');
+        $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $file->getClientOriginalName());
+        $path = $file->storeAs("vehicle_documents/{$vehicle->id}", $filename, 'public');
+
+        $doc = VehicleDocument::create([
+            'vehicle_id'    => $vehicle->id,
+            'title'         => $request->title,
+            'document_type' => $request->document_type,
+            'file_path'     => $path,
+            'file_name'     => $file->getClientOriginalName(),
+            'file_size'     => $file->getSize(),
+            'issue_date'    => $request->issue_date,
+            'expiry_date'   => $request->expiry_date,
+            'notes'         => $request->notes,
+            'uploaded_by'   => Auth::id(),
+        ]);
+
+        // Auto-update vehicle document expiry if matched
+        if ($request->expiry_date) {
+            $fieldMap = [
+                'rc'             => 'rc_expiry',
+                'insurance'      => 'insurance_expiry',
+                'fitness'        => 'fitness_expiry',
+                'permit'         => 'permit_expiry',
+                'puc'            => 'puc_expiry',
+                'tax'            => 'tax_expiry',
+                'driver_license' => 'driver_license_expiry',
+            ];
+            if (isset($fieldMap[$request->document_type])) {
+                $vehicle->update([$fieldMap[$request->document_type] => $request->expiry_date]);
+            }
+        }
+
+        return back()->with('success', "Document \"{$doc->title}\" uploaded successfully.");
+    }
+
+    public function viewDocument(int $id)
+    {
+        $doc = VehicleDocument::findOrFail($id);
+        if (!Storage::disk('public')->exists($doc->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        $path = Storage::disk('public')->path($doc->file_path);
+        return response()->file($path);
+    }
+
+    public function downloadDocument(int $id)
+    {
+        $doc = VehicleDocument::findOrFail($id);
+        if (!Storage::disk('public')->exists($doc->file_path)) {
+            abort(404, 'Document file not found.');
+        }
+
+        $path = Storage::disk('public')->path($doc->file_path);
+        return response()->download($path, $doc->file_name ?? basename($doc->file_path));
+    }
+
+    public function destroyDocument(int $id)
+    {
+        $doc = VehicleDocument::findOrFail($id);
+        if ($doc->file_path && Storage::disk('public')->exists($doc->file_path)) {
+            Storage::disk('public')->delete($doc->file_path);
+        }
+        $title = $doc->title;
+        $doc->delete();
+
+        return back()->with('success', "Document \"{$title}\" deleted.");
     }
 
     public function allotment(Request $request)
@@ -475,17 +698,56 @@ class TransportController extends Controller
 
     public function storeVehicle(Request $request)
     {
-        $request->validate([
-            'vehicle_number'  => 'required|string|max:20|unique:vehicles',
-            'make'            => 'nullable|string|max:60',
-            'model'           => 'nullable|string|max:60',
-            'seating_capacity'=> 'required|integer|min:1',
-            'vehicle_type'    => 'nullable|in:bus,van,minibus,auto',
-            'driver_name'     => 'nullable|string|max:100',
-            'driver_mobile'   => 'nullable|string|max:15',
+        $validated = $request->validate([
+            'vehicle_number'        => 'required|string|max:30|unique:vehicles,vehicle_number',
+            'registration_number'   => 'nullable|string|max:30',
+            'make'                  => 'nullable|string|max:60',
+            'model'                 => 'nullable|string|max:60',
+            'seating_capacity'      => 'required|integer|min:1',
+            'vehicle_type'          => 'nullable|string',
+            'driver_name'           => 'nullable|string|max:100',
+            'driver_mobile'         => 'nullable|string|max:20',
+            'driver_license'        => 'nullable|string|max:50',
+            'driver_license_expiry' => 'nullable|date',
+            'driver_address'        => 'nullable|string',
+            'attendant_name'        => 'nullable|string|max:100',
+            'attendant_mobile'      => 'nullable|string|max:20',
+            'attendant_address'     => 'nullable|string',
+            'attendant_aadhaar'     => 'nullable|string|max:20',
+            'route_id'              => 'nullable|exists:transport_routes,id',
+            'fitness_expiry'        => 'nullable|date',
+            'insurance_expiry'      => 'nullable|date',
+            'permit_expiry'         => 'nullable|date',
+            'puc_expiry'            => 'nullable|date',
+            'tax_expiry'            => 'nullable|date',
         ]);
-        Vehicle::create(array_merge($request->validated(), ['is_active' => true]));
-        return redirect()->route('transport.vehicles')->with('success', 'Vehicle added.');
+
+        $validated['capacity'] = $validated['seating_capacity'];
+        $validated['is_active'] = true;
+        $validated['status'] = 'active';
+
+        $vehicle = Vehicle::create($validated);
+
+        // If route assigned, update route's vehicle_id
+        if (!empty($validated['route_id'])) {
+            TransportRoute::where('id', $validated['route_id'])->update(['vehicle_id' => $vehicle->id]);
+        }
+
+        // If attendant entered, sync to transport_attendants
+        if (!empty($validated['attendant_name'])) {
+            TransportAttendant::updateOrCreate(
+                ['vehicle_id' => $vehicle->id],
+                [
+                    'name'      => $validated['attendant_name'],
+                    'mobile'    => $validated['attendant_mobile'] ?? null,
+                    'aadhaar'   => $validated['attendant_aadhaar'] ?? null,
+                    'route_id'  => $validated['route_id'] ?? null,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        return redirect()->route('transport.vehicle.show', $vehicle->id)->with('success', "Vehicle {$vehicle->vehicle_number} created successfully.");
     }
 
     public function createRoute()

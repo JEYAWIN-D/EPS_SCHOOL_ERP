@@ -20,7 +20,7 @@ class HostelVisitingHours extends Model
         $rule = self::where('is_active', true)
             ->where(fn($q) => $q->whereIn('day_type', ['all', $dayType]))
             ->when($hostelId, fn($q) => $q->where(fn($q2) => $q2->where('hostel_id', $hostelId)->orWhereNull('hostel_id')))
-            ->orderByRaw("FIELD(day_type, '{$dayType}', 'all') DESC")
+            ->orderByRaw("CASE WHEN day_type = ? THEN 1 WHEN day_type = 'all' THEN 2 ELSE 3 END", [$dayType])
             ->first();
 
         if (!$rule) return true; // no restriction configured = always allowed
