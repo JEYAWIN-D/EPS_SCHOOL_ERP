@@ -36,7 +36,7 @@ class Student extends Model
         'rejection_reason', 'rejected_by', 'rejected_at',
         'parent_visitor_pass_token',
         'payment_terms', 'total_admission_fee', 'admission_paid_amount',
-        'admission_pending_amount', 'payment_mode', 'payment_account', 'payment_date', 'payment_status', 'admission_fee_terms',
+        'admission_pending_amount', 'excess_amount', 'payment_mode', 'payment_account', 'payment_date', 'payment_status', 'admission_fee_terms',
         'document_token',
         'emis_no', 'identification_mark_1', 'identification_mark_2',
         'is_asp', 'asp_fee',
@@ -59,6 +59,14 @@ class Student extends Model
                 $student->parent_visitor_pass_token = \Illuminate\Support\Str::random(40);
             }
         });
+
+        static::saved(function ($student) {
+            \Illuminate\Support\Facades\Cache::forget('students_aadhaar_map');
+        });
+
+        static::deleted(function ($student) {
+            \Illuminate\Support\Facades\Cache::forget('students_aadhaar_map');
+        });
     }
 
     protected $casts = [
@@ -80,6 +88,7 @@ class Student extends Model
         'total_admission_fee'           => 'decimal:2',
         'admission_paid_amount'         => 'decimal:2',
         'admission_pending_amount'      => 'decimal:2',
+        'excess_amount'                 => 'decimal:2',
         'admission_fee_terms'           => 'array',
         'is_asp'                        => 'boolean',
         'asp_fee'                       => 'decimal:2',
@@ -316,4 +325,142 @@ class Student extends Model
 
         return $candidate;
     }
+
+    /**
+     * Invalidate cached Aadhaar registry.
+     */
+    public static function clearAadhaarCache(): void
+    {
+        \Illuminate\Support\Facades\Cache::forget('students_aadhaar_map');
+    }
+
+    /**
+     * Find an existing active student by 12-digit Aadhaar number.
+     * Decrypts encrypted strings seamlessly and returns student info or null.
+     */
+    public static function findStudentByAadhaar(?string $aadhaar, ?int $excludeStudentId = null): ?array
+    {
+        $clean = preg_replace('/[^0-9]/', '', (string)$aadhaar);
+        if (strlen($clean) !== 12) {
+            return null;
+        }
+
+        $map = \Illuminate\Support\Facades\Cache::remember('students_aadhaar_map', 300, function () {
+            $rows = static::withoutGlobalScopes()
+                ->whereNull('deleted_at')
+                ->whereNotNull('aadhaar_no')
+                ->where('aadhaar_no', '!=', '')
+                ->with(['currentEnrollment.class', 'currentEnrollment.section'])
+                ->select(['id', 'first_name', 'last_name', 'admission_no', 'roll_number', 'aadhaar_no'])
+                ->get();
+
+            $out = [];
+            foreach ($rows as $r) {
+                $c = preg_replace('/[^0-9]/', '', (string)$r->aadhaar_no);
+                if (strlen($c) === 12) {
+                    $className = $r->currentEnrollment?->class?->name ?? 'Standard Class';
+                    $secName = $r->currentEnrollment?->section?->name ? ' (' . $r->currentEnrollment->section->name . ')' : '';
+                    $out[$c] = [
+                        'id'           => (int)$r->id,
+                        'name'         => trim($r->first_name . ' ' . ($r->last_name ?? '')),
+                        'admission_no' => $r->admission_no ?? 'N/A',
+                        'roll_number'  => $r->roll_number ?? '',
+                        'class'        => $className . $secName,
+                    ];
+                }
+            }
+            return $out;
+        });
+
+        if (isset($map[$clean])) {
+            $record = $map[$clean];
+            if ($excludeStudentId && (int)$record['id'] === (int)$excludeStudentId) {
+                return null;
+            }
+            return $record;
+        }
+
+        return null;
+    }
+
+    /**
+     * Find an existing active student by EMIS / PEN Number.
+     */
+    public static function findStudentByEmis(?string $emis, ?int $excludeStudentId = null): ?array
+    {
+        $clean = trim((string)$emis);
+        if ($clean === '') {
+            return null;
+        }
+
+        $query = static::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->whereNotNull('emis_no')
+            ->where('emis_no', '!=', '')
+            ->whereRaw('LOWER(TRIM(emis_no)) = ?', [strtolower($clean)])
+            ->with(['currentEnrollment.class', 'currentEnrollment.section'])
+            ->select(['id', 'first_name', 'last_name', 'admission_no', 'roll_number', 'emis_no']);
+
+        if ($excludeStudentId) {
+            $query->where('id', '!=', $excludeStudentId);
+        }
+
+        $student = $query->first();
+        if (!$student) {
+            return null;
+        }
+
+        $className = $student->currentEnrollment?->class?->name ?? 'Standard Class';
+        $secName = $student->currentEnrollment?->section?->name ? ' (' . $student->currentEnrollment->section->name . ')' : '';
+
+        return [
+            'id'           => (int)$student->id,
+            'name'         => trim($student->first_name . ' ' . ($student->last_name ?? '')),
+            'admission_no' => $student->admission_no ?? 'N/A',
+            'roll_number'  => $student->roll_number ?? '',
+            'class'        => $className . $secName,
+            'emis_no'      => $student->emis_no,
+        ];
+    }
+
+    /**
+     * Find an existing active student by Student Email Address.
+     */
+    public static function findStudentByEmail(?string $email, ?int $excludeStudentId = null): ?array
+    {
+        $clean = strtolower(trim((string)$email));
+        if ($clean === '' || !filter_var($clean, FILTER_VALIDATE_EMAIL)) {
+            return null;
+        }
+
+        $query = static::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->whereRaw('LOWER(TRIM(email)) = ?', [$clean])
+            ->with(['currentEnrollment.class', 'currentEnrollment.section'])
+            ->select(['id', 'first_name', 'last_name', 'admission_no', 'roll_number', 'email']);
+
+        if ($excludeStudentId) {
+            $query->where('id', '!=', $excludeStudentId);
+        }
+
+        $student = $query->first();
+        if (!$student) {
+            return null;
+        }
+
+        $className = $student->currentEnrollment?->class?->name ?? 'Standard Class';
+        $secName = $student->currentEnrollment?->section?->name ? ' (' . $student->currentEnrollment->section->name . ')' : '';
+
+        return [
+            'id'           => (int)$student->id,
+            'name'         => trim($student->first_name . ' ' . ($student->last_name ?? '')),
+            'admission_no' => $student->admission_no ?? 'N/A',
+            'roll_number'  => $student->roll_number ?? '',
+            'class'        => $className . $secName,
+            'email'        => $student->email,
+        ];
+    }
 }
+

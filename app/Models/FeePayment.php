@@ -10,7 +10,7 @@ class FeePayment extends Model
     protected $fillable = [
         'student_id', 'enrollment_id', 'fee_head_id', 'term_number', 'term_name', 'academic_year_id',
         'receipt_number', 'payment_date', 'amount', 'late_fee', 'discount',
-        'amount_paid', 'total_paid', 'payment_mode', 'payment_account', 'transaction_id',
+        'amount_paid', 'amount_adjusted', 'excess_amount', 'total_paid', 'payment_mode', 'payment_account', 'transaction_id',
         'cheque_number', 'cheque_bank', 'cheque_branch', 'cheque_date',
         'cheque_status', 'bounce_charge', 'bounce_reason',
         'remarks', 'collected_by', 'is_cancelled', 'cancel_reason',
@@ -18,16 +18,18 @@ class FeePayment extends Model
     ];
 
     protected $casts = [
-        'payment_date'  => 'date',
-        'cheque_date'   => 'date',
-        'bounce_charge' => 'decimal:2',
-        'is_cancelled'  => 'boolean',
-        'cancelled_at'  => 'datetime',
-        'late_fee'      => 'decimal:2',
-        'discount'      => 'decimal:2',
-        'amount'        => 'decimal:2',
-        'amount_paid'   => 'decimal:2',
-        'total_paid'    => 'decimal:2',
+        'payment_date'    => 'date',
+        'cheque_date'     => 'date',
+        'bounce_charge'   => 'decimal:2',
+        'is_cancelled'    => 'boolean',
+        'cancelled_at'    => 'datetime',
+        'late_fee'        => 'decimal:2',
+        'discount'        => 'decimal:2',
+        'amount'          => 'decimal:2',
+        'amount_paid'     => 'decimal:2',
+        'amount_adjusted' => 'decimal:2',
+        'excess_amount'   => 'decimal:2',
+        'total_paid'      => 'decimal:2',
     ];
 
     public function student(): BelongsTo

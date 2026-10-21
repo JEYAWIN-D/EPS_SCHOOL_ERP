@@ -21,6 +21,10 @@
       </p>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
+      <a href="{{ route('students.roll-numbers.index', array_filter(['class_id' => request('class_id')])) }}" class="btn btn-secondary btn-sm" title="Generate alphabetical roll numbers per section, allocate sections, or promote for next academic year">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg>
+        Generate Section &amp; Roll No.
+      </a>
       <a href="{{ route('students.directory') }}" class="btn btn-secondary btn-sm">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
         Directory
@@ -107,6 +111,28 @@
       </div>
     </div>
   </form>
+
+  @if(request('class_id') || request('section'))
+    @php
+      $filterCls = $classes->firstWhere('id', request('class_id'));
+      $cleanFilterSec = request('section') ? strtoupper(trim(preg_replace('/^section\s*/i', '', request('section')))) : null;
+    @endphp
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-2.5 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 text-xs">
+      <div class="flex items-center gap-2 text-indigo-950 font-medium">
+        <svg class="w-4 h-4 text-indigo-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span>
+          Active Filter:
+          <strong class="text-indigo-900 font-bold">{{ $filterCls ? 'Class ' . $filterCls->name : 'All Classes' }}</strong>
+          @if($cleanFilterSec) &bull; <strong class="text-indigo-900 font-bold">Section {{ $cleanFilterSec }}</strong>@endif
+        </span>
+      </div>
+      <a href="{{ route('students.roll-numbers.index', array_filter(['class_id' => request('class_id'), 'auto_preview' => 1])) }}"
+         class="inline-flex items-center gap-1.5 font-bold text-indigo-700 hover:text-indigo-900 underline underline-offset-2 shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg>
+        <span>Preview &amp; Regenerate Roll Numbers for this Section</span>
+      </a>
+    </div>
+  @endif
 
   {{-- Table --}}
   <div class="table-wrap">

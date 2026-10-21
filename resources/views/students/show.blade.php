@@ -45,9 +45,14 @@
         </button>
       @endif
 
-      <a href="{{ route('fees.collect', ['student_id' => $student->id]) }}" class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-xs text-slate-700 hover:text-indigo-600">
-        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        FeePayment
+      <a href="{{ route('fees.student-statement', ['student_id' => $student->id]) }}" target="_blank" class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-xs text-slate-700 hover:text-indigo-600">
+        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Fee Statement
+      </a>
+
+      <a href="{{ route('fees.collect', ['student_id' => $student->id]) }}" class="btn btn-primary btn-sm flex items-center gap-1.5 shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+        Payment Received
       </a>
 
       @if($student->status === 'active')
@@ -1438,113 +1443,148 @@
   </div>
 
   {{-- ========================================================================= --}}
-  {{-- 4. FULL WIDTH: FINANCIAL & ADMISSION FEE SCHEDULE                         --}}
+  {{-- 4. FULL WIDTH: STUDENT-WISE FEE STATEMENT & PAYMENT LEDGER                --}}
   {{-- ========================================================================= --}}
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
-    <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6" id="fee-statement-section">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100 shadow-xs">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         </div>
         <div>
-          <h3 class="text-lg font-bold text-slate-900">Fee Payment Details</h3>
-          <p class="text-xs text-slate-400">Admission fee payment summary, payment terms, and installment schedule</p>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <h3 class="text-lg font-bold text-slate-900">Student Fee Statement &amp; Ledger</h3>
+            @if($student->payment_terms)
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                {{ str_replace('_', ' ', strtoupper($student->payment_terms)) }}
+              </span>
+            @endif
+            @php
+              $statusBadge = match($student->payment_status) {
+                'paid' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                'partially_paid' => 'bg-amber-50 text-amber-700 border-amber-200',
+                default => 'bg-rose-50 text-rose-700 border-rose-200'
+              };
+            @endphp
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border {{ $statusBadge }}">
+              {{ str_replace('_', ' ', $student->payment_status ?? 'Pending') }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">Real-time ledger with automated waterfall adjustment, term schedules &amp; transaction history</p>
         </div>
       </div>
 
-      @if($student->payment_terms)
-      <span class="px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-blue-50 text-blue-700 border border-blue-200">
-        {{ str_replace('_', ' ', strtoupper($student->payment_terms)) }}
-      </span>
-      @endif
-    </div>
+      <div class="flex items-center gap-2.5 self-stretch sm:self-auto justify-end">
+        <a href="{{ route('fees.student-statement', ['student_id' => $student->id]) }}" target="_blank" class="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 transition flex items-center gap-1.5 shadow-2xs">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+          Print Statement
+        </a>
 
-    @if($student->total_admission_fee > 0 || !empty($student->admission_fee_terms))
-    {{-- Summary Grid --}}
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-      <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Admission Fee</p>
-        <p class="text-lg font-black text-slate-900 font-mono mt-0.5">₹{{ number_format($student->total_admission_fee, 2) }}</p>
-      </div>
-
-      <div class="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200/80">
-        <p class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Total Paid</p>
-        <p class="text-lg font-black text-emerald-700 font-mono mt-0.5">₹{{ number_format($student->admission_paid_amount, 2) }}</p>
-      </div>
-
-      <div class="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200/80">
-        <p class="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Total Pending</p>
-        <p class="text-lg font-black text-amber-700 font-mono mt-0.5">₹{{ number_format($student->admission_pending_amount, 2) }}</p>
-      </div>
-
-      <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Payment Status</p>
-        @php
-          $statusClass = match($student->payment_status) {
-            'paid' => 'text-emerald-600',
-            'partially_paid' => 'text-amber-600',
-            default => 'text-slate-600'
-          };
-        @endphp
-        <p class="text-sm font-extrabold font-mono capitalize mt-1 {{ $statusClass }}">
-          {{ str_replace('_', ' ', $student->payment_status ?? 'Pending') }}
-        </p>
-      </div>
-
-      <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 col-span-2 sm:col-span-1">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Payment Terms</p>
-        <p class="text-sm font-extrabold font-mono text-slate-800 capitalize mt-1">
-          {{ str_replace('_', ' ', $student->payment_terms ?? 'Single Payment') }}
-        </p>
+        <a href="{{ route('fees.collect', ['student_id' => $student->id]) }}" class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs shadow-sm hover:shadow transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          Payment Received
+        </a>
       </div>
     </div>
 
-    {{-- Term Breakdown Table --}}
+    {{-- The 5 Student-Wise Metric Cards --}}
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+      <div class="bg-gradient-to-br from-slate-50 to-slate-100/60 p-4 rounded-xl border border-slate-200">
+        <p class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Total Fees Payable</p>
+        <p class="text-xl font-black text-slate-900 font-mono mt-1">₹{{ number_format($totalFeesPayable, 2) }}</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">Annual / Course fee</p>
+      </div>
+
+      <div class="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200">
+        <p class="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider">Total Amount Paid</p>
+        <p class="text-xl font-black text-emerald-700 font-mono mt-1">₹{{ number_format($totalPaid, 2) }}</p>
+        <p class="text-[10px] text-emerald-600/80 mt-0.5">Gross collections</p>
+      </div>
+
+      <div class="bg-blue-50/70 p-4 rounded-xl border border-blue-200">
+        <p class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Amount Adjusted</p>
+        <p class="text-xl font-black text-blue-700 font-mono mt-1">₹{{ number_format($totalAdjusted, 2) }}</p>
+        <p class="text-[10px] text-blue-600/80 mt-0.5">Applied against dues</p>
+      </div>
+
+      <div class="bg-purple-50/70 p-4 rounded-xl border border-purple-200">
+        <p class="text-[10px] font-extrabold text-purple-700 uppercase tracking-wider">Excess Amount / Advance</p>
+        <p class="text-xl font-black text-purple-700 font-mono mt-1">₹{{ number_format($excessAmount, 2) }}</p>
+        <p class="text-[10px] text-purple-600/80 mt-0.5">Surplus credit balance</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-amber-50/80 to-rose-50/60 p-4 rounded-xl border border-amber-200 col-span-2 sm:col-span-1">
+        <p class="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider">Outstanding Balance</p>
+        <p class="text-xl font-black {{ $outstandingBalance > 0 ? 'text-amber-700' : 'text-emerald-700' }} font-mono mt-1">
+          ₹{{ number_format($outstandingBalance, 2) }}
+        </p>
+        <p class="text-[10px] text-amber-600/80 mt-0.5">Net balance due</p>
+      </div>
+    </div>
+
+    {{-- Term-Wise Schedule with Remaining Payable Breakdown --}}
     @if(!empty($student->admission_fee_terms) && is_array($student->admission_fee_terms))
-    <div class="space-y-2 pt-2">
-      <p class="text-xs font-extrabold text-slate-700 uppercase tracking-wider">Term Schedule Breakdown</p>
-      <div class="overflow-x-auto border border-slate-200/80 rounded-xl">
+    <div class="space-y-2.5 pt-2">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          Term-Wise Payment &amp; Adjustment Schedule
+        </h4>
+        <span class="text-[11px] text-slate-400">Excess payments automatically waterfall to future terms</span>
+      </div>
+
+      <div class="overflow-x-auto border border-slate-200 rounded-xl shadow-2xs">
         <table class="w-full text-xs text-left">
           <thead>
-            <tr class="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
-              <th class="py-2.5 px-3.5">Term</th>
-              <th class="py-2.5 px-3.5 text-right">Term Amount</th>
-              <th class="py-2.5 px-3.5 text-right">Paid</th>
-              <th class="py-2.5 px-3.5 text-right">Pending</th>
-              <th class="py-2.5 px-3.5">Due Date</th>
-              <th class="py-2.5 px-3.5 text-center">Status</th>
-              <th class="py-2.5 px-3.5">Payment Mode / Date</th>
+            <tr class="bg-slate-50/90 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+              <th class="py-3 px-3.5">Term Name</th>
+              <th class="py-3 px-3.5 text-right">Term Amount</th>
+              <th class="py-3 px-3.5 text-right text-emerald-700">Paid / Adjusted</th>
+              <th class="py-3 px-3.5 text-right text-amber-700">Remaining Payable</th>
+              <th class="py-3 px-3.5">Due Date</th>
+              <th class="py-3 px-3.5 text-center">Status</th>
+              <th class="py-3 px-3.5">Last Mode / Date</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 font-medium">
             @foreach($student->admission_fee_terms as $term)
-              <tr class="hover:bg-slate-50/60 transition">
-                <td class="py-3 px-3.5 font-bold text-slate-900">{{ $term['name'] ?? ('Term ' . ($term['term_number'] ?? $loop->iteration)) }}</td>
-                <td class="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹{{ number_format($term['amount'] ?? 0, 2) }}</td>
-                <td class="py-3 px-3.5 text-right font-mono font-bold text-emerald-600">₹{{ number_format($term['paid'] ?? 0, 2) }}</td>
-                <td class="py-3 px-3.5 text-right font-mono font-bold text-amber-600">₹{{ number_format($term['pending'] ?? 0, 2) }}</td>
+              @php
+                $tAmt = (float)($term['amount'] ?? 0);
+                $tPaid = (float)($term['paid'] ?? 0);
+                $tPending = (float)($term['pending'] ?? max(0, $tAmt - $tPaid));
+                $tStatus = $term['status'] ?? ($tPending <= 0 ? 'paid' : ($tPaid > 0 ? 'partially_paid' : 'pending'));
+                $tBadge = match($tStatus) {
+                  'paid' => 'bg-emerald-100 text-emerald-800 border-emerald-200',
+                  'partially_paid' => 'bg-amber-100 text-amber-800 border-amber-200',
+                  default => 'bg-rose-50 text-rose-700 border-rose-200',
+                };
+              @endphp
+              <tr class="hover:bg-slate-50/60 transition {{ $tPending <= 0 ? 'bg-emerald-50/20' : '' }}">
+                <td class="py-3 px-3.5 font-bold text-slate-900 flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full {{ $tPending <= 0 ? 'bg-emerald-500' : ($tPaid > 0 ? 'bg-amber-500' : 'bg-slate-300') }}"></span>
+                  {{ $term['name'] ?? ('Term ' . ($term['term_number'] ?? $loop->iteration)) }}
+                </td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-slate-900">₹{{ number_format($tAmt, 2) }}</td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-emerald-600">₹{{ number_format($tPaid, 2) }}</td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold {{ $tPending > 0 ? 'text-amber-600' : 'text-slate-400' }}">
+                  ₹{{ number_format($tPending, 2) }}
+                </td>
                 <td class="py-3 px-3.5 font-mono text-slate-600">
                   {{ !empty($term['due_date']) ? \Carbon\Carbon::parse($term['due_date'])->format('d-m-Y') : '—' }}
                 </td>
                 <td class="py-3 px-3.5 text-center">
-                  @php
-                    $termStatus = $term['status'] ?? 'pending';
-                    $termBadge = match($termStatus) {
-                      'paid' => 'bg-emerald-100 text-emerald-700 border-emerald-200',
-                      'partially_paid' => 'bg-amber-100 text-amber-700 border-amber-200',
-                      default => 'bg-slate-100 text-slate-600 border-slate-200',
-                    };
-                  @endphp
-                  <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border {{ $termBadge }}">
-                    {{ str_replace('_', ' ', $termStatus) }}
+                  <span class="px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border {{ $tBadge }}">
+                    {{ str_replace('_', ' ', $tStatus) }}
                   </span>
                 </td>
-                <td class="py-3 px-3.5 font-xs text-slate-600">
-                  @if(($term['paid'] ?? 0) > 0 && !empty($term['payment_mode']))
+                <td class="py-3 px-3.5 text-xs text-slate-600">
+                  @if($tPaid > 0 && !empty($term['payment_mode']))
                     <span class="font-bold text-slate-800">{{ $term['payment_mode'] }}</span>
                     <span class="text-slate-400 font-mono text-[11px] block">
                       {{ !empty($term['payment_date']) ? \Carbon\Carbon::parse($term['payment_date'])->format('d-m-Y') : '' }}
                     </span>
+                  @elseif($tPaid > 0)
+                    <span class="text-emerald-700 font-medium">Waterfall Adjusted</span>
                   @else
                     <span class="text-slate-400">—</span>
                   @endif
@@ -1557,9 +1597,93 @@
     </div>
     @endif
 
-    @else
-    <p class="text-xs text-slate-400 italic">No admission fee payment details recorded for this student.</p>
-    @endif
+    {{-- Payment History & Adjustment Ledger Table --}}
+    <div class="space-y-2.5 pt-2">
+      <div class="flex items-center justify-between">
+        <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          Payment History &amp; Adjustment Ledger
+        </h4>
+        <span class="text-[11px] text-slate-400">{{ $allFeePayments->count() }} transaction(s) recorded</span>
+      </div>
+
+      @if($allFeePayments->count() > 0)
+      <div class="overflow-x-auto border border-slate-200 rounded-xl shadow-2xs">
+        <table class="w-full text-xs text-left">
+          <thead>
+            <tr class="bg-slate-50/90 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+              <th class="py-3 px-3.5">Receipt #</th>
+              <th class="py-3 px-3.5">Date</th>
+              <th class="py-3 px-3.5">Particulars / Head</th>
+              <th class="py-3 px-3.5 text-right text-emerald-700">Amount Paid</th>
+              <th class="py-3 px-3.5 text-right text-blue-700">Adjusted</th>
+              <th class="py-3 px-3.5 text-right text-purple-700">Excess Credit</th>
+              <th class="py-3 px-3.5">Mode &amp; Ref</th>
+              <th class="py-3 px-3.5">Collected By</th>
+              <th class="py-3 px-3.5 text-center">Receipt</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 font-medium">
+            @foreach($allFeePayments as $payment)
+              @php
+                $pAdj = (float)($payment->amount_adjusted ?? $payment->total_paid);
+                $pExc = (float)($payment->excess_amount ?? 0);
+              @endphp
+              <tr class="hover:bg-slate-50/60 transition">
+                <td class="py-3 px-3.5 font-mono font-bold text-slate-900">
+                  <a href="{{ route('fees.receipt', $payment->id) }}" class="text-indigo-600 hover:text-indigo-800 hover:underline">
+                    {{ $payment->receipt_number ?? ('#' . $payment->id) }}
+                  </a>
+                </td>
+                <td class="py-3 px-3.5 font-mono text-slate-700">
+                  {{ $payment->payment_date ? \Carbon\Carbon::parse($payment->payment_date)->format('d-m-Y') : '—' }}
+                </td>
+                <td class="py-3 px-3.5 text-slate-800 font-medium">
+                  {{ $payment->feeHead->name ?? $payment->notes ?? 'Fee Collection' }}
+                </td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-emerald-700">
+                  ₹{{ number_format($payment->total_paid, 2) }}
+                </td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold text-blue-700">
+                  ₹{{ number_format($pAdj, 2) }}
+                </td>
+                <td class="py-3 px-3.5 text-right font-mono font-bold {{ $pExc > 0 ? 'text-purple-700' : 'text-slate-400' }}">
+                  {{ $pExc > 0 ? '₹' . number_format($pExc, 2) : '—' }}
+                </td>
+                <td class="py-3 px-3.5 text-slate-600">
+                  <span class="inline-block px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] font-bold uppercase text-slate-700">
+                    {{ $payment->payment_mode ?? 'CASH' }}
+                  </span>
+                  @if($payment->reference_number)
+                    <span class="text-slate-400 font-mono text-[10px] block mt-0.5">{{ $payment->reference_number }}</span>
+                  @endif
+                </td>
+                <td class="py-3 px-3.5 text-slate-600 text-xs">
+                  {{ $payment->collectedBy->name ?? 'System' }}
+                </td>
+                <td class="py-3 px-3.5 text-center">
+                  <a href="{{ route('fees.receipt', $payment->id) }}" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    View
+                  </a>
+                </td>
+              </tr>
+            @endforeach
+          </tbody>
+        </table>
+      </div>
+      @else
+      <div class="p-6 text-center rounded-xl bg-slate-50 border border-slate-200/80">
+        <p class="text-xs text-slate-500 font-medium">No fee payments recorded yet for this student.</p>
+        <div class="mt-3">
+          <a href="{{ route('fees.collect', ['student_id' => $student->id]) }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+            Payment Received
+          </a>
+        </div>
+      </div>
+      @endif
+    </div>
   </div>
 
   {{-- ========================================================================= --}}

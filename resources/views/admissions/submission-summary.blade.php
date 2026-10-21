@@ -233,6 +233,49 @@
     </div>
   </div>
 
+  {{-- ── Alphabetical Roll Number Regeneration Option for Affected Section ── --}}
+  @php
+    $enr = $student->currentEnrollment;
+    $classId = $enr?->class_id;
+    $secId   = $enr?->section_id;
+    $clsName = $enr?->class?->name ?? 'Class';
+    $secName = $enr?->section?->name ?? 'A';
+  @endphp
+  @if($classId)
+  <div class="bg-gradient-to-r from-indigo-50 via-slate-50 to-emerald-50 border border-indigo-200/90 rounded-3xl p-5 sm:p-6 shadow-xs space-y-3 print:hidden">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="space-y-1.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-600 text-white shadow-2xs">
+            New Admission Enrolled
+          </span>
+          <span class="text-xs font-semibold text-slate-500">Issued Roll Number:</span>
+          <span class="font-mono text-xs font-black text-indigo-700 bg-white px-2.5 py-0.5 rounded-md border border-indigo-200 shadow-2xs">
+            {{ $student->roll_number ?: 'Auto-Appended' }}
+          </span>
+          <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+            <svg class="w-3 h-3 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            Existing Students Protected
+          </span>
+        </div>
+        <h3 class="text-base font-black text-slate-900 tracking-tight">
+          Section {{ $secName }} Alphabetical Roll Number Regeneration Option
+        </h3>
+        <p class="text-xs text-slate-600 max-w-2xl leading-relaxed">
+          The new student was appended with roll number <strong class="font-mono text-slate-800">{{ $student->roll_number }}</strong> to protect existing students from silent roll changes. You can preview and regenerate A–Z alphabetical roll numbers for <strong>Class {{ $clsName }} — Section {{ $secName }}</strong> with authorization and confirmation anytime. Permanent admission numbers (e.g. <strong class="font-mono text-slate-800">{{ $student->admission_no }}</strong>) are permanent and will never change.
+        </p>
+      </div>
+      <div class="shrink-0 flex items-center gap-2">
+        <a href="{{ route('students.roll-numbers.index', ['class_id' => $classId, 'section_id' => $secId, 'auto_preview' => 1]) }}"
+           class="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm shadow-indigo-600/30 transition hover:shadow-md">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>Preview &amp; Regenerate Section Roll Numbers</span>
+        </a>
+      </div>
+    </div>
+  </div>
+  @endif
+
   {{-- ── 2 Columns: Applicant Dossier + Home QR Document Slip ──────────── --}}
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 

@@ -2,7 +2,16 @@
 @section('title','Student Promotion')
 @section('content')
 <div class="space-y-6">
-  <h1 class="page-title">Student Promotion & Rollover</h1>
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div>
+      <h1 class="page-title">Student Promotion &amp; Rollover</h1>
+      <p class="page-subtitle">Promote students across academic years with independent class &amp; section list generation.</p>
+    </div>
+    <a href="{{ route('students.roll-numbers.index') }}" class="btn btn-secondary btn-sm text-indigo-700 bg-indigo-50 border-indigo-200">
+      <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg>
+      <span>Roll Number Generator</span>
+    </a>
+  </div>
   <div class="grid grid-cols-3 gap-4">
     <div class="card text-center py-5"><p class="text-3xl font-bold text-green-600">{{ $stats['promoted'] ?? 0 }}</p><p class="text-sm text-slate-500 mt-1">Promoted</p></div>
     <div class="card text-center py-5"><p class="text-3xl font-bold text-amber-600">{{ $stats['detained'] ?? 0 }}</p><p class="text-sm text-slate-500 mt-1">Detained</p></div>
@@ -19,9 +28,9 @@
             @foreach($classes as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
           </select>
         </div>
-        <div><label class="label">To Class (next year)</label>
-          <select name="to_class_id" class="select">
-            <option value="">Select (leave blank to retain)</option>
+        <div><label class="label">To Class (next year) <span class="text-red-500">*</span></label>
+          <select name="to_class_id" class="select" required>
+            <option value="">Select target class</option>
             @foreach($classes as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach
           </select>
         </div>
@@ -31,8 +40,14 @@
           </select>
         </div>
       </div>
+      <div class="flex items-center gap-2 pt-1">
+        <input type="checkbox" id="bulk_generate_rolls" name="generate_roll_numbers" value="1" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+        <label for="bulk_generate_rolls" class="text-xs text-slate-700 font-medium">
+          Generate independent alphabetical section roll numbers for the promoted class in the target academic year.
+        </label>
+      </div>
       <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-700">
-        ⚠️ This will promote ALL active students of the selected class. Individual overrides can be done from each student profile.
+        ⚠️ This will promote ALL active students of the selected class. Individual overrides can be done from each student profile. Permanent admission numbers are protected.
       </div>
       <button type="submit" class="btn btn-primary" @click.prevent="confirm=true" x-show="!confirm">Promote All Students</button>
       <div x-show="confirm" class="flex items-center gap-3">
@@ -71,14 +86,28 @@
     <form method="POST" action="{{ route('students.promotions.process') }}" x-data="{confirm:false}">
         @csrf
         <input type="hidden" name="from_class_id" value="{{ request('class_id') }}">
-        <div class="mb-4">
-            <label class="label">To Class</label>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="label">To Class <span class="text-rose-500">*</span></label>
             <select name="to_class_id" class="select" required>
                 <option value="">Select target class</option>
                 @foreach($classes as $c)
                     <option value="{{ $c->id }}">{{ $c->name }}</option>
                 @endforeach
             </select>
+          </div>
+          <div>
+            <label class="label">Target Academic Year</label>
+            <select name="to_academic_year_id" class="select">
+                @foreach($academicYears as $y)<option value="{{ $y->id }}">{{ $y->name }}</option>@endforeach
+            </select>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 mb-4">
+          <input type="checkbox" id="selective_generate_rolls" name="generate_roll_numbers" value="1" checked class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+          <label for="selective_generate_rolls" class="text-xs text-slate-700 font-medium">
+            Generate independent alphabetical section roll numbers for promoted students in the target class.
+          </label>
         </div>
         <div class="mb-4 flex gap-3">
             <button type="button" onclick="document.querySelectorAll('.promo-cb').forEach(c=>c.checked=true)" class="btn btn-secondary text-xs">Select All</button>

@@ -18,8 +18,10 @@ use App\Models\StudentEnrollment;
 use App\Models\StudentMedicalRecord;
 use App\Models\StudentPromotion;
 use App\Models\StudentVaccination;
+use App\Models\FeePayment;
 use App\Models\User;
 use App\Models\Employee;
+use App\Services\StudentRollNumberService;
 use App\Exports\StudentsExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -195,6 +197,25 @@ class StudentController extends Controller
             'house'               => 'nullable|string|max:50',
         ]);
 
+        $targetAadhaar = $validated['aadhaar_number'] ?? $request->input('aadhaar_no');
+        if (!empty($targetAadhaar)) {
+            $existing = Student::findStudentByAadhaar($targetAadhaar);
+            if ($existing) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'aadhaar_number' => "Student Aadhaar Number is already used for student: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']})."
+                ]);
+            }
+        }
+
+        if ($request->filled('emis_no')) {
+            $existingEmis = Student::findStudentByEmis($request->input('emis_no'));
+            if ($existingEmis) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'emis_no' => "EMIS / PEN Number is already used for student: {$existingEmis['name']} (Admn: {$existingEmis['admission_no']}, Class: {$existingEmis['class']})."
+                ]);
+            }
+        }
+
         $currentYear = AcademicYear::current();
 
         $newStudentId = null;
@@ -214,12 +235,26 @@ class StudentController extends Controller
             AuditLog::record('student_created', $student, [], ['admission_no' => $student->admission_no, 'first_name' => $student->first_name, 'last_name' => $student->last_name]);
 
             if ($currentYear) {
+                $rollNo = $validated['roll_number'] ?? null;
+                if (!$rollNo) {
+                    $cls = Classes::find($validated['class_id']);
+                    $sec = !empty($validated['section_id']) ? Section::find($validated['section_id']) : null;
+                    $cleanClassName = StudentRollNumberService::getClassCode($cls);
+                    $cleanSecName   = StudentRollNumberService::getSectionCode($sec);
+                    $classSecCount  = StudentEnrollment::where('class_id', $validated['class_id'])
+                        ->when($sec, fn($q) => $q->where('section_id', $sec->id))
+                        ->count() + 1;
+                    $rollNo = StudentRollNumberService::formatRollNumber($cleanClassName, $cleanSecName, $classSecCount);
+                    $student->roll_number = $rollNo;
+                    $student->save();
+                }
+
                 StudentEnrollment::create([
                     'student_id'      => $student->id,
                     'academic_year_id'=> $currentYear->id,
                     'class_id'        => $validated['class_id'],
                     'section_id'      => $validated['section_id'] ?? null,
-                    'roll_number'     => $validated['roll_number'] ?? null,
+                    'roll_number'     => $rollNo,
                     'house'           => $validated['house'] ?? null,
                     'status'          => 'active',
                 ]);
@@ -320,10 +355,39 @@ class StudentController extends Controller
                 ];
             })->values();
 
+        // All fee payments for full fee statement
+        $allFeePayments = FeePayment::with(['collectedBy', 'feeHead'])
+            ->where('student_id', $id)
+            ->where('is_cancelled', false)
+            ->orderByDesc('payment_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $totalFeesPayable = (float)($student->total_admission_fee ?? 0);
+        if ($totalFeesPayable <= 0 && !empty($student->admission_fee_terms)) {
+            $totalFeesPayable = array_sum(array_column($student->admission_fee_terms, 'amount'));
+        }
+        if ($totalFeesPayable <= 0) {
+            $totalFeesPayable = (float)$feeCharged;
+        }
+
+        $totalPaid = (float)$allFeePayments->sum('total_paid');
+        $totalAdjusted = (float)$allFeePayments->sum('amount_adjusted');
+        if ($totalAdjusted <= 0) {
+            $totalAdjusted = min($totalPaid, $totalFeesPayable);
+        }
+
+        $excessAmount = (float)($student->excess_amount ?? 0);
+        if ($excessAmount <= 0) {
+            $excessAmount = (float)DB::table('fee_advance_payments')
+                ->where('student_id', $student->id)
+                ->sum('remaining_amount');
+        }
+
+        $outstandingBalance = (float)($student->admission_pending_amount ?? max(0, $totalFeesPayable - $totalAdjusted));
+
         // Recent payments (last 3)
-        $recentPayments = DB::table('fee_payments')
-            ->where('student_id', $id)->where('is_cancelled', false)
-            ->orderByDesc('payment_date')->limit(3)->get();
+        $recentPayments = $allFeePayments->take(3);
 
         // Student Documents & QR Portal Data
         $studentDocuments = StudentDocument::where('student_id', $id)->latest()->get();
@@ -334,6 +398,8 @@ class StudentController extends Controller
         return response()
             ->view('students.show', compact(
                 'student', 'feeCharged', 'feePaid', 'feeBalance',
+                'totalFeesPayable', 'totalPaid', 'totalAdjusted', 'excessAmount', 'outstandingBalance',
+                'allFeePayments',
                 'attPresent', 'attAbsent', 'attLate', 'attHalfDay', 'attLeave',
                 'attTotal', 'totalDaysConducted', 'fixedAnnualDays', 'effectivePresent',
                 'attPct', 'annualTargetPct', 'statutoryMinDaysRequired',
@@ -355,38 +421,62 @@ class StudentController extends Controller
             ->sum('amount');
 
         $feeCharged = max((float)$feeChargedFromTable, (float)($student->total_admission_fee ?? 0));
+        if ($feeCharged <= 0 && !empty($student->admission_fee_terms)) {
+            $feeCharged = (float)array_sum(array_column($student->admission_fee_terms, 'amount'));
+        }
 
-        $feePaid = (float) DB::table('fee_payments')
+        $allPayments = DB::table('fee_payments')
             ->where('student_id', $id)->where('is_cancelled', false)
             ->when($year, fn($q) => $q->where('academic_year_id', $year->id))
-            ->sum('total_paid');
+            ->get();
 
-        $feeBalance = max(0, $feeCharged - $feePaid);
+        $feePaid = (float) $allPayments->sum('total_paid');
+        $feeAdjusted = (float) $allPayments->sum('amount_adjusted');
+        if ($feeAdjusted <= 0) {
+            $feeAdjusted = min($feePaid, $feeCharged);
+        }
+
+        $excessAmount = (float)($student->excess_amount ?? 0);
+        if ($excessAmount <= 0) {
+            $excessAmount = (float)DB::table('fee_advance_payments')
+                ->where('student_id', $student->id)
+                ->sum('remaining_amount');
+        }
+
+        $feeBalance = (float)($student->admission_pending_amount ?? max(0, $feeCharged - $feeAdjusted));
 
         $recentPayments = DB::table('fee_payments')
             ->where('student_id', $id)->where('is_cancelled', false)
             ->orderByDesc('payment_date')->orderByDesc('id')
-            ->limit(3)
+            ->limit(5)
             ->get()
             ->map(function ($p) {
                 return [
                     'id' => $p->id,
+                    'receipt_number' => $p->receipt_number,
                     'date' => \Carbon\Carbon::parse($p->payment_date)->format('d M Y'),
                     'amount' => (float)$p->total_paid,
-                    'amount_formatted' => '₹' . number_format($p->total_paid),
+                    'amount_formatted' => '₹' . number_format($p->total_paid, 2),
+                    'adjusted_formatted' => '₹' . number_format((float)($p->amount_adjusted ?? $p->total_paid), 2),
+                    'excess_formatted' => '₹' . number_format((float)($p->excess_amount ?? 0), 2),
                 ];
             });
 
         return response()->json([
             'success' => true,
             'feeCharged' => $feeCharged,
-            'feeChargedFormatted' => '₹' . number_format($feeCharged),
+            'feeChargedFormatted' => '₹' . number_format($feeCharged, 2),
             'feePaid' => $feePaid,
-            'feePaidFormatted' => '₹' . number_format($feePaid),
+            'feePaidFormatted' => '₹' . number_format($feePaid, 2),
+            'feeAdjusted' => $feeAdjusted,
+            'feeAdjustedFormatted' => '₹' . number_format($feeAdjusted, 2),
+            'excessAmount' => $excessAmount,
+            'excessAmountFormatted' => '₹' . number_format($excessAmount, 2),
             'feeBalance' => $feeBalance,
-            'feeBalanceFormatted' => $feeBalance > 0 ? ('₹' . number_format($feeBalance)) : 'Fully Paid',
+            'feeBalanceFormatted' => $feeBalance > 0 ? ('₹' . number_format($feeBalance, 2)) : 'Fully Paid',
             'isPaid' => $feeBalance <= 0,
             'paymentStatus' => $student->payment_status,
+            'terms' => $student->admission_fee_terms ?? [],
             'recentPayments' => $recentPayments,
         ])->header('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
@@ -480,14 +570,88 @@ class StudentController extends Controller
 
     public function showTCForm(int $id)
     {
-        $student    = Student::with(['currentEnrollment.class', 'currentEnrollment.section'])->findOrFail($id);
+        $student = Student::with(['currentEnrollment.class', 'currentEnrollment.section'])->findOrFail($id);
         if ($student->status !== 'active') {
             return redirect()->route('students.show', $student->id)
                 ->with('error', 'Transfer Certificate (TC) generation is locked. Student admission must be fully approved by Principal and confirmed by Admin before a TC can be issued.');
         }
-        $enrollment = $student->currentEnrollment;
+        $enrollment   = $student->currentEnrollment;
+        $school       = \App\Models\SchoolSetting::first();
+        $academicYear = \App\Models\AcademicYear::current();
 
-        return view('students.tc-form', compact('student', 'enrollment'));
+        // Attendance stats
+        $totalDays   = \App\Models\AttendanceRecord::where('student_id', $student->id)->count();
+        $presentDays = \App\Models\AttendanceRecord::where('student_id', $student->id)->where('status', 'present')->count();
+
+        // TC count
+        $tcCount  = Student::whereNotNull('tc_number')->count();
+        $tcNumber = $student->tc_number ?: ('TC-' . date('Y') . '-' . str_pad($tcCount + 1, 4, '0', STR_PAD_LEFT));
+
+        // Smart defaults for subjects based on class level
+        $className = strtoupper($enrollment?->class?->name ?? '');
+        if (in_array($className, ['XI', 'XII', '11', '12', 'CLASS XI', 'CLASS XII'])) {
+            $defaultSubjects = '1. English Core  2. Mathematics  3. Physics  4. Chemistry  5. Computer Science';
+        } elseif (in_array($className, ['IX', 'X', '9', '10', 'CLASS IX', 'CLASS X'])) {
+            $defaultSubjects = '1. English  2. Mathematics  3. Science  4. Social Science  5. Tamil / Hindi';
+        } else {
+            $defaultSubjects = '1. English  2. Mathematics  3. Environmental Studies  4. Social Science  5. Language II';
+        }
+
+        // DOB in words
+        $dobInWords = $this->dateToWords($student->dob);
+
+        // ECA / Games activities formatted cleanly as string
+        $gamesActivities = '';
+        if (is_array($student->selected_eca)) {
+            $formattedEca = array_map(function($item) {
+                return ucwords(str_replace('_', ' ', trim((string)$item)));
+            }, array_filter($student->selected_eca));
+            $gamesActivities = implode(', ', $formattedEca);
+        } elseif (is_string($student->selected_eca)) {
+            $gamesActivities = trim($student->selected_eca);
+        }
+        if (empty($gamesActivities)) {
+            $gamesActivities = 'Physical Education, Yoga & School Games';
+        }
+
+        $defaults = [
+            'tc_number'           => $tcNumber,
+            'tc_date'             => $student->tc_date ? \Carbon\Carbon::parse($student->tc_date)->format('Y-m-d') : today()->format('Y-m-d'),
+            'application_date'    => today()->subDays(3)->format('Y-m-d'),
+            'leaving_date'        => $student->leaving_date ? \Carbon\Carbon::parse($student->leaving_date)->format('Y-m-d') : today()->format('Y-m-d'),
+            'admission_no'        => (string)($student->admission_no ?? ''),
+            'emis_no'             => (string)($student->emis_no ?: ($student->id ? '33100' . str_pad($student->id, 6, '0', STR_PAD_LEFT) : '')),
+            'aadhaar_no'          => (string)($student->aadhaar_no ?? ''),
+            'full_name'           => strtoupper((string)$student->full_name),
+            'father_name'         => ucwords(strtolower((string)($student->father_name ?? ''))),
+            'mother_name'         => ucwords(strtolower((string)($student->mother_name ?? ''))),
+            'nationality'         => ucwords(strtolower((string)($student->nationality ?: 'Indian'))),
+            'religion'            => ucwords(strtolower((string)($student->religion ?: 'Hindu'))),
+            'caste'               => (string)($student->caste ?? ''),
+            'category'            => strtoupper((string)($student->category ?: 'General')),
+            'dob'                 => $student->dob ? $student->dob->format('Y-m-d') : '',
+            'dob_in_words'        => (string)$dobInWords,
+            'place_of_birth'      => (string)($student->place_of_birth ?: ($student->city ? ($student->city . ($student->state ? ', ' . $student->state : ', Tamil Nadu')) : 'Erode, Tamil Nadu')),
+            'admission_date'      => $student->admission_date ? $student->admission_date->format('Y-m-d') : ($student->created_at ? $student->created_at->format('Y-m-d') : today()->format('Y-m-d')),
+            'admitted_class'      => (string)($student->admitted_class ?: ($enrollment?->class?->name ?? 'I')),
+            'last_class'          => (string)(($enrollment?->class?->name ?? 'XI') . ($enrollment?->section ? ' - Section ' . $enrollment->section->name : '')),
+            'exam_result'         => (string)('Passed ' . ($enrollment?->class?->name ?? 'Class') . ' Annual Examination'),
+            'whether_failed'      => 'No',
+            'subjects'            => (string)$defaultSubjects,
+            'qualified_promotion' => 'Yes, Qualified for promotion to the next higher class',
+            'dues_cleared'        => 'All dues cleared up to ' . now()->format('F Y'),
+            'fee_concession'      => (string)($student->concession_type ? ($student->concession_type . ' concession availed') : 'No'),
+            'total_working_days'  => $totalDays > 0 ? (int)$totalDays : 210,
+            'days_present'        => $presentDays > 0 ? (int)$presentDays : 198,
+            'ncc_scout'           => 'N/A',
+            'games_activities'    => $gamesActivities,
+            'conduct'             => 'Good',
+            'progress'            => 'Good',
+            'reason'              => (string)($student->leaving_reason ?: "Parent's Request"),
+            'remarks'             => 'Conduct and Character have been Good during the period of study.',
+        ];
+
+        return view('students.tc-form', compact('student', 'enrollment', 'school', 'academicYear', 'defaults'));
     }
 
     public function generateTC(Request $request, int $id)
@@ -501,22 +665,121 @@ class StudentController extends Controller
         $enrollment   = $student->currentEnrollment;
         $academicYear = \App\Models\AcademicYear::current();
 
-        // Compute TC number and write back to student record
-        if (!$student->tc_number) {
-            $tcCount  = Student::whereNotNull('tc_number')->count();
-            $tcNumber = 'TC-' . date('Y') . '-' . str_pad($tcCount + 1, 4, '0', STR_PAD_LEFT);
-            $student->update(['tc_number' => $tcNumber, 'tc_date' => today()->toDateString()]);
-        } else {
-            $tcNumber = $student->tc_number;
+        // Reason for leaving
+        $reason = $request->input('reason', '');
+        if ($reason === 'Other' && $request->filled('custom_reason')) {
+            $reason = trim($request->input('custom_reason'));
         }
 
-        // Attendance stats
-        $totalDays   = \App\Models\AttendanceRecord::where('student_id', $student->id)->count();
-        $presentDays = \App\Models\AttendanceRecord::where('student_id', $student->id)->where('status', 'present')->count();
+        // DOB resolution
+        $dobInput = $request->input('dob') ? \Carbon\Carbon::parse($request->input('dob')) : $student->dob;
+        $dobInWords = $request->filled('dob_in_words') ? trim($request->input('dob_in_words')) : $this->dateToWords($dobInput);
 
-        // Embed signature/stamp as base64
+        // Games and activities formatting
+        $gamesInput = $request->input('games_activities');
+        if (is_array($gamesInput)) {
+            $gamesActivities = implode(', ', array_map('trim', array_filter($gamesInput)));
+        } else {
+            $gamesActivities = trim((string)$gamesInput);
+        }
+        if (empty($gamesActivities)) {
+            if (is_array($student->selected_eca)) {
+                $gamesActivities = implode(', ', array_map(fn($i) => ucwords(str_replace('_', ' ', trim((string)$i))), array_filter($student->selected_eca)));
+            } elseif (is_string($student->selected_eca)) {
+                $gamesActivities = trim($student->selected_eca);
+            }
+        }
+        if (empty($gamesActivities)) {
+            $gamesActivities = 'General Physical Education & School Games';
+        }
+
+        // Compile complete TC payload from manual inputs with fallbacks
+        $tcCount  = Student::whereNotNull('tc_number')->count();
+        $tcNumber = trim($request->input('tc_number') ?: ($student->tc_number ?: ('TC-' . date('Y') . '-' . str_pad($tcCount + 1, 4, '0', STR_PAD_LEFT))));
+        $tcDate   = $request->input('tc_date') ? \Carbon\Carbon::parse($request->input('tc_date'))->format('Y-m-d') : today()->format('Y-m-d');
+
+        $tcData = [
+            'tc_number'           => $tcNumber,
+            'tc_date'             => \Carbon\Carbon::parse($tcDate)->format('d/m/Y'),
+            'application_date'    => $request->input('application_date') ? \Carbon\Carbon::parse($request->input('application_date'))->format('d/m/Y') : now()->subDays(3)->format('d/m/Y'),
+            'leaving_date'        => $request->input('leaving_date') ? \Carbon\Carbon::parse($request->input('leaving_date'))->format('d/m/Y') : now()->format('d/m/Y'),
+            'admission_no'        => trim($request->input('admission_no') ?: ($student->admission_no ?? '—')),
+            'emis_no'             => trim($request->input('emis_no') ?: ($student->emis_no ?? '—')),
+            'aadhaar_no'          => trim($request->input('aadhaar_no') ?: ($student->aadhaar_no ?? '—')),
+            'full_name'           => strtoupper(trim($request->input('full_name') ?: $student->full_name)),
+            'father_name'         => ucwords(strtolower(trim($request->input('father_name') ?: ($student->father_name ?? '—')))),
+            'mother_name'         => ucwords(strtolower(trim($request->input('mother_name') ?: ($student->mother_name ?? '—')))),
+            'nationality'         => ucwords(strtolower(trim($request->input('nationality') ?: ($student->nationality ?: 'Indian')))),
+            'religion'            => ucwords(strtolower(trim($request->input('religion') ?: ($student->religion ?? '—')))),
+            'caste'               => trim($request->input('caste') ?: ($student->caste ?? '')),
+            'category'            => strtoupper(trim($request->input('category') ?: ($student->category ?: 'General'))),
+            'dob_formatted'       => $dobInput ? $dobInput->format('d / m / Y') : '—',
+            'dob_in_words'        => $dobInWords,
+            'place_of_birth'      => trim($request->input('place_of_birth') ?: ($student->place_of_birth ?? '—')),
+            'admission_date'      => $request->input('admission_date') ? \Carbon\Carbon::parse($request->input('admission_date'))->format('d/m/Y') : ($student->admission_date ? $student->admission_date->format('d/m/Y') : '—'),
+            'admitted_class'      => trim($request->input('admitted_class') ?: ($student->admitted_class ?? ($enrollment?->class?->name ?? '—'))),
+            'last_class'          => trim($request->input('last_class') ?: (($enrollment?->class?->name ?? '—') . ($enrollment?->section ? ' - ' . $enrollment->section->name : ''))),
+            'exam_result'         => trim($request->input('exam_result') ?: ('Passed ' . ($enrollment?->class?->name ?? 'Class') . ' Annual Examination')),
+            'whether_failed'      => trim($request->input('whether_failed', 'No')),
+            'subjects'            => trim($request->input('subjects') ?: '1. English Core  2. Mathematics  3. Physics  4. Chemistry  5. Computer Science'),
+            'qualified_promotion' => trim($request->input('qualified_promotion') ?: 'Yes, Qualified for promotion to the next higher class'),
+            'dues_cleared'        => trim($request->input('dues_cleared') ?: ('All dues cleared up to ' . now()->format('F Y'))),
+            'fee_concession'      => trim($request->input('fee_concession', 'No')),
+            'total_working_days'  => trim($request->input('total_working_days') ?: '210'),
+            'days_present'        => trim($request->input('days_present') ?: '198'),
+            'ncc_scout'           => trim($request->input('ncc_scout', 'N/A')),
+            'games_activities'    => $gamesActivities,
+            'conduct'             => trim($request->input('conduct', 'Good')),
+            'progress'            => trim($request->input('progress', 'Good')),
+            'reason'              => $reason ?: "Parent's Request",
+            'remarks'             => trim($request->input('remarks', 'Conduct and Character have been Good during the period of study.')),
+        ];
+
+        // Save overrides to student record if authorized user requested
+        $updateFields = [
+            'tc_number'      => $tcNumber,
+            'tc_date'        => $tcDate,
+            'leaving_date'   => $request->input('leaving_date', today()->toDateString()),
+            'leaving_reason' => $reason,
+        ];
+
+        if ($request->boolean('save_to_profile')) {
+            if ($request->filled('mother_name'))    $updateFields['mother_name']    = trim($request->input('mother_name'));
+            if ($request->filled('father_name'))    $updateFields['father_name']    = trim($request->input('father_name'));
+            if ($request->filled('religion'))       $updateFields['religion']       = trim($request->input('religion'));
+            if ($request->filled('caste'))          $updateFields['caste']          = trim($request->input('caste'));
+            if ($request->filled('category')) {
+                $cat = strtolower(trim($request->input('category')));
+                if (in_array($cat, ['general', 'sc', 'st', 'obc', 'ews', 'minority'])) {
+                    $updateFields['category'] = $cat;
+                }
+            }
+            if ($request->filled('place_of_birth') && \Illuminate\Support\Facades\Schema::hasColumn('students', 'place_of_birth')) {
+                $updateFields['place_of_birth'] = trim($request->input('place_of_birth'));
+            }
+            if ($request->filled('emis_no'))        $updateFields['emis_no']        = trim($request->input('emis_no'));
+            if ($request->filled('aadhaar_no'))     $updateFields['aadhaar_no']     = trim($request->input('aadhaar_no'));
+            if ($request->filled('nationality'))    $updateFields['nationality']    = trim($request->input('nationality'));
+        }
+
+        $student->update($updateFields);
+
+        // Embed Base64 assets
+        $logoBase64      = null;
+        $sealBase64      = null;
         $signatureBase64 = null;
         $stampBase64     = null;
+
+        $logoPath = public_path('images/school-crest-transparent.png');
+        if (file_exists($logoPath)) {
+            $logoBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath));
+        }
+
+        $sealPath = public_path('images/school-seal-badge.png');
+        if (file_exists($sealPath)) {
+            $sealBase64 = 'data:image/png;base64,' . base64_encode(file_get_contents($sealPath));
+        }
+
         if ($school?->signature_path && \Storage::disk('public')->exists($school->signature_path)) {
             $mime = str_contains($school->signature_path, '.png') ? 'image/png' : 'image/jpeg';
             $signatureBase64 = 'data:' . $mime . ';base64,' . base64_encode(\Storage::disk('public')->get($school->signature_path));
@@ -526,32 +789,12 @@ class StudentController extends Controller
             $stampBase64 = 'data:' . $mime . ';base64,' . base64_encode(\Storage::disk('public')->get($school->stamp_path));
         }
 
-        // DOB in words
-        $dobInWords = $this->dateToWords($student->dob);
-
-        // Reason for leaving
-        $reason = $request->input('reason', '');
-        if ($reason === 'Other' && $request->filled('custom_reason')) {
-            $reason = trim($request->input('custom_reason'));
-        }
-
-        $tcData = [
-            'leaving_date'  => $request->input('leaving_date', now()->format('Y-m-d')) ? \Carbon\Carbon::parse($request->input('leaving_date', now()))->format('d/m/Y') : now()->format('d/m/Y'),
-            'reason'        => $reason,
-            'conduct'       => $request->input('conduct', 'Good'),
-            'progress'      => $request->input('progress', 'Good'),
-            'remarks'       => $request->input('remarks', ''),
-            'days_attended' => $presentDays ?: '—',
-            'total_days'    => $totalDays   ?: '—',
-            'dob_in_words'  => $dobInWords,
-        ];
-
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.tc', compact(
             'student', 'school', 'enrollment', 'academicYear',
-            'tcNumber', 'tcData', 'signatureBase64', 'stampBase64'
+            'tcNumber', 'tcData', 'logoBase64', 'sealBase64', 'signatureBase64', 'stampBase64'
         ))->setPaper('A4', 'portrait');
 
-        return $pdf->stream('tc-' . ($student->admission_no ?? $student->id) . '.pdf');
+        return $pdf->stream('TC-' . ($student->admission_no ?? $student->id) . '.pdf');
     }
 
     private function generateAdmissionNumber(?string $gender = null): string
@@ -769,17 +1012,69 @@ class StudentController extends Controller
 
     public function processPromotion(Request $request)
     {
-        $request->validate(['from_class_id' => 'required|exists:classes,id', 'to_class_id' => 'required|exists:classes,id', 'student_ids' => 'required|array']);
+        $request->validate([
+            'from_class_id'        => 'required|exists:classes,id',
+            'to_class_id'          => 'required|exists:classes,id',
+            'student_ids'          => 'nullable|array',
+            'student_ids.*'        => 'exists:students,id',
+            'to_academic_year_id'  => 'nullable|exists:academic_years,id',
+            'generate_roll_numbers'=> 'nullable|boolean',
+        ]);
+
         $currentYear = AcademicYear::current();
-        DB::transaction(function () use ($request, $currentYear) {
-            foreach ($request->student_ids as $studentId) {
+        $targetYearId = $request->input('to_academic_year_id') ?: ($currentYear?->id);
+
+        $studentIds = $request->input('student_ids');
+        if (empty($studentIds)) {
+            $studentIds = StudentEnrollment::where('class_id', $request->from_class_id)
+                ->where('status', 'active')
+                ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id))
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        if (empty($studentIds)) {
+            return back()->with('error', 'No active students found in the selected class to promote.');
+        }
+
+        $rollService = app(StudentRollNumberService::class);
+
+        // If target year is different, run independent next-year rollover with roll generation
+        if ($targetYearId && $currentYear && (int)$targetYearId !== (int)$currentYear->id) {
+            $result = $rollService->generateNextYearRollNumbers(
+                (int)$request->from_class_id,
+                (int)$request->to_class_id,
+                (int)$currentYear->id,
+                (int)$targetYearId,
+                $studentIds,
+                true
+            );
+            return back()->with('success', count($studentIds) . " students promoted to {$result['target_class']} ({$result['target_year']}) with independent class lists and alphabetical roll numbers generated!");
+        }
+
+        DB::transaction(function () use ($request, $currentYear, $studentIds) {
+            foreach ($studentIds as $studentId) {
                 $enrollment = StudentEnrollment::where('student_id', $studentId)->where('status', 'active')->first();
                 if (!$enrollment) continue;
-                StudentPromotion::create(['student_id' => $studentId, 'from_class_id' => $request->from_class_id, 'to_class_id' => $request->to_class_id, 'from_academic_year_id' => $currentYear?->id, 'promoted_by' => Auth::id(), 'promoted_on' => today()]);
+                StudentPromotion::create([
+                    'student_id'            => $studentId,
+                    'from_class_id'         => $request->from_class_id,
+                    'to_class_id'           => $request->to_class_id,
+                    'from_academic_year_id' => $currentYear?->id,
+                    'to_academic_year_id'   => $currentYear?->id,
+                    'promoted_by'           => Auth::id(),
+                    'promoted_at'           => today(),
+                    'status'                => 'promoted',
+                ]);
                 $enrollment->update(['class_id' => $request->to_class_id]);
             }
         });
-        return back()->with('success', count($request->student_ids) . ' students promoted.');
+
+        if ($request->boolean('generate_roll_numbers', true)) {
+            $rollService->applyRegeneration((int)$request->to_class_id, null, $currentYear?->id);
+        }
+
+        return back()->with('success', count($studentIds) . ' students promoted successfully with alphabetical roll numbers generated.');
     }
 
     public function rolloverReport(Request $request)
@@ -1947,5 +2242,265 @@ class StudentController extends Controller
         if ($num < 1000000) return $this->numberToWords((int)($num / 1000)) . ' Thousand' . ($num % 1000 ? ' ' . $this->numberToWords($num % 1000) : '');
 
         return (string)$num;
+    }
+
+    /**
+     * Authorize action for roll number management.
+     */
+    private function assertCanManageRollNumbers(): void
+    {
+        $user = Auth::user();
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
+        }
+
+        if ($user->hasRole('student') || $user->hasRole('parent')) {
+            abort(403, 'Unauthorized access: Students and parents cannot manage or regenerate roll numbers.');
+        }
+    }
+
+    /**
+     * Main UI for Roll Number and Section Manager.
+     */
+    public function rollNumberManager(Request $request, StudentRollNumberService $rollService)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $classes = Classes::active()->orderBy('id')->get();
+        $academicYears = AcademicYear::orderByDesc('start_date')->get();
+        $currentYear = AcademicYear::current();
+
+        $selectedYearId = $request->input('academic_year_id') ? (int)$request->input('academic_year_id') : null;
+        if (!$selectedYearId) {
+            $hasCurrEnr = $currentYear ? StudentEnrollment::where('academic_year_id', $currentYear->id)->where('status', 'active')->exists() : false;
+            if ($hasCurrEnr) {
+                $selectedYearId = $currentYear->id;
+            } else {
+                $latestActiveYear = StudentEnrollment::where('status', 'active')->latest('academic_year_id')->value('academic_year_id');
+                $selectedYearId = $latestActiveYear ?: ($currentYear?->id);
+            }
+        }
+
+        $selectedClassId = $request->input('class_id') ? (int)$request->input('class_id') : null;
+        if (!$selectedClassId) {
+            $firstClassWithStudents = StudentEnrollment::where('academic_year_id', $selectedYearId)
+                ->where('status', 'active')
+                ->value('class_id');
+            $selectedClassId = $firstClassWithStudents ?: ($classes->first()?->id);
+        }
+
+        $selectedSectionId = $request->input('section_id') ? (int)$request->input('section_id') : null;
+
+        // Active sections for the selected class
+        $sections = $selectedClassId
+            ? Section::where('class_id', $selectedClassId)->where('is_active', true)->orderBy('name')->get()
+            : collect();
+
+        // Auto-load preview for the resolved class and section
+        $initialPreview = null;
+        if ($selectedClassId) {
+            try {
+                $initialPreview = $rollService->previewRegeneration(
+                    $selectedClassId,
+                    $selectedSectionId,
+                    $selectedYearId,
+                    $request->input('prefix_style', 'standard'),
+                    (int)$request->input('start_seq', 1),
+                    $request->input('custom_prefix')
+                );
+            } catch (\Throwable $e) {
+                // Ignore initial preview failure if no records found
+            }
+        }
+
+        return view('students.roll-numbers', compact(
+            'classes',
+            'sections',
+            'academicYears',
+            'currentYear',
+            'selectedClassId',
+            'selectedSectionId',
+            'selectedYearId',
+            'initialPreview'
+        ));
+    }
+
+    /**
+     * Preview roll number regeneration.
+     */
+    public function previewRollNumbers(Request $request, StudentRollNumberService $rollService)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $request->validate([
+            'class_id'         => 'required|exists:classes,id',
+            'section_id'       => 'nullable|exists:sections,id',
+            'academic_year_id' => 'nullable|exists:academic_years,id',
+            'prefix_style'     => 'nullable|string|in:standard,roman,custom',
+            'start_seq'        => 'nullable|integer|min:1',
+            'custom_prefix'    => 'nullable|string|max:10',
+        ]);
+
+        try {
+            $preview = $rollService->previewRegeneration(
+                (int)$request->class_id,
+                $request->filled('section_id') ? (int)$request->section_id : null,
+                $request->filled('academic_year_id') ? (int)$request->academic_year_id : null,
+                $request->input('prefix_style', 'standard'),
+                (int)$request->input('start_seq', 1),
+                $request->input('custom_prefix')
+            );
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'status'  => 'success',
+                    'preview' => $preview,
+                ]);
+            }
+
+            return redirect()->route('students.roll-numbers.index', [
+                'class_id'         => $request->class_id,
+                'section_id'       => $request->section_id,
+                'academic_year_id' => $request->academic_year_id,
+                'prefix_style'     => $request->prefix_style,
+                'start_seq'        => $request->start_seq,
+                'custom_prefix'    => $request->custom_prefix,
+                'auto_preview'     => 1,
+            ]);
+        } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+            }
+            return back()->with('error', 'Preview failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Execute authorized roll number regeneration.
+     * Permanent admission numbers remain strictly untouched.
+     */
+    public function generateRollNumbers(Request $request, StudentRollNumberService $rollService)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $request->validate([
+            'class_id'         => 'required|exists:classes,id',
+            'section_id'       => 'nullable|exists:sections,id',
+            'academic_year_id' => 'nullable|exists:academic_years,id',
+            'prefix_style'     => 'nullable|string|in:standard,roman,custom',
+            'start_seq'        => 'nullable|integer|min:1',
+            'custom_prefix'    => 'nullable|string|max:10',
+            'confirm'          => 'required',
+        ]);
+
+        try {
+            $result = $rollService->applyRegeneration(
+                (int)$request->class_id,
+                $request->filled('section_id') ? (int)$request->section_id : null,
+                $request->filled('academic_year_id') ? (int)$request->academic_year_id : null,
+                $request->input('prefix_style', 'standard'),
+                (int)$request->input('start_seq', 1),
+                $request->input('custom_prefix'),
+                Auth::id()
+            );
+
+            $msg = "Alphabetical roll numbers successfully generated for {$result['class_name']} ({$result['affected_count']} students updated across {$result['section_count']} section(s)). Permanent admission numbers were strictly preserved.";
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'status'  => 'success',
+                    'message' => $msg,
+                    'result'  => $result,
+                ]);
+            }
+
+            return redirect()->route('students.roll-numbers.index', [
+                'class_id'         => $request->class_id,
+                'section_id'       => $request->section_id,
+                'academic_year_id' => $request->academic_year_id,
+                'auto_preview'     => 1,
+            ])->with('success', $msg);
+        } catch (\Throwable $e) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+            }
+            return back()->with('error', 'Regeneration failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Allocate sections to students (Balanced or Alphabetical split) and generate roll numbers.
+     */
+    public function allocateSections(Request $request, StudentRollNumberService $rollService)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $request->validate([
+            'class_id'         => 'required|exists:classes,id',
+            'academic_year_id' => 'nullable|exists:academic_years,id',
+            'strategy'         => 'required|in:balance,alphabetical_split',
+            'section_ids'      => 'nullable|array',
+            'section_ids.*'    => 'exists:sections,id',
+            'generate_rolls'   => 'nullable|boolean',
+        ]);
+
+        try {
+            $result = $rollService->allocateSections(
+                (int)$request->class_id,
+                $request->filled('academic_year_id') ? (int)$request->academic_year_id : null,
+                $request->input('strategy', 'balance'),
+                $request->input('section_ids', []),
+                $request->boolean('generate_rolls', true)
+            );
+
+            $msg = "Sections successfully allocated to {$result['allocated_count']} students across {$result['sections_used']} sections with fresh sequential roll numbers!";
+
+            return redirect()->route('students.roll-numbers.index', [
+                'class_id'         => $request->class_id,
+                'academic_year_id' => $request->academic_year_id,
+                'auto_preview'     => 1,
+            ])->with('success', $msg);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Section allocation failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Independent class and section roll number generation for the next academic year.
+     */
+    public function generateNextYearRollNumbers(Request $request, StudentRollNumberService $rollService)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $request->validate([
+            'from_class_id'   => 'required|exists:classes,id',
+            'to_class_id'     => 'required|exists:classes,id',
+            'from_year_id'    => 'required|exists:academic_years,id',
+            'to_year_id'      => 'required|exists:academic_years,id|different:from_year_id',
+            'student_ids'     => 'nullable|array',
+            'student_ids.*'   => 'exists:students,id',
+            'retain_sections' => 'nullable|boolean',
+        ]);
+
+        try {
+            $result = $rollService->generateNextYearRollNumbers(
+                (int)$request->from_class_id,
+                (int)$request->to_class_id,
+                (int)$request->from_year_id,
+                (int)$request->to_year_id,
+                $request->input('student_ids', []),
+                $request->boolean('retain_sections', true)
+            );
+
+            $msg = "Successfully promoted {$result['promoted_count']} students to {$result['target_class']} ({$result['target_year']}) with independent class lists and alphabetical roll numbers generated!";
+
+            return redirect()->route('students.roll-numbers.index', [
+                'class_id'         => $request->to_class_id,
+                'academic_year_id' => $request->to_year_id,
+                'auto_preview'     => 1,
+            ])->with('success', $msg);
+        } catch (\Throwable $e) {
+            return back()->with('error', 'Next year generation failed: ' . $e->getMessage());
+        }
     }
 }

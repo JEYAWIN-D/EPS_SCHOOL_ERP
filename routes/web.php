@@ -80,6 +80,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/',            [AdmissionController::class, 'index'])->name('index');
         Route::get('/create',      [AdmissionController::class, 'create'])->name('create');
         Route::get('/sibling-lookup', [AdmissionController::class, 'lookupSibling'])->name('sibling-lookup');
+        Route::get('/check-unique', [AdmissionController::class, 'checkUnique'])->name('check-unique');
         Route::get('/print-form',  [AdmissionController::class, 'printForm'])->name('print-form');
         Route::post('/save-print-form', [AdmissionController::class, 'savePrintForm'])->name('save-print-form');
         Route::get('/fee-structure',[AdmissionController::class, 'feeStructure'])->name('fee-structure');
@@ -150,6 +151,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/import',              [StudentController::class, 'importForm'])->name('import');
         Route::post('/import',             [StudentController::class, 'processImport'])->name('import.process');
         Route::get('/import/template',     [StudentController::class, 'importTemplate'])->name('import.template');
+        // Roll Number & Section Management
+        Route::get('/roll-numbers',                 [StudentController::class, 'rollNumberManager'])->name('roll-numbers.index');
+        Route::post('/roll-numbers/preview',        [StudentController::class, 'previewRollNumbers'])->name('roll-numbers.preview');
+        Route::post('/roll-numbers/generate',       [StudentController::class, 'generateRollNumbers'])->name('roll-numbers.generate');
+        Route::post('/roll-numbers/allocate-sections', [StudentController::class, 'allocateSections'])->name('roll-numbers.allocate-sections');
+        Route::post('/promotions/generate-next-year', [StudentController::class, 'generateNextYearRollNumbers'])->name('promotions.generate-next-year');
+
         // Static sub-pages
         Route::get('/promotions',          [StudentController::class, 'promotions'])->name('promotions');
         Route::post('/promotions',         [StudentController::class, 'processPromotion'])->name('promotions.process');
@@ -175,6 +183,7 @@ Route::middleware(['auth'])->group(function () {
         // Parameterized routes on {id} (Defined after static routes)
         Route::get('/{id}',            [StudentController::class, 'show'])->name('show')->where('id', '[0-9]+');
         Route::get('/{id}/fee-status', [StudentController::class, 'feeStatusJson'])->name('fee-status')->where('id', '[0-9]+');
+        Route::get('/{id}/fee-statement', [FeeController::class, 'studentStatement'])->name('fee-statement')->where('id', '[0-9]+');
         Route::get('/{id}/edit',       [StudentController::class, 'edit'])->middleware('permission:edit students')->name('edit')->where('id', '[0-9]+');
         Route::put('/{id}',        [StudentController::class, 'update'])->middleware('permission:edit students')->name('update')->where('id', '[0-9]+');
         Route::delete('/{id}',     [StudentController::class, 'destroy'])->middleware('permission:delete students')->name('destroy')->where('id', '[0-9]+');
@@ -511,6 +520,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/defaulters/{id}/block-portal',     [FeeController::class, 'blockPortalAccess'])->name('defaulters.block');
         Route::post('/defaulters/{id}/unblock-portal',   [FeeController::class, 'unblockPortalAccess'])->name('defaulters.unblock');
         Route::get('/receipt/{id}', [FeeController::class, 'receipt'])->name('receipt');
+        Route::get('/statement/{student_id}', [FeeController::class, 'studentStatement'])->name('student-statement');
         Route::get('/report',       [FeeController::class, 'report'])->name('report');
         Route::get('/report/export',[FeeController::class, 'reportExport'])->name('report.export');
         // Concessions

@@ -611,48 +611,73 @@
     return Math.max(0, this.grandTotal - this.totalKitFee);
   },
 
-  // Term amounts calculations: follows official Term 1, Term 2, Term 3 fee breakdown
+  // 2 TERMS SPLIT:
+  // Term 1: 100% Kit + 50% Term Fee + 50% Transport
+  // Term 2: 50% Term Fee + 50% Transport
+  get twoTermsT1() {
+    let tFee = this.transportFee;
+    let transportT1 = Math.round(tFee * 0.5);
+    let termFeeBase = Math.max(0, this.grandTotal - this.totalKitFee - tFee);
+    let termFeeT1 = Math.round(termFeeBase * 0.5);
+    return Math.max(0, this.totalKitFee + termFeeT1 + transportT1);
+  },
+  get twoTermsT2() {
+    return Math.max(0, this.grandTotal - this.twoTermsT1);
+  },
+
+  // 3 TERMS SPLIT:
+  // Term 1: 100% Kit + T1 Fee + 50% Transport
+  // Term 2: T2 Fee + 50% Transport
+  // Term 3: T3 Fee (0% Transport)
+  get threeTermsT1() {
+    let tFee = this.transportFee;
+    let transportT1 = Math.round(tFee * 0.5);
+    let baseT1 = Number(this.activeFeeSchedule?.term1_fee || 0) + this.admissionFeeTotal + (Number(this.activeFeeSchedule?.material_fee || 0));
+    let aspShare = Math.round(this.aspFeeTotal / 3);
+    let discShare = Math.round(this.concessionAmount / 3);
+    return Math.max(0, this.totalKitFee + baseT1 + transportT1 + aspShare - discShare);
+  },
+  get threeTermsT2() {
+    let tFee = this.transportFee;
+    let transportT2 = tFee - Math.round(tFee * 0.5);
+    let baseT2 = Number(this.activeFeeSchedule?.term2_fee || 0);
+    let aspShare = Math.round(this.aspFeeTotal / 3);
+    let discShare = Math.round(this.concessionAmount / 3);
+    return Math.max(0, baseT2 + transportT2 + aspShare - discShare);
+  },
+  get threeTermsT3() {
+    return Math.max(0, this.grandTotal - (this.threeTermsT1 + this.threeTermsT2));
+  },
+
+  // Active Term amounts calculations (used in schedule breakdown table and form submission)
   get term1Amount() {
     if (this.paymentTerms === 'single') return this.grandTotal;
-    if (this.paymentTerms === '2_terms') {
-      let remT1 = Math.round(this.remainingFeesTotal / 2);
-      return this.totalKitFee + remT1;
-    }
-    if (this.paymentTerms === '3_terms') {
-      let baseT1 = Number(this.activeFeeSchedule?.term1_fee || 0) + this.admissionFeeTotal;
-      let facilityShare = Math.round((this.aspFeeTotal + this.transportFee) / 3);
-      let discShare = Math.round(this.concessionAmount / 3);
-      return Math.max(0, baseT1 + this.totalKitFee + facilityShare - discShare);
-    }
+    if (this.paymentTerms === '2_terms') return this.twoTermsT1;
+    if (this.paymentTerms === '3_terms') return this.threeTermsT1;
     return this.grandTotal;
   },
   get term2Amount() {
     if (this.paymentTerms === 'single') return 0;
-    if (this.paymentTerms === '2_terms') return this.grandTotal - this.term1Amount;
-    if (this.paymentTerms === '3_terms') {
-      let baseT2 = Number(this.activeFeeSchedule?.term2_fee || 0);
-      let facilityShare = Math.round((this.aspFeeTotal + this.transportFee) / 3);
-      let discShare = Math.round(this.concessionAmount / 3);
-      return Math.max(0, baseT2 + facilityShare - discShare);
-    }
+    if (this.paymentTerms === '2_terms') return this.twoTermsT2;
+    if (this.paymentTerms === '3_terms') return this.threeTermsT2;
     return 0;
   },
   get term3Amount() {
-    if (this.paymentTerms === '3_terms') {
-      return Math.max(0, this.grandTotal - (this.term1Amount + this.term2Amount));
-    }
+    if (this.paymentTerms === '3_terms') return this.threeTermsT3;
     return 0;
   },
 
   get amountCollected() {
     if (this.userAmountCollected !== null && this.userAmountCollected !== '') {
-      let val = Number(this.userAmountCollected);
-      return Math.min(val, this.grandTotal);
+      return Number(this.userAmountCollected) || 0;
     }
     return this.term1Amount;
   },
   get pendingAmount() {
     return Math.max(0, this.grandTotal - this.amountCollected);
+  },
+  get excessAmount() {
+    return Math.max(0, this.amountCollected - this.grandTotal);
   },
   get paymentStatus() {
     if (this.amountCollected >= this.grandTotal && this.grandTotal > 0) return 'Paid';
@@ -1141,14 +1166,14 @@
             </div>
             <div>
               <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider">Class Enrollment &amp; Academic Stage</h3>
-              <p class="text-[11px] text-slate-500 font-medium">Academic year, standard selection, section placement, and stage curriculum</p>
+              <p class="text-[11px] text-slate-500 font-medium">Academic year, standard selection, and stage curriculum</p>
             </div>
           </div>
           <div class="hidden sm:block h-px bg-slate-100 flex-1 ml-4"></div>
         </div>
 
-        {{-- Academic Year, Class, Section & Enquiry Source (Spacious 4-Column Grid) --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {{-- Academic Year, Class & Enquiry Source (Spacious 3-Column Grid) --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <div>
             <label for="academic_year_id" class="block text-xs font-bold text-slate-700 mb-2">Academic Year <span class="text-rose-500">*</span></label>
             <select id="academic_year_id" name="academic_year_id" required x-model="academicYearId"
@@ -1161,7 +1186,7 @@
 
           <div>
             <label for="class_id" class="block text-xs font-bold text-slate-700 mb-2">Applying for Standard / Class <span class="text-rose-500">*</span></label>
-            <select id="class_id" name="class_id" required x-model="selectedClassId" @change="selectedSectionId = ''"
+            <select id="class_id" name="class_id" required x-model="selectedClassId"
                     class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-bold text-slate-900 bg-white">
               <option value="">-- Select Class (Pre-KG to 12) --</option>
               @foreach($classes as $c)
@@ -1170,23 +1195,6 @@
             </select>
             @error('class_id') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
             <p id="class_id_client_err" class="text-xs text-rose-500 mt-1 font-semibold hidden"></p>
-          </div>
-
-          <div>
-            <label for="section_id" class="block text-xs font-bold text-slate-700 mb-2">Section Placement</label>
-            <select id="section_id" name="section_id" x-model="selectedSectionId"
-                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-700 bg-white">
-              <option value="">Select Section (Default Section A)</option>
-              <template x-for="sec in availableSections" :key="sec.id">
-                <option :value="sec.id" x-text="sec.name.toLowerCase().includes('section') ? sec.name : ('Section ' + sec.name)"></option>
-              </template>
-              <template x-if="availableSections.length === 0">
-                <template x-for="secName in ['Section A', 'Section B', 'Section C', 'Section D']" :key="secName">
-                  <option :value="secName" x-text="secName"></option>
-                </template>
-              </template>
-            </select>
-            @error('section_id') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
           </div>
 
           <div>
@@ -1625,6 +1633,7 @@
             <input type="text" id="aadhaar_no" name="aadhaar_no" value="{{ old('aadhaar_no') }}"
                    inputmode="numeric" maxlength="12" pattern="[0-9]{12}"
                    oninput="this.value=this.value.replace(/\D/g,'').slice(0,12); updateAadhaarBadge(this, 'aadhaar_no_badge')"
+                   onblur="if(this.value.length===12){ checkAadhaarUniqueness(this.value); }"
                    placeholder="12-digit Aadhaar"
                    class="w-full px-4 py-3 rounded-xl border @error('aadhaar_no') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition tracking-wider bg-white">
             @error('aadhaar_no') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
@@ -1635,23 +1644,27 @@
           <div>
             <div class="flex items-center justify-between mb-2">
               <label for="emis_no" class="block text-xs font-bold text-slate-700">EMIS / PEN Number <span class="font-normal text-slate-400 text-[11px]">(Optional)</span></label>
-              <span class="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">Optional</span>
+              <span id="emis_no_badge" class="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">Optional</span>
             </div>
             <input type="text" id="emis_no" name="emis_no" value="{{ old('emis_no') }}" maxlength="30"
+                   oninput="checkEmisUniqueDebounced(this)"
+                   onblur="checkEmisUnique(this)"
                    placeholder="e.g. 33020100101234 (Leave blank if not allocated)"
-                   class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
+                   class="w-full px-4 py-3 rounded-xl border @error('emis_no') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
             <p class="text-[10.5px] text-slate-400 mt-1">State EMIS / Permanent Education Number (can be updated later)</p>
+            @error('emis_no') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
+            <p id="emis_no_client_err" class="text-xs text-rose-500 mt-1 font-semibold hidden"></p>
           </div>
 
           {{-- Student Email Address --}}
           <div>
             <div class="flex items-center justify-between mb-2">
               <label for="email" class="block text-xs font-bold text-slate-700">Student Email Address</label>
-              <span class="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">Optional</span>
+              <span id="email_badge" class="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">Optional</span>
             </div>
             <input type="email" id="email" name="email" maxlength="100" value="{{ old('email') }}"
-                   oninput="validateEmailLive(this, 'email_client_err', false)"
-                   onblur="validateEmailLive(this, 'email_client_err', false)"
+                   oninput="validateEmailLive(this, 'email_client_err', false); checkEmailUniqueDebounced(this)"
+                   onblur="validateEmailLive(this, 'email_client_err', false); checkEmailUnique(this)"
                    placeholder="student@example.com (Class 9+)"
                    class="w-full px-4 py-3 rounded-xl border @error('email') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
             @error('email') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
@@ -3115,8 +3128,8 @@
                 <span class="text-xs font-extrabold text-slate-900">2 Terms</span>
                 <input type="radio" name="payment_terms" value="2_terms" x-model="paymentTerms" class="w-4 h-4 text-[#8C2826] focus:ring-[#8C2826]">
               </div>
-              <p class="text-[11px] text-slate-500 font-medium">100% Kit + 50% tuition in T1, 50% in T2</p>
-              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(term1Amount) + ' (T1) &bull; ' + formatMoney(term2Amount) + ' (T2)'"></p>
+              <p class="text-[11px] text-slate-500 font-medium">100% Kit + 50% Term Fee + 50% Transport in T1, 50% in T2</p>
+              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(twoTermsT1) + ' (T1) &bull; ' + formatMoney(twoTermsT2) + ' (T2)'"></p>
             </label>
 
             <label class="p-5 rounded-2xl border transition cursor-pointer flex flex-col justify-between space-y-3 select-none"
@@ -3125,8 +3138,8 @@
                 <span class="text-xs font-extrabold text-slate-900">3 Terms</span>
                 <input type="radio" name="payment_terms" value="3_terms" x-model="paymentTerms" class="w-4 h-4 text-[#8C2826] focus:ring-[#8C2826]">
               </div>
-              <p class="text-[11px] text-slate-500 font-medium">Official 3 Terms: April (T1), August (T2), December (T3)</p>
-              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(term1Amount) + ' (T1) &bull; ' + formatMoney(term2Amount) + ' (T2) &bull; ' + formatMoney(term3Amount) + ' (T3)'"></p>
+              <p class="text-[11px] text-slate-500 font-medium">100% Kit + T1 Fee + 50% Transport, T2 Fee + 50% Transport, T3 Fee</p>
+              <p class="text-sm font-extrabold text-[#8C2826] tabular-nums" x-text="formatMoney(threeTermsT1) + ' (T1) &bull; ' + formatMoney(threeTermsT2) + ' (T2) &bull; ' + formatMoney(threeTermsT3) + ' (T3)'"></p>
             </label>
           </div>
         </div>
@@ -3253,7 +3266,25 @@
             </div>
 
             <div>
-              <label class="block text-xs font-bold text-slate-700 mb-2">Amount Collected Today (₹) <span class="text-rose-500">*</span></label>
+              <div class="flex items-center justify-between mb-2 flex-wrap gap-1">
+                <label class="block text-xs font-bold text-slate-700">Amount Collected Today (₹) <span class="text-rose-500">*</span></label>
+                {{-- Quick Presets --}}
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <button type="button" @click="userAmountCollected = (admissionFeeTotal > 0 ? admissionFeeTotal : Math.round(grandTotal * 0.2))"
+                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition">
+                    🎓 Admission Only
+                  </button>
+                  <button type="button" @click="userAmountCollected = term1Amount"
+                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition">
+                    📅 Term 1 Fee
+                  </button>
+                  <button type="button" @click="userAmountCollected = grandTotal"
+                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition">
+                    🏆 Full Fee
+                  </button>
+                </div>
+              </div>
+
               <input type="number" step="0.01" min="0" id="amount_collected" name="amount_collected" required
                      :value="userAmountCollected !== null ? userAmountCollected : term1Amount"
                      @input="userAmountCollected = $event.target.value"
@@ -3261,12 +3292,23 @@
                      class="w-full px-4 py-3 rounded-xl border @error('amount_collected') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-bold transition text-slate-900 tabular-nums bg-white">
               @error('amount_collected') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
               <p id="amount_collected_client_err" class="text-xs text-rose-500 mt-1 font-semibold hidden"></p>
+
+              {{-- Live Waterfall Notice --}}
+              <div x-show="amountCollected > term1Amount && amountCollected < grandTotal && paymentTerms !== 'single'" class="mt-2 p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-[11px] text-blue-800 flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Settle Term 1 and automatically adjust <strong class="font-bold text-blue-900" x-text="formatMoney(amountCollected - term1Amount)"></strong> towards upcoming terms sequentially.</span>
+              </div>
+
+              <div x-show="excessAmount > 0" class="mt-2 p-2.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-[11px] text-purple-800 flex items-center gap-2">
+                <svg class="w-4 h-4 text-purple-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Full fees settled! <strong class="font-bold text-purple-900" x-text="formatMoney(excessAmount)"></strong> surplus will be credited as an advance credit balance.</span>
+              </div>
             </div>
           </div>
         </div>
 
         {{-- Live Collection Status Summary Tiles --}}
-        <div class="grid grid-cols-3 gap-4 p-5 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5 p-5 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div>
             <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Collected Today</span>
             <p class="text-xl sm:text-2xl font-black text-emerald-700 tabular-nums mt-1" x-text="formatMoney(amountCollected)"></p>
@@ -3276,10 +3318,16 @@
             <p class="text-xl sm:text-2xl font-black text-amber-600 tabular-nums mt-1" x-text="formatMoney(pendingAmount)"></p>
           </div>
           <div>
+            <span class="text-[10px] font-bold text-purple-800 uppercase tracking-wider">Excess / Advance</span>
+            <p class="text-xl sm:text-2xl font-black tabular-nums mt-1"
+               :class="excessAmount > 0 ? 'text-purple-700 font-black' : 'text-slate-400 font-medium'"
+               x-text="excessAmount > 0 ? formatMoney(excessAmount) : '₹0'"></p>
+          </div>
+          <div>
             <span class="text-[10px] font-bold text-[#380E0D] uppercase tracking-wider">Payment Status</span>
             <p class="text-sm sm:text-base font-extrabold mt-1.5"
                :class="paymentStatus === 'Paid' ? 'text-emerald-600' : (paymentStatus === 'Partially Paid' ? 'text-amber-600' : 'text-slate-600')"
-               x-text="paymentStatus">
+               x-text="excessAmount > 0 ? 'Advance Paid' : paymentStatus">
             </p>
           </div>
         </div>
@@ -3518,6 +3566,64 @@
     }
   }
 
+  // Real-time Government Document & Unique Identity Verification
+  let aadhaarCheckTimer = null;
+  let isAadhaarDuplicate = false;
+  let aadhaarDuplicateMsg = '';
+
+  function checkAadhaarUniqueness(val) {
+    const badge = document.getElementById('aadhaar_no_badge');
+    const input = document.getElementById('aadhaar_no');
+    const errEl = document.getElementById('aadhaar_no_client_err');
+    if (!input || !badge) return;
+
+    if (val.length !== 12) {
+      isAadhaarDuplicate = false;
+      aadhaarDuplicateMsg = '';
+      if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      return;
+    }
+
+    badge.innerHTML = '<span class="text-blue-600 font-semibold flex items-center gap-1"><i class="fas fa-spinner fa-spin text-xs"></i> Checking...</span>';
+
+    fetch(`{{ route('admissions.check-unique') }}?field=aadhaar_no&value=${encodeURIComponent(val)}`, {
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (input.value.trim() !== val) return;
+
+      if (!data.available) {
+        isAadhaarDuplicate = true;
+        const studentInfo = data.student ? `<strong>${data.student.name}</strong> (Admn: <strong>${data.student.admission_no}</strong>, Class: ${data.student.class})` : 'another student';
+        aadhaarDuplicateMsg = data.message || `Already used for another student (${data.student ? data.student.admission_no : ''})`;
+
+        badge.innerHTML = '<span class="text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 shadow-sm"><i class="fas fa-exclamation-circle text-rose-600"></i> Already used</span>';
+        input.classList.remove('border-emerald-500', 'ring-emerald-100', 'border-slate-200');
+        input.classList.add('border-rose-500', 'ring-2', 'ring-rose-200', 'bg-rose-50/20');
+
+        if (errEl) {
+          errEl.innerHTML = `<span class="inline-flex items-center gap-1 text-rose-600 font-bold"><i class="fas fa-times-circle"></i> Already used for student: ${studentInfo}. Government documents cannot be reused for another admission.</span>`;
+          errEl.classList.remove('hidden');
+        }
+      } else {
+        isAadhaarDuplicate = false;
+        aadhaarDuplicateMsg = '';
+        badge.innerHTML = '<span class="text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded font-bold flex items-center gap-1 shadow-sm"><i class="fas fa-check-circle text-emerald-600"></i> Valid &amp; Available</span>';
+        input.classList.remove('border-rose-400', 'border-rose-500', 'ring-rose-100', 'ring-rose-200', 'bg-rose-50/20');
+        input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100', 'bg-emerald-50/10');
+        if (errEl) {
+          errEl.innerText = '';
+          errEl.classList.add('hidden');
+        }
+      }
+    })
+    .catch(err => {
+      console.warn('Aadhaar unique check failed:', err);
+      badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 12-digit Aadhaar</span>';
+    });
+  }
+
   // Real-time Aadhaar badge updater
   function updateAadhaarBadge(input, badgeId) {
     const badge = document.getElementById(badgeId);
@@ -3527,18 +3633,183 @@
 
     if (len === 0) {
       badge.innerHTML = '<span class="text-slate-400">12 digits (Optional)</span>';
-      input.classList.remove('border-rose-400', 'border-emerald-500', 'ring-2', 'ring-rose-100', 'ring-emerald-100');
+      input.classList.remove('border-rose-400', 'border-rose-500', 'border-emerald-500', 'ring-2', 'ring-rose-100', 'ring-rose-200', 'ring-emerald-100', 'bg-rose-50/20', 'bg-emerald-50/10');
+      if (input.id === 'aadhaar_no') {
+        isAadhaarDuplicate = false;
+        aadhaarDuplicateMsg = '';
+        const errEl = document.getElementById('aadhaar_no_client_err');
+        if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      }
       return;
     }
 
     if (len < 12) {
       badge.innerHTML = `<span class="text-amber-600 font-bold">${len}/12 digits</span>`;
-      input.classList.remove('border-emerald-500', 'ring-emerald-100');
+      input.classList.remove('border-emerald-500', 'ring-emerald-100', 'bg-emerald-50/10');
+      if (input.id === 'aadhaar_no') {
+        isAadhaarDuplicate = false;
+        aadhaarDuplicateMsg = '';
+        const errEl = document.getElementById('aadhaar_no_client_err');
+        if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      }
     } else if (len === 12) {
-      badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 12-digit Aadhaar</span>';
-      input.classList.remove('border-rose-400', 'ring-rose-100');
-      input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+      if (input.id === 'aadhaar_no') {
+        clearTimeout(aadhaarCheckTimer);
+        aadhaarCheckTimer = setTimeout(() => {
+          checkAadhaarUniqueness(val);
+        }, 200);
+      } else {
+        // Father Aadhaar: valid 12-digit (allowed to be shared across siblings)
+        badge.innerHTML = '<span class="text-emerald-600 font-bold flex items-center gap-1"><i class="fas fa-check-circle"></i> Valid 12-digit Aadhaar</span>';
+        input.classList.remove('border-rose-400', 'ring-rose-100');
+        input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+      }
     }
+  }
+
+  // Real-time EMIS / PEN Number Uniqueness Check
+  let emisCheckTimer = null;
+  let isEmisDuplicate = false;
+  let emisDuplicateMsg = '';
+
+  function checkEmisUnique(input) {
+    if (!input) input = document.getElementById('emis_no');
+    if (!input) return;
+
+    const val = input.value.trim();
+    const badge = document.getElementById('emis_no_badge');
+    const errEl = document.getElementById('emis_no_client_err');
+
+    if (!val) {
+      isEmisDuplicate = false;
+      emisDuplicateMsg = '';
+      if (badge) {
+        badge.innerHTML = 'Optional';
+        badge.className = 'text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200';
+      }
+      input.classList.remove('border-rose-500', 'border-emerald-500', 'ring-2', 'ring-rose-100', 'ring-emerald-100', 'bg-rose-50/20');
+      if (errEl) { errEl.innerText = ''; errEl.classList.add('hidden'); }
+      return;
+    }
+
+    if (badge) {
+      badge.innerHTML = '<span class="text-blue-600 font-semibold flex items-center gap-1"><i class="fas fa-spinner fa-spin text-xs"></i> Checking...</span>';
+      badge.className = 'text-[10px] font-semibold px-2 py-0.5 rounded-md';
+    }
+
+    fetch(`{{ route('admissions.check-unique') }}?field=emis_no&value=${encodeURIComponent(val)}`, {
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (input.value.trim() !== val) return;
+
+      if (!data.available) {
+        isEmisDuplicate = true;
+        const studentInfo = data.student ? `<strong>${data.student.name}</strong> (Admn: <strong>${data.student.admission_no}</strong>, Class: ${data.student.class})` : 'another student';
+        emisDuplicateMsg = data.message || `Already used for another student (${data.student ? data.student.admission_no : ''})`;
+
+        if (badge) {
+          badge.innerHTML = '<span class="text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 shadow-sm"><i class="fas fa-exclamation-circle text-rose-600"></i> Already used</span>';
+          badge.className = 'text-[10px] font-bold';
+        }
+        input.classList.remove('border-emerald-500', 'ring-emerald-100', 'border-slate-200');
+        input.classList.add('border-rose-500', 'ring-2', 'ring-rose-200', 'bg-rose-50/20');
+
+        if (errEl) {
+          errEl.innerHTML = `<span class="inline-flex items-center gap-1 text-rose-600 font-bold"><i class="fas fa-times-circle"></i> Already used for student: ${studentInfo}. Government documents cannot be reused for another admission.</span>`;
+          errEl.classList.remove('hidden');
+        }
+      } else {
+        isEmisDuplicate = false;
+        emisDuplicateMsg = '';
+        if (badge) {
+          badge.innerHTML = '<span class="text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded font-bold flex items-center gap-1 shadow-sm"><i class="fas fa-check-circle text-emerald-600"></i> Available</span>';
+          badge.className = 'text-[10px] font-bold';
+        }
+        input.classList.remove('border-rose-400', 'border-rose-500', 'ring-rose-100', 'ring-rose-200', 'bg-rose-50/20');
+        input.classList.add('border-emerald-500', 'ring-2', 'ring-emerald-100');
+        if (errEl) {
+          errEl.innerText = '';
+          errEl.classList.add('hidden');
+        }
+      }
+    })
+    .catch(err => {
+      console.warn('EMIS check failed:', err);
+      if (badge) {
+        badge.innerHTML = 'Optional';
+        badge.className = 'text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200';
+      }
+    });
+  }
+
+  function checkEmisUniqueDebounced(input) {
+    clearTimeout(emisCheckTimer);
+    emisCheckTimer = setTimeout(() => {
+      checkEmisUnique(input);
+    }, 400);
+  }
+
+  // Real-time Student Email Uniqueness Check (Class 9+)
+  let emailCheckTimer = null;
+  let isEmailDuplicate = false;
+  let emailDuplicateMsg = '';
+
+  function checkEmailUnique(input) {
+    if (!input) input = document.getElementById('email');
+    if (!input) return;
+
+    const val = input.value.trim();
+    const badge = document.getElementById('email_badge');
+    const errEl = document.getElementById('email_client_err');
+
+    if (!val || !RFC_EMAIL_REGEX.test(val)) {
+      isEmailDuplicate = false;
+      emailDuplicateMsg = '';
+      return;
+    }
+
+    fetch(`{{ route('admissions.check-unique') }}?field=email&value=${encodeURIComponent(val)}`, {
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (input.value.trim() !== val) return;
+
+      if (!data.available) {
+        isEmailDuplicate = true;
+        const studentInfo = data.student ? `<strong>${data.student.name}</strong> (Admn: <strong>${data.student.admission_no}</strong>, Class: ${data.student.class})` : 'another student';
+        emailDuplicateMsg = data.message || `Email already registered to ${data.student ? data.student.name : 'another student'}`;
+
+        if (badge) {
+          badge.innerHTML = '<span class="text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 shadow-sm"><i class="fas fa-exclamation-circle text-rose-600"></i> Already used</span>';
+        }
+        input.classList.remove('border-emerald-500', 'ring-emerald-100', 'border-slate-200');
+        input.classList.add('border-rose-500', 'ring-2', 'ring-rose-200', 'bg-rose-50/20');
+
+        if (errEl) {
+          errEl.innerHTML = `<span class="inline-flex items-center gap-1 text-rose-600 font-bold"><i class="fas fa-times-circle"></i> Already registered to student: ${studentInfo}.</span>`;
+          errEl.classList.remove('hidden');
+        }
+      } else {
+        isEmailDuplicate = false;
+        emailDuplicateMsg = '';
+        if (badge) {
+          badge.innerHTML = 'Optional';
+        }
+      }
+    })
+    .catch(err => {
+      console.warn('Email check failed:', err);
+    });
+  }
+
+  function checkEmailUniqueDebounced(input) {
+    clearTimeout(emailCheckTimer);
+    emailCheckTimer = setTimeout(() => {
+      checkEmailUnique(input);
+    }, 400);
   }
 
   // Real-time Pincode badge updater
@@ -3582,10 +3853,21 @@
     if (guardianMobile && guardianMobile.value) updatePhoneBadge(guardianMobile, 'guardian_mobile_badge', false);
 
     const aadhaarNo = document.getElementById('aadhaar_no');
-    if (aadhaarNo && aadhaarNo.value) updateAadhaarBadge(aadhaarNo, 'aadhaar_no_badge');
+    if (aadhaarNo && aadhaarNo.value) {
+      updateAadhaarBadge(aadhaarNo, 'aadhaar_no_badge');
+      if (aadhaarNo.value.trim().length === 12) {
+        checkAadhaarUniqueness(aadhaarNo.value.trim());
+      }
+    }
 
     const fatherAadhaar = document.getElementById('father_aadhaar');
     if (fatherAadhaar && fatherAadhaar.value) updateAadhaarBadge(fatherAadhaar, 'father_aadhaar_badge');
+
+    const emisNo = document.getElementById('emis_no');
+    if (emisNo && emisNo.value) checkEmisUnique(emisNo);
+
+    const email = document.getElementById('email');
+    if (email && email.value) checkEmailUnique(email);
 
     const pincode = document.getElementById('pincode');
     if (pincode && pincode.value) updatePincodeBadge(pincode, 'pincode_badge');
@@ -3650,26 +3932,34 @@
           markInvalid(gender, 'gender_client_err', 'Student Gender selection is required.');
         }
 
-        // 5. Student Email (Optional, but if filled must be valid RFC format)
+        // 5. Student Email (Optional, but if filled must be valid RFC format and unique)
         const email = document.getElementById('email');
         if (email && email.value.trim()) {
           if (!RFC_EMAIL_REGEX.test(email.value.trim())) {
             markInvalid(email, 'email_client_err', 'Please enter a valid student email address (e.g. student@example.com).');
+          } else if (isEmailDuplicate) {
+            markInvalid(email, 'email_client_err', emailDuplicateMsg || 'Student email is already registered to another student.');
           }
         }
 
-        // 6. Student Aadhaar (Optional, but if filled must be exactly 12 digits)
+        // 6. Student Aadhaar (Optional, but if filled must be exactly 12 digits and unique)
         const aadhaarNo = document.getElementById('aadhaar_no');
         if (aadhaarNo && aadhaarNo.value.trim()) {
           if (!/^\d{12}$/.test(aadhaarNo.value.trim())) {
             markInvalid(aadhaarNo, 'aadhaar_no_client_err', 'Student Aadhaar number must be exactly 12 numeric digits.');
+          } else if (isAadhaarDuplicate) {
+            markInvalid(aadhaarNo, 'aadhaar_no_client_err', aadhaarDuplicateMsg || 'Student Aadhaar number is already used for another admission.');
           }
         }
 
-        // 7. EMIS / PEN Number (OPTIONAL: Never block if blank)
+        // 7. EMIS / PEN Number (OPTIONAL: Never block if blank, but if filled must be unique)
         const emisNo = document.getElementById('emis_no');
-        if (emisNo && emisNo.value.trim() && emisNo.value.trim().length > 30) {
-          markInvalid(emisNo, 'emis_no_client_err', 'EMIS / PEN Number cannot exceed 30 characters.');
+        if (emisNo && emisNo.value.trim()) {
+          if (emisNo.value.trim().length > 30) {
+            markInvalid(emisNo, 'emis_no_client_err', 'EMIS / PEN Number cannot exceed 30 characters.');
+          } else if (isEmisDuplicate) {
+            markInvalid(emisNo, 'emis_no_client_err', emisDuplicateMsg || 'EMIS / PEN Number is already used for another admission.');
+          }
         }
 
         // 8. Pincode (Optional, but if filled must be 6 digits starting with 1-9)

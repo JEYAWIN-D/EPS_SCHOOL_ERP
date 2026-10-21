@@ -488,6 +488,107 @@ class AdmissionController extends Controller
         ]);
     }
 
+    /**
+     * AJAX Endpoint to check real-time uniqueness of Government Document numbers and student data
+     * (Aadhaar number, EMIS / PEN number, student email)
+     * NOTE: Mobile numbers are explicitly excluded to support siblings sharing parent contacts.
+     */
+    public function checkUnique(Request $request)
+    {
+        $field = trim((string)$request->get('field', ''));
+        $value = trim((string)$request->get('value', ''));
+        $excludeId = $request->filled('exclude_id') ? (int)$request->get('exclude_id') : null;
+
+        if (!$field || $value === '') {
+            return response()->json([
+                'available' => true,
+                'field'     => $field,
+                'message'   => 'Value is empty',
+            ]);
+        }
+
+        // 1. Student Aadhaar Number Check
+        if ($field === 'aadhaar_no') {
+            $digits = preg_replace('/[^0-9]/', '', $value);
+            if (strlen($digits) < 12) {
+                return response()->json([
+                    'available'  => true,
+                    'incomplete' => true,
+                    'field'      => 'aadhaar_no',
+                    'message'    => 'Entering 12 digits...',
+                ]);
+            }
+
+            $existing = \App\Models\Student::findStudentByAadhaar($digits, $excludeId);
+            if ($existing) {
+                return response()->json([
+                    'available' => false,
+                    'field'     => 'aadhaar_no',
+                    'message'   => "Already used for student: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']})",
+                    'student'   => $existing,
+                ]);
+            }
+
+            return response()->json([
+                'available' => true,
+                'field'     => 'aadhaar_no',
+                'message'   => 'Valid & Available',
+            ]);
+        }
+
+        // 2. EMIS / PEN Number Check
+        if ($field === 'emis_no') {
+            $existing = \App\Models\Student::findStudentByEmis($value, $excludeId);
+            if ($existing) {
+                return response()->json([
+                    'available' => false,
+                    'field'     => 'emis_no',
+                    'message'   => "Already used for student: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']})",
+                    'student'   => $existing,
+                ]);
+            }
+
+            return response()->json([
+                'available' => true,
+                'field'     => 'emis_no',
+                'message'   => 'Available',
+            ]);
+        }
+
+        // 3. Student Email Address Check (Class 9+)
+        if ($field === 'email') {
+            if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                return response()->json([
+                    'available' => true,
+                    'field'     => 'email',
+                    'message'   => 'Invalid email format',
+                ]);
+            }
+
+            $existing = \App\Models\Student::findStudentByEmail($value, $excludeId);
+            if ($existing) {
+                return response()->json([
+                    'available' => false,
+                    'field'     => 'email',
+                    'message'   => "Already registered to student: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']})",
+                    'student'   => $existing,
+                ]);
+            }
+
+            return response()->json([
+                'available' => true,
+                'field'     => 'email',
+                'message'   => 'Available',
+            ]);
+        }
+
+        return response()->json([
+            'available' => true,
+            'field'     => $field,
+            'message'   => 'Field check passed',
+        ]);
+    }
+
     public function printFeeStructure($classId = null)
     {
         $feeData      = $this->getFeeStructureData();
@@ -763,6 +864,35 @@ class AdmissionController extends Controller
             'previous_percentage.between' => 'Previous Percentage / CGPA must be between 0 and 100.',
         ]);
 
+        // Enforce uniqueness of Government Document numbers and student identity fields
+        // (Student Aadhaar Number and EMIS/PEN Number cannot be reused across admissions)
+        if (!empty($validated['aadhaar_no'])) {
+            $existing = \App\Models\Student::findStudentByAadhaar($validated['aadhaar_no']);
+            if ($existing) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'aadhaar_no' => "Student Aadhaar Number is already used for another admission: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']}). Government document numbers cannot be reused for another admission."
+                ]);
+            }
+        }
+
+        if (!empty($validated['emis_no'])) {
+            $existing = \App\Models\Student::findStudentByEmis($validated['emis_no']);
+            if ($existing) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'emis_no' => "EMIS / PEN Number is already used for another admission: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']}). Government document numbers cannot be reused for another admission."
+                ]);
+            }
+        }
+
+        if (!empty($validated['email'])) {
+            $existing = \App\Models\Student::findStudentByEmail($validated['email']);
+            if ($existing) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'email' => "Student Email Address is already registered to student: {$existing['name']} (Admn: {$existing['admission_no']}, Class: {$existing['class']})."
+                ]);
+            }
+        }
+
         $currentYear = AcademicYear::current();
         $feeData = $this->getFeeStructureData();
         $classFee = $feeData['standardFees'][$request->class_id] ?? null;
@@ -913,12 +1043,16 @@ class AdmissionController extends Controller
                 'payment_date' => $amountCollected > 0 ? $paymentDate : null,
             ];
         } elseif ($paymentTerms === '2_terms') {
-            // Kit amounts added directly to Term 1; remaining tuition fees, etc. divided evenly
-            $remT1 = (float)round($remainingFees / 2, 2);
-            $remT2 = (float)round($remainingFees - $remT1, 2);
+            // 2 TERMS SPLIT: 100% Kit, T1(50%), Transport(50%) in Term 1; T2(50%), Transport(50%) in Term 2
+            $transportT1 = (float)round($transportFee * 0.5, 2);
+            $transportT2 = (float)round($transportFee - $transportT1, 2);
 
-            $t1Amount = (float)round($totalKitFee + $remT1, 2);
-            $t2Amount = $remT2;
+            $termFeeBase = max(0, $totalFee - $totalKitFee - $transportFee);
+            $termFeeT1   = (float)round($termFeeBase * 0.5, 2);
+            $termFeeT2   = (float)round($termFeeBase - $termFeeT1, 2);
+
+            $t1Amount = (float)round($totalKitFee + $termFeeT1 + $transportT1, 2);
+            $t2Amount = max(0, (float)round($totalFee - $t1Amount, 2));
 
             $t1Paid = min($amountCollected, $t1Amount);
             $t1Pending = max(0, $t1Amount - $t1Paid);
@@ -954,17 +1088,20 @@ class AdmissionController extends Controller
                 'payment_date' => $t2Paid > 0 ? $paymentDate : null,
             ];
         } else { // 3_terms
-            // Official 3 terms: Term 1 (T1 fee + Material fee + Admission fee), Term 2 (T2 fee), Term 3 (T3 fee)
-            $facilityShare   = round(($aspFee + $transportFee) / 3, 2);
+            // 3 TERMS SPLIT: 100% Kit, T1 Fee + Transport(50%) in Term 1; T2 Fee + Transport(50%) in Term 2; T3 Fee in Term 3 (0% Transport)
+            $transportT1 = (float)round($transportFee * 0.5, 2);
+            $transportT2 = (float)round($transportFee - $transportT1, 2);
+
+            $aspShare        = round($aspFee / 3, 2);
             $concessionShare = round($concessionAmount / 3, 2);
 
             $baseT1   = $term1Fee + $materialFee + $admissionFee;
-            $t1Amount = max(0, (float)round($baseT1 + $totalKitFee + $facilityShare - $concessionShare, 2));
+            $t1Amount = max(0, (float)round($totalKitFee + $baseT1 + $transportT1 + $aspShare - $concessionShare, 2));
 
             $baseT2   = $term2Fee;
-            $t2Amount = max(0, (float)round($baseT2 + $facilityShare - $concessionShare, 2));
+            $t2Amount = max(0, (float)round($baseT2 + $transportT2 + $aspShare - $concessionShare, 2));
 
-            // Remaining balance assigned to Term 3 to guarantee exact total sum
+            // Remaining balance assigned to Term 3 to guarantee exact total sum matching totalFee
             $t3Amount = max(0, (float)round($totalFee - ($t1Amount + $t2Amount), 2));
 
             $rem = $amountCollected;
@@ -1090,28 +1227,18 @@ class AdmissionController extends Controller
             // Generate Official School Admission Number: Boys (EPSB0000 sample -> EPSB0001...), Girls (EPSG000 sample -> EPSG0001...)
             $admNo = \App\Models\Student::generateAdmissionNumber($request->gender);
 
-            // Generate Formatted Roll Number (e.g. 11A041, Max 12 chars)
+            // Generate Formatted Roll Number using StudentRollNumberService (e.g. 6A011, LKGC018)
             $classModel = \App\Models\Classes::find($request->class_id);
             $sectionModel = $request->section_id ? \App\Models\Section::find($request->section_id) : \App\Models\Section::where('class_id', $request->class_id)->first();
 
-            $className = $classModel?->name ?? '1';
-            if (preg_match('/\d+/', $className, $matches)) {
-                $cleanClassName = $matches[0];
-            } else {
-                $cleanClassName = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $className), 0, 3));
-            }
-
-            $cleanSecName = $sectionModel ? strtoupper(trim(preg_replace('/^section\s*/i', '', $sectionModel->name))) : 'A';
-            if (strlen($cleanSecName) > 2) {
-                $cleanSecName = strtoupper(substr($cleanSecName, 0, 1));
-            }
+            $cleanClassName = \App\Services\StudentRollNumberService::getClassCode($classModel);
+            $cleanSecName   = \App\Services\StudentRollNumberService::getSectionCode($sectionModel);
 
             $classSecCount = \App\Models\StudentEnrollment::where('class_id', $request->class_id)
                 ->when($sectionModel, fn($q) => $q->where('section_id', $sectionModel->id))
-                ->where('academic_year_id', $currentYear?->id)
                 ->count() + 1;
 
-            $autoRollNo = substr($cleanClassName . $cleanSecName . str_pad($classSecCount, 3, '0', STR_PAD_LEFT), 0, 12);
+            $autoRollNo = \App\Services\StudentRollNumberService::formatRollNumber($cleanClassName, $cleanSecName, $classSecCount);
 
             // Auto Allocate House in Round-Robin Order (Red, Blue, Green, Yellow)
             $houses = ['Red', 'Blue', 'Green', 'Yellow'];

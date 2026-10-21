@@ -1,8 +1,8 @@
 @extends('layouts.app')
-@section('title', 'FeePayment')
+@section('title', 'Record Payment — Fee Desk')
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-6 pb-16">
+<div class="max-w-5xl mx-auto space-y-6 pb-20">
 
   {{-- Top Navigation Bar --}}
   <div class="flex items-center justify-between gap-4">
@@ -15,10 +15,21 @@
         </svg>
       </a>
       <div>
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Student Profile / Billing</h2>
-        <h1 class="text-2xl font-black text-slate-900 tracking-tight">FeePayment</h1>
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Student Profile / Billing Desk</h2>
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight">Record Fee Payment</h1>
       </div>
     </div>
+
+    @if($student)
+    <div class="flex items-center gap-2">
+      <a href="{{ route('fees.student-statement', $student->id) }}" 
+         class="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-indigo-600 font-bold text-xs shadow-xs transition flex items-center gap-1.5"
+         title="View Student Fee Statement">
+        <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span>Fee Statement</span>
+      </a>
+    </div>
+    @endif
   </div>
 
   {{-- Alert Messages --}}
@@ -48,8 +59,8 @@
   @endif
 
   @if($student)
-  {{-- Student Information Banner --}}
-  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+  {{-- Student Information & Fee Statement Banner --}}
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white font-extrabold text-xl shadow-sm shrink-0">
@@ -61,6 +72,9 @@
             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider {{ $student->status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
               {{ ucfirst($student->status) }}
             </span>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider {{ $student->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800' }}">
+              {{ str_replace('_', ' ', ucfirst($student->payment_status ?? 'Pending')) }}
+            </span>
           </div>
           <p class="text-xs text-slate-500 font-medium mt-0.5">
             Admission No: <span class="font-mono font-bold text-indigo-600">{{ $student->admission_no ?? $student->admission_number }}</span>
@@ -68,15 +82,39 @@
             @if($student->currentEnrollment?->section)
               &bull; Sec: <span class="font-bold text-slate-800">{{ $student->currentEnrollment->section->name }}</span>
             @endif
-            @if($student->currentEnrollment?->house)
-              &bull; House: <span class="font-semibold text-slate-700">{{ $student->currentEnrollment->house }}</span>
+            @if($student->payment_terms)
+              &bull; Plan: <span class="font-bold text-indigo-700">{{ str_replace('_', ' ', strtoupper($student->payment_terms)) }}</span>
             @endif
           </p>
         </div>
       </div>
       <div class="text-left sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
         <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Academic Year</p>
-        <p class="text-sm font-extrabold text-slate-800">{{ $student->currentEnrollment?->academicYear?->name ?? $currentYear?->name ?? '2025-2026' }}</p>
+        <p class="text-sm font-extrabold text-slate-800">{{ $student->currentEnrollment?->academicYear?->name ?? $currentYear?->name ?? '2026-2027' }}</p>
+      </div>
+    </div>
+
+    {{-- Live Fee Statement Summary Cards --}}
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-3 border-t border-slate-100">
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Fees Payable</span>
+        <p class="text-base sm:text-lg font-black font-mono text-slate-900 mt-0.5">₹{{ number_format($totalFeesPayable ?? 0, 2) }}</p>
+      </div>
+      <div class="bg-emerald-50/80 p-3 rounded-xl border border-emerald-200/80">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Total Amount Paid</span>
+        <p class="text-base sm:text-lg font-black font-mono text-emerald-700 mt-0.5">₹{{ number_format($totalPaidSoFar ?? 0, 2) }}</p>
+      </div>
+      <div class="bg-blue-50/80 p-3 rounded-xl border border-blue-200/80">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-blue-700">Amount Adjusted</span>
+        <p class="text-base sm:text-lg font-black font-mono text-blue-700 mt-0.5">₹{{ number_format($totalAdjustedSoFar ?? 0, 2) }}</p>
+      </div>
+      <div class="bg-purple-50/80 p-3 rounded-xl border border-purple-200/80">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700">Excess / Advance</span>
+        <p class="text-base sm:text-lg font-black font-mono text-purple-700 mt-0.5">₹{{ number_format($excessCreditSoFar ?? 0, 2) }}</p>
+      </div>
+      <div class="bg-rose-50/80 p-3 rounded-xl border border-rose-200/80 col-span-2 sm:col-span-1">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-rose-700">Outstanding Balance</span>
+        <p class="text-base sm:text-lg font-black font-mono text-rose-700 mt-0.5">₹{{ number_format($outstandingBalance ?? 0, 2) }}</p>
       </div>
     </div>
   </div>
@@ -88,16 +126,22 @@
       $duesMap[$d->item_key] = [
         'balance'     => (float)$d->balance,
         'name'        => $d->name,
+        'item_type'   => $d->item_type,
         'term_number' => $d->term_number ?? null,
       ];
     }
   @endphp
 
-  {{-- Alpine JS Helper placed before x-data to guarantee global availability --}}
+  {{-- Alpine JS Helper for Waterfall Allocation and Preset Management --}}
   <script>
-  function feePaymentForm(duesMap) {
+  function feePaymentDesk(duesMap, termsSchedule, totalOutstanding, admissionFeeAmount) {
     return {
       duesMap: duesMap || {},
+      termsSchedule: termsSchedule || [],
+      totalOutstanding: parseFloat(totalOutstanding) || 0,
+      admissionFeeAmount: parseFloat(admissionFeeAmount) || 0,
+      
+      activePreset: 'term_wise', // 'admission_only', 'term_wise', 'full_annual', 'custom'
       selectedItemKey: '',
       amount: {{ $dues->first()?->balance ?? 0 }},
       discount: 0,
@@ -110,6 +154,16 @@
         { payment_mode: 'upi', payment_account: 'upi', amount: 0, transaction_id: '' }
       ],
 
+      init() {
+        const keys = Object.keys(this.duesMap);
+        if (keys.length > 0) {
+          // If first item is full_annual, choose it or the first pending term
+          const termKey = keys.find(k => k.startsWith('term_')) || keys[0];
+          this.selectedItemKey = termKey;
+          this.handleFeeItemChange();
+        }
+      },
+
       handleModeChange() {
         if (this.singleMode === 'cash') {
           this.paymentAccount = 'cash_box_1';
@@ -120,27 +174,148 @@
         }
       },
 
-      init() {
-        const keys = Object.keys(this.duesMap);
-        if (keys.length > 0) {
-          this.selectedItemKey = keys[0];
-          this.handleFeeItemChange();
-        }
-      },
-
       handleFeeItemChange() {
         const item = this.duesMap[this.selectedItemKey];
         if (item) {
           this.amount = parseFloat(item.balance) || 0;
           this.discount = 0;
+          if (this.selectedItemKey === 'admission_only') {
+            this.activePreset = 'admission_only';
+          } else if (this.selectedItemKey === 'full_annual') {
+            this.activePreset = 'full_annual';
+          } else if (this.selectedItemKey.startsWith('term_')) {
+            this.activePreset = 'term_wise';
+          }
           this.syncSplitAmounts();
         }
+      },
+
+      selectPreset(type, termKey = null) {
+        this.activePreset = type;
+        if (type === 'admission_only') {
+          this.selectedItemKey = 'admission_only' in this.duesMap ? 'admission_only' : Object.keys(this.duesMap)[0];
+          this.amount = this.admissionFeeAmount > 0 ? this.admissionFeeAmount : (this.duesMap[this.selectedItemKey]?.balance || 2500);
+        } else if (type === 'full_annual') {
+          this.selectedItemKey = 'full_annual' in this.duesMap ? 'full_annual' : Object.keys(this.duesMap)[0];
+          this.amount = this.totalOutstanding > 0 ? this.totalOutstanding : (this.duesMap[this.selectedItemKey]?.balance || 0);
+        } else if (type === 'term_wise') {
+          if (termKey && termKey in this.duesMap) {
+            this.selectedItemKey = termKey;
+            this.amount = this.duesMap[termKey].balance;
+          } else {
+            // Find first pending term
+            const firstTermKey = Object.keys(this.duesMap).find(k => k.startsWith('term_'));
+            if (firstTermKey) {
+              this.selectedItemKey = firstTermKey;
+              this.amount = this.duesMap[firstTermKey].balance;
+            }
+          }
+        }
+        this.discount = 0;
+        this.syncSplitAmounts();
       },
 
       netPayable() {
         const amt = parseFloat(this.amount) || 0;
         const disc = parseFloat(this.discount) || 0;
         return Math.max(0, amt - disc);
+      },
+
+      // Real-time Waterfall Calculation Simulation
+      get waterfallCalculation() {
+        const payable = this.netPayable();
+        let rem = payable;
+        let totalAdjusted = 0;
+
+        let targetTermNum = null;
+        if (this.selectedItemKey && this.selectedItemKey.startsWith('term_')) {
+          targetTermNum = parseInt(this.selectedItemKey.replace('term_', ''));
+        }
+
+        // Clone terms schedule
+        let terms = JSON.parse(JSON.stringify(this.termsSchedule));
+        if (terms.length === 0) {
+          // Fallback single term
+          terms = [{
+            term_number: 1,
+            name: 'Admission Fee Dues',
+            amount: this.totalOutstanding,
+            paid: 0,
+            pending: this.totalOutstanding,
+            status: 'pending'
+          }];
+        }
+
+        let orderedTerms = [];
+        if (targetTermNum !== null) {
+          let matchIdx = terms.findIndex(t => t.term_number === targetTermNum);
+          if (matchIdx !== -1) {
+            orderedTerms.push(terms[matchIdx]);
+            for (let i = matchIdx + 1; i < terms.length; i++) orderedTerms.push(terms[i]);
+            for (let i = 0; i < matchIdx; i++) orderedTerms.push(terms[i]);
+          } else {
+            orderedTerms = terms;
+          }
+        } else {
+          orderedTerms = terms;
+        }
+
+        let calculatedTerms = [];
+
+        for (let t of orderedTerms) {
+          const tPending = parseFloat(t.pending) || 0;
+          const tPaid = parseFloat(t.paid) || 0;
+          const tAmount = parseFloat(t.amount) || 0;
+
+          if (tPending <= 0) {
+            calculatedTerms.push({
+              term_number: t.term_number,
+              name: t.name,
+              amount: tAmount,
+              already_paid: tPaid,
+              allocated_now: 0,
+              remaining_due: 0,
+              status_after: 'paid',
+              is_cleared: true
+            });
+            continue;
+          }
+
+          const alloc = Math.min(rem, tPending);
+          const newPaid = tPaid + alloc;
+          const newPending = Math.max(0, tPending - alloc);
+          const statusAfter = newPending <= 0 ? 'paid' : (newPaid > 0 ? 'partially_paid' : 'pending');
+
+          calculatedTerms.push({
+            term_number: t.term_number,
+            name: t.name,
+            amount: tAmount,
+            already_paid: tPaid,
+            allocated_now: alloc,
+            remaining_due: newPending,
+            status_after: statusAfter,
+            is_cleared: newPending <= 0
+          });
+
+          totalAdjusted += alloc;
+          rem = Math.max(0, rem - alloc);
+        }
+
+        // Sort back by term_number for clean display
+        calculatedTerms.sort((a, b) => a.term_number - b.term_number);
+
+        const excessSurplus = rem;
+        const newOverallBalance = Math.max(0, this.totalOutstanding - totalAdjusted);
+
+        return {
+          payable: payable,
+          totalAdjusted: totalAdjusted,
+          excessSurplus: excessSurplus,
+          newOverallBalance: newOverallBalance,
+          terms: calculatedTerms,
+          hasExcessOverTerm: (payable > (calculatedTerms.find(t => t.term_number === targetTermNum)?.already_paid ?? 0)) && (calculatedTerms.length > 1),
+          hasSurplusExcess: excessSurplus > 0
+        };
       },
 
       totalSplitAmount() {
@@ -199,7 +374,7 @@
         if (this.paymentType === 'split') {
           if (!this.isSplitValid()) {
             e.preventDefault();
-            alert('Payment amounts do not match the selected payment amount.');
+            alert('Split payment breakdown amounts must equal the net payable amount.');
             return false;
           }
         }
@@ -218,7 +393,7 @@
 
   {{-- Fee Payment Card & Form --}}
   <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8"
-       x-data="feePaymentForm({{ json_encode($duesMap) }})"
+       x-data="feePaymentDesk({{ json_encode($duesMap) }}, {{ json_encode($termsSchedule ?? []) }}, {{ $outstandingBalance ?? 0 }}, {{ $admissionFeeAmount ?? 2500 }})"
        x-init="init()">
     <form id="fee-collect-form" 
           method="POST" 
@@ -230,10 +405,100 @@
       <input type="hidden" name="student_id" value="{{ $student->id }}">
       <input type="hidden" name="idempotency_token" value="{{ (string) \Illuminate\Support\Str::uuid() }}">
 
-      {{-- Fee Head / Term Selection --}}
+      {{-- ── SECTION 1: FLEXIBLE PAYMENT OPTION PRESETS ────────────── --}}
+      <div class="space-y-3 pb-2 border-b border-slate-100">
+        <div class="flex items-center justify-between">
+          <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700">
+            Payment Options <span class="text-rose-500">*</span>
+          </label>
+          <span class="text-[11px] font-semibold text-slate-400">Choose a preset or enter any amount</span>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {{-- Option A: Admission Fee Only --}}
+          <button type="button" 
+                  @click="selectPreset('admission_only')"
+                  class="p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer"
+                  :class="activePreset === 'admission_only' ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-200 text-indigo-950 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'">
+            <div class="flex items-center justify-between w-full">
+              <span class="text-xs font-extrabold flex items-center gap-1.5">
+                <span>🎓</span> Admission Only
+              </span>
+              <span class="w-2 h-2 rounded-full" :class="activePreset === 'admission_only' ? 'bg-indigo-600' : 'bg-slate-300'"></span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Initial Kit &amp; Reg. fee</p>
+            <p class="text-sm font-black font-mono text-indigo-700 mt-1.5">₹<span x-text="formatCurrency(admissionFeeAmount)"></span></p>
+          </button>
+
+          {{-- Option B: Term-Wise Payment --}}
+          <button type="button" 
+                  @click="selectPreset('term_wise')"
+                  class="p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer"
+                  :class="activePreset === 'term_wise' ? 'bg-indigo-50 border-indigo-400 ring-2 ring-indigo-200 text-indigo-950 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'">
+            <div class="flex items-center justify-between w-full">
+              <span class="text-xs font-extrabold flex items-center gap-1.5">
+                <span>📅</span> Term-Wise
+              </span>
+              <span class="w-2 h-2 rounded-full" :class="activePreset === 'term_wise' ? 'bg-indigo-600' : 'bg-slate-300'"></span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Pay specific term dues</p>
+            <p class="text-sm font-black font-mono text-slate-800 mt-1.5">Term Dues</p>
+          </button>
+
+          {{-- Option C: Full Annual Fee --}}
+          <button type="button" 
+                  @click="selectPreset('full_annual')"
+                  class="p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer"
+                  :class="activePreset === 'full_annual' ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200 text-emerald-950 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'">
+            <div class="flex items-center justify-between w-full">
+              <span class="text-xs font-extrabold flex items-center gap-1.5 text-emerald-800">
+                <span>🏆</span> Full Annual Fee
+              </span>
+              <span class="w-2 h-2 rounded-full" :class="activePreset === 'full_annual' ? 'bg-emerald-600' : 'bg-slate-300'"></span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">100% of all annual dues</p>
+            <p class="text-sm font-black font-mono text-emerald-700 mt-1.5">₹<span x-text="formatCurrency(totalOutstanding)"></span></p>
+          </button>
+
+          {{-- Option D: Custom Amount --}}
+          <button type="button" 
+                  @click="activePreset = 'custom'"
+                  class="p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer"
+                  :class="activePreset === 'custom' ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-200 text-amber-950 shadow-xs' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'">
+            <div class="flex items-center justify-between w-full">
+              <span class="text-xs font-extrabold flex items-center gap-1.5 text-amber-800">
+                <span>✏️</span> Custom Amount
+              </span>
+              <span class="w-2 h-2 rounded-full" :class="activePreset === 'custom' ? 'bg-amber-600' : 'bg-slate-300'"></span>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1">Any partial or excess sum</p>
+            <p class="text-sm font-black font-mono text-amber-700 mt-1.5">Type Below</p>
+          </button>
+        </div>
+
+        {{-- Sub-term buttons when Term-Wise is active --}}
+        @if(!empty($termsSchedule) && count($termsSchedule) > 1)
+        <div class="flex items-center gap-2 pt-2 flex-wrap" x-show="activePreset === 'term_wise'">
+          <span class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quick Term Select:</span>
+          @foreach($termsSchedule as $t)
+            @if(($t['pending'] ?? 0) > 0)
+              <button type="button" 
+                      @click="selectPreset('term_wise', 'term_{{ $t['term_number'] }}')"
+                      class="px-3 py-1 rounded-lg text-xs font-bold border transition flex items-center gap-1.5"
+                      :class="selectedItemKey === 'term_{{ $t['term_number'] }}' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'">
+                <span>{{ $t['name'] }}</span>
+                <span class="font-mono text-[11px]">₹{{ number_format($t['pending'], 2) }}</span>
+              </button>
+            @endif
+          @endforeach
+        </div>
+        @endif
+      </div>
+
+      {{-- Fee Head / Target Term Selection Dropdown --}}
       <div>
         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
-          Fee Head <span class="text-rose-500">*</span>
+          Target Term / Fee Head <span class="text-rose-500">*</span>
         </label>
         <select name="fee_item_id" 
                 class="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm font-semibold text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
@@ -245,14 +510,14 @@
             </option>
           @endforeach
         </select>
-        <p class="text-[11px] text-slate-400 mt-1 font-medium">Select the term or fee head to record this collection against.</p>
+        <p class="text-[11px] text-slate-400 mt-1 font-medium">Select the initial term to satisfy. Any excess amount received will automatically adjust against upcoming terms.</p>
       </div>
 
-      {{-- Amount, Discount, Payment Date (Late Fee completely removed) --}}
+      {{-- Amount, Discount, Payment Date --}}
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div>
           <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
-            Amount <span class="text-rose-500">*</span>
+            Payment Amount <span class="text-rose-500">*</span>
           </label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-sm">₹</span>
@@ -265,12 +530,12 @@
                    min="1" 
                    step="0.01">
           </div>
-          <p class="text-[11px] text-slate-400 mt-1">Full or partial amount</p>
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">Enter amount paid today</p>
         </div>
 
         <div>
           <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700 mb-2">
-            Discount
+            Discount / Concession
           </label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-sm">₹</span>
@@ -283,7 +548,7 @@
                    step="0.01" 
                    value="0">
           </div>
-          <p class="text-[11px] text-slate-400 mt-1">Concession / Waiver</p>
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">Waiver applied to this payment</p>
         </div>
 
         <div>
@@ -295,14 +560,110 @@
                  class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition" 
                  value="{{ old('payment_date', today()->toDateString()) }}"
                  max="{{ today()->toDateString() }}">
-          <p class="text-[11px] text-slate-400 mt-1">Date payment was received</p>
+          <p class="text-[11px] text-slate-400 mt-1 font-medium">Date payment was received</p>
         </div>
       </div>
 
-      {{-- Payment Mode Selection (Single vs Split) --}}
+      {{-- ── SECTION 2: LIVE WATERFALL ALLOCATION & EXCESS ADJUSTMENT PREVIEW ── --}}
+      <div class="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-indigo-50/30 border border-indigo-100 shadow-2xs space-y-4">
+        <div class="flex items-center justify-between border-b border-indigo-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+              ₹
+            </div>
+            <div>
+              <h3 class="text-xs font-black uppercase tracking-wider text-slate-900">Automatic Term-Wise Waterfall &amp; Excess Adjustment</h3>
+              <p class="text-[11px] text-slate-500">Live preview showing how payment is distributed and excess adjusted across upcoming terms.</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-[11px] font-black font-mono bg-indigo-100 text-indigo-800">
+            Net Payable: ₹<span x-text="formatCurrency(netPayable())"></span>
+          </span>
+        </div>
+
+        {{-- Waterfall Terms Allocation Table --}}
+        <div class="overflow-x-auto rounded-xl border border-slate-200/90 bg-white shadow-2xs">
+          <table class="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                <th class="py-2.5 px-3">Term Schedule</th>
+                <th class="py-2.5 px-3 text-right">Term Amount</th>
+                <th class="py-2.5 px-3 text-right">Already Paid</th>
+                <th class="py-2.5 px-3 text-right text-indigo-700">Allocated Today</th>
+                <th class="py-2.5 px-3 text-right text-rose-700">Remaining Due</th>
+                <th class="py-2.5 px-3 text-center">Status After Payment</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 font-medium">
+              <template x-for="t in waterfallCalculation.terms" :key="t.term_number">
+                <tr class="hover:bg-slate-50/60 transition" :class="t.allocated_now > 0 ? 'bg-indigo-50/20' : ''">
+                  <td class="py-2.5 px-3 font-bold text-slate-900 flex items-center gap-2">
+                    <span x-text="t.name"></span>
+                    <template x-if="t.allocated_now > 0">
+                      <span class="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800">Adjusted</span>
+                    </template>
+                  </td>
+                  <td class="py-2.5 px-3 text-right font-mono font-bold text-slate-800">
+                    ₹<span x-text="formatCurrency(t.amount)"></span>
+                  </td>
+                  <td class="py-2.5 px-3 text-right font-mono text-slate-500">
+                    ₹<span x-text="formatCurrency(t.already_paid)"></span>
+                  </td>
+                  <td class="py-2.5 px-3 text-right font-mono font-extrabold text-indigo-600">
+                    +₹<span x-text="formatCurrency(t.allocated_now)"></span>
+                  </td>
+                  <td class="py-2.5 px-3 text-right font-mono font-bold"
+                      :class="t.remaining_due <= 0 ? 'text-emerald-600' : 'text-rose-600'">
+                    ₹<span x-text="formatCurrency(t.remaining_due)"></span>
+                  </td>
+                  <td class="py-2.5 px-3 text-center">
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase border"
+                          :class="t.remaining_due <= 0 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : (t.already_paid + t.allocated_now > 0 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200')"
+                          x-text="t.remaining_due <= 0 ? 'Paid' : (t.already_paid + t.allocated_now > 0 ? 'Partially Paid' : 'Pending')">
+                    </span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        {{-- Excess Adjustment Alert Banner --}}
+        <template x-if="waterfallCalculation.hasSurplusExcess">
+          <div class="p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs flex items-center gap-3">
+            <span class="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center text-sm font-bold shrink-0">🎁</span>
+            <div>
+              <p class="font-extrabold text-purple-950">
+                Excess Amount Received: ₹<span x-text="formatCurrency(waterfallCalculation.excessSurplus)"></span>
+              </p>
+              <p class="text-[11px] text-purple-800 mt-0.5">
+                This payment exceeds all scheduled fee dues. The surplus ₹<span x-text="formatCurrency(waterfallCalculation.excessSurplus)"></span> will be automatically credited to the student's <strong>Advance Balance</strong> wallet.
+              </p>
+            </div>
+          </div>
+        </template>
+
+        {{-- Summary Metrics Bar --}}
+        <div class="grid grid-cols-3 gap-3 p-3 bg-white rounded-xl border border-slate-200 text-center">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Adjusted</span>
+            <p class="text-base font-black font-mono text-indigo-700 mt-0.5">₹<span x-text="formatCurrency(waterfallCalculation.totalAdjusted)"></span></p>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-purple-700">Excess Credited</span>
+            <p class="text-base font-black font-mono text-purple-700 mt-0.5">₹<span x-text="formatCurrency(waterfallCalculation.excessSurplus)"></span></p>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-rose-700">Remaining Balance</span>
+            <p class="text-base font-black font-mono text-rose-600 mt-0.5">₹<span x-text="formatCurrency(waterfallCalculation.newOverallBalance)"></span></p>
+          </div>
+        </div>
+      </div>
+
+      {{-- ── SECTION 3: PAYMENT MODE (SINGLE VS SPLIT) ────────────── --}}
       <div class="space-y-4 pt-2">
         <label class="block text-xs font-extrabold uppercase tracking-wider text-slate-700">
-          Payment Mode <span class="text-rose-500">*</span>
+          Payment Method <span class="text-rose-500">*</span>
         </label>
 
         {{-- Mode Selector Pills --}}
@@ -419,7 +780,6 @@
           <div class="space-y-3">
             <template x-for="(split, index) in splits" :key="index">
               <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                {{-- Payment Method --}}
                 <div class="w-full sm:w-1/4">
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Method</label>
                   <select :name="'splits[' + index + '][payment_mode]'" 
@@ -437,7 +797,6 @@
                   </select>
                 </div>
 
-                {{-- Destination Account --}}
                 <div class="w-full sm:w-1/4">
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Account</label>
                   <select :name="'splits[' + index + '][payment_account]'" 
@@ -451,7 +810,6 @@
                   </select>
                 </div>
 
-                {{-- Amount --}}
                 <div class="w-full sm:w-1/4">
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Amount (₹)</label>
                   <div class="relative">
@@ -466,7 +824,6 @@
                   </div>
                 </div>
 
-                {{-- Reference / Details --}}
                 <div class="w-full sm:w-1/4">
                   <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Ref / UTR / Cheque</label>
                   <input type="text" 
@@ -477,7 +834,6 @@
                          class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs text-slate-800">
                 </div>
 
-                {{-- Remove Row Button --}}
                 <div class="sm:pt-5 shrink-0 flex justify-end">
                   <button type="button" 
                           @click="removeSplitRow(index)" 
@@ -491,7 +847,7 @@
             </template>
           </div>
 
-          {{-- Split Breakdown Totals & Validation Box --}}
+          {{-- Split Breakdown Totals --}}
           <div class="mt-4 p-4 rounded-xl bg-white border border-slate-200/90 shadow-xs space-y-2">
             <div class="grid grid-cols-3 gap-3 text-center border-b border-slate-100 pb-3">
               <div>
@@ -514,7 +870,7 @@
             <template x-if="!isSplitValid()">
               <div class="flex items-center gap-2 text-rose-600 text-xs font-bold pt-1">
                 <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                <span>Payment amounts do not match the selected payment amount.</span>
+                <span>Split breakdown does not match the payable amount.</span>
               </div>
             </template>
             <template x-if="isSplitValid()">
@@ -533,21 +889,43 @@
         <textarea name="remarks" 
                   rows="2" 
                   class="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition resize-none" 
-                  placeholder="Optional payment notes or comments..."></textarea>
+                  placeholder="Optional payment notes, excess authorization, or bank comments..."></textarea>
       </div>
 
-      {{-- Action Buttons --}}
-      <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-        <a href="{{ route('students.show', $student->id) }}" 
-           class="px-5 py-2.5 rounded-xl border border-slate-300 text-sm font-bold text-slate-700 hover:bg-slate-50 transition shadow-xs">
-          Cancel
-        </a>
-        <button type="submit" 
-                :disabled="submitting || (paymentType === 'split' && !isSplitValid())"
-                class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold shadow-md transition flex items-center gap-2">
-          <span x-show="submitting" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-          <span x-text="submitting ? 'Recording Payment...' : 'Record Payment'">Record Payment</span>
-        </button>
+      {{-- ── SECTION 4: THE PAYMENT RECEIVED SUBMIT BUTTON ─────────── --}}
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-5 border-t border-slate-200">
+        <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
+          <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>All fees, term schedules, and excess balances update automatically upon recording.</span>
+        </div>
+
+        <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <a href="{{ route('students.show', $student->id) }}" 
+             class="px-5 py-3 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-xs">
+            Cancel
+          </a>
+
+          {{-- The Required "Payment Received" Button --}}
+          <button type="submit" 
+                  :disabled="submitting || (paymentType === 'split' && !isSplitValid())"
+                  class="px-8 py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-extrabold shadow-md hover:shadow-lg transition flex items-center justify-center gap-2.5 cursor-pointer">
+            <template x-if="!submitting">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>Payment Received</span>
+                <span class="font-mono bg-white/20 px-2 py-0.5 rounded text-xs">₹<span x-text="formatCurrency(amount)"></span></span>
+              </span>
+            </template>
+            <template x-if="submitting">
+              <span class="flex items-center gap-2">
+                <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>Recording Payment Received...</span>
+              </span>
+            </template>
+          </button>
+        </div>
       </div>
     </form>
   </div>

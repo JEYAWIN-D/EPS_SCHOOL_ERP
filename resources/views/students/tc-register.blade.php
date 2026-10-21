@@ -56,7 +56,7 @@
                 </div>
               </div>
             </td>
-            <td class="td font-mono text-xs text-blue-600">{{ $s->admission_number }}</td>
+            <td class="td font-mono text-xs text-blue-600">{{ $s->admission_no ?? $s->admission_number ?? '—' }}</td>
             <td class="td">{{ $s->currentEnrollment?->class?->name ?? '—' }}</td>
             <td class="td font-mono text-sm font-semibold text-slate-700">{{ $s->tc_number }}</td>
             <td class="td text-sm">{{ $s->tc_date?->format('d M Y') ?? '—' }}</td>

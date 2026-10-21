@@ -152,6 +152,16 @@ class FeeController extends Controller
         $feeHeads = FeeHead::where('is_active', true)->get();
         $currentYear = AcademicYear::current();
 
+        // Default metrics for safe view rendering even before a student is selected
+        $termsSchedule      = [];
+        $totalFeesPayable   = 0;
+        $totalPaidSoFar     = 0;
+        $totalAdjustedSoFar = 0;
+        $excessCreditSoFar  = 0;
+        $outstandingBalance = 0;
+        $admissionFeeAmount = 0;
+        $totalPendingTerms  = 0;
+
         // For autocomplete suggestions if needed
         $studentSuggestions = Student::where('status', 'active')
             ->orderBy('first_name')
@@ -171,12 +181,29 @@ class FeeController extends Controller
 
             if ($student && $currentYear) {
                 // 1. Process terms from student admission fee schedule
-                if (!empty($student->admission_fee_terms) && is_array($student->admission_fee_terms)) {
-                    foreach ($student->admission_fee_terms as $idx => $term) {
+                $terms = $student->admission_fee_terms ?? [];
+
+                if (!empty($terms) && is_array($terms)) {
+                    foreach ($terms as $idx => $term) {
                         $pending = (float)($term['pending'] ?? 0);
+                        $amt     = (float)($term['amount'] ?? 0);
+                        $paidAmt = (float)($term['paid'] ?? 0);
+                        $tNum    = $term['term_number'] ?? ($idx + 1);
+                        $tName   = $term['name'] ?? ('Term ' . $tNum);
+                        $status  = $term['status'] ?? ($pending <= 0 ? 'paid' : ($paidAmt > 0 ? 'partially_paid' : 'pending'));
+                        
+                        $totalPendingTerms += $pending;
+                        $termsSchedule[] = [
+                            'term_number' => $tNum,
+                            'name'        => $tName,
+                            'amount'      => $amt,
+                            'paid'        => $paidAmt,
+                            'pending'     => $pending,
+                            'due_date'    => $term['due_date'] ?? null,
+                            'status'      => $status,
+                        ];
+
                         if ($pending > 0) {
-                            $tNum = $term['term_number'] ?? ($idx + 1);
-                            $tName = $term['name'] ?? ('Term ' . $tNum);
                             $dues->push((object)[
                                 'id'            => 'term_' . $tNum,
                                 'item_key'      => 'term_' . $tNum,
@@ -193,6 +220,20 @@ class FeeController extends Controller
                     }
                 } elseif ((float)($student->admission_pending_amount ?? 0) > 0) {
                     $pending = (float)$student->admission_pending_amount;
+                    $amt     = (float)($student->total_admission_fee ?? $pending);
+                    $paidAmt = (float)($student->admission_paid_amount ?? 0);
+                    $totalPendingTerms = $pending;
+                    
+                    $termsSchedule[] = [
+                        'term_number' => 1,
+                        'name'        => 'Term 1',
+                        'amount'      => $amt,
+                        'paid'        => $paidAmt,
+                        'pending'     => $pending,
+                        'due_date'    => null,
+                        'status'      => $paidAmt > 0 ? 'partially_paid' : 'pending',
+                    ];
+
                     $dues->push((object)[
                         'id'            => 'term_1',
                         'item_key'      => 'term_1',
@@ -206,6 +247,67 @@ class FeeController extends Controller
                         'due_date'      => null,
                     ]);
                 }
+
+                // Add Full Annual Fee option if there are multiple terms or dues
+                if ($totalPendingTerms > 0) {
+                    $dues->prepend((object)[
+                        'id'            => 'full_annual',
+                        'item_key'      => 'full_annual',
+                        'item_type'     => 'full_annual',
+                        'term_number'   => null,
+                        'term_name'     => 'Full Annual Fee',
+                        'fee_head_id'   => null,
+                        'name'          => 'Full Annual Fee (All Terms Combined)',
+                        'display_label' => 'Full Annual Fee (All Terms) — ₹' . number_format($totalPendingTerms, 2) . ' due',
+                        'balance'       => $totalPendingTerms,
+                        'due_date'      => null,
+                    ]);
+                }
+
+                // Admission Fee structure detection
+                $admissionFeeAmount = 2500;
+                $admHead = FeeStructure::where('class_id', $student->currentEnrollment?->class_id)
+                    ->where('academic_year_id', $currentYear->id)
+                    ->whereHas('feeHead', fn($q) => $q->where('name', 'like', '%Admission%'))
+                    ->first();
+                if ($admHead) {
+                    $admissionFeeAmount = (float)$admHead->amount;
+                }
+
+                // Add Admission Fee Only option if dues exist
+                if ($totalPendingTerms > 0) {
+                    $admBalance = min($admissionFeeAmount, $totalPendingTerms);
+                    $dues->push((object)[
+                        'id'            => 'admission_only',
+                        'item_key'      => 'admission_only',
+                        'item_type'     => 'admission_only',
+                        'term_number'   => 1,
+                        'term_name'     => 'Admission Fee Only',
+                        'fee_head_id'   => $admHead?->fee_head_id,
+                        'name'          => 'Admission Fee Only',
+                        'display_label' => 'Admission Fee Only — ₹' . number_format($admBalance, 2) . ' due',
+                        'balance'       => $admBalance,
+                        'due_date'      => null,
+                    ]);
+                }
+
+                // Student Fee Statistics
+                $totalFeesPayable = (float)($student->total_admission_fee ?? 0);
+                if ($totalFeesPayable <= 0 && !empty($termsSchedule)) {
+                    $totalFeesPayable = array_sum(array_column($termsSchedule, 'amount'));
+                }
+                $totalPaidSoFar = (float)($student->feePayments->sum('total_paid'));
+                $totalAdjustedSoFar = (float)($student->feePayments->sum('amount_adjusted'));
+                if ($totalAdjustedSoFar <= 0) {
+                    $totalAdjustedSoFar = min($totalPaidSoFar, $totalFeesPayable);
+                }
+                $excessCreditSoFar = (float)($student->excess_amount ?? 0);
+                if ($excessCreditSoFar <= 0) {
+                    $excessCreditSoFar = (float)DB::table('fee_advance_payments')
+                        ->where('student_id', $student->id)
+                        ->sum('remaining_amount');
+                }
+                $outstandingBalance = (float)($student->admission_pending_amount ?? max(0, $totalFeesPayable - $totalAdjustedSoFar));
 
                 // 2. Process class fee structures
                 $isNewAdmission = $currentYear->start_date
@@ -278,7 +380,11 @@ class FeeController extends Controller
             }
         }
 
-        return view('fees.collect', compact('student', 'dues', 'classes', 'feeHeads', 'currentYear', 'studentSuggestions'));
+        return view('fees.collect', compact(
+            'student', 'dues', 'classes', 'feeHeads', 'currentYear', 'studentSuggestions',
+            'termsSchedule', 'totalFeesPayable', 'totalPaidSoFar', 'totalAdjustedSoFar',
+            'excessCreditSoFar', 'outstandingBalance', 'admissionFeeAmount', 'totalPendingTerms'
+        ));
     }
 
     public function savePayment(Request $request)
@@ -365,7 +471,6 @@ class FeeController extends Controller
             $feeHeadId = null;
             $termNumber = null;
             $termName = null;
-            $maxAllowed = null;
 
             if (str_starts_with($feeItemId, 'term_')) {
                 $termNumber = (int) substr($feeItemId, 5);
@@ -377,47 +482,22 @@ class FeeController extends Controller
                         break;
                     }
                 }
-                if ($matchedTerm) {
-                    $termName = $matchedTerm['name'] ?? ('Term ' . $termNumber);
-                    $maxAllowed = (float)($matchedTerm['pending'] ?? 0);
-                } else {
-                    $termName = 'Term ' . $termNumber;
-                    $maxAllowed = (float)($student->admission_pending_amount ?? 0);
-                }
+                $termName = $matchedTerm['name'] ?? ('Term ' . $termNumber);
+            } elseif ($feeItemId === 'full_annual') {
+                $termName = 'Full Annual Fee';
+            } elseif ($feeItemId === 'admission_only') {
+                $termName = 'Admission Fee Only';
             } elseif (str_starts_with($feeItemId, 'head_')) {
                 $feeHeadId = (int) substr($feeItemId, 5);
                 $head = FeeHead::find($feeHeadId);
-                $termName = $head?->name ?? 'Fee';
-                $struct = FeeStructure::where('class_id', $student->currentEnrollment?->class_id)
-                    ->where('academic_year_id', $currentYear?->id)
-                    ->where('fee_head_id', $feeHeadId)
-                    ->first();
-                if ($struct) {
-                    $paidSoFar = FeePayment::where('student_id', $student->id)
-                        ->where('academic_year_id', $currentYear?->id)
-                        ->where('fee_head_id', $feeHeadId)
-                        ->where('is_cancelled', false)
-                        ->sum('total_paid');
-                    $maxAllowed = max(0, (float)$struct->amount - (float)$paidSoFar);
-                }
+                $termName = $head?->name ?? 'Fee Head';
             } elseif (str_starts_with($feeItemId, 'charge_')) {
                 $chargeId = (int) substr($feeItemId, 7);
                 $charge = StudentFeeCharge::find($chargeId);
-                if ($charge) {
-                    $feeHeadId = $charge->fee_head_id;
-                    $termName = $charge->feeHead?->name ?? $charge->description ?? 'Fee Charge';
-                    $paidSoFar = $charge->fee_head_id ? FeePayment::where('student_id', $student->id)
-                        ->where('academic_year_id', $currentYear?->id)
-                        ->where('fee_head_id', $charge->fee_head_id)
-                        ->where('is_cancelled', false)
-                        ->sum('total_paid') : 0;
-                    $maxAllowed = max(0, (float)$charge->amount - (float)$paidSoFar);
-                }
-            }
-
-            if ($maxAllowed !== null && $amount > ($maxAllowed + 0.01)) {
-                DB::rollBack();
-                return back()->withErrors(['amount' => 'Payment amount cannot exceed outstanding due of ₹' . number_format($maxAllowed, 2) . '.'])->withInput();
+                $feeHeadId = $charge?->fee_head_id;
+                $termName = $charge?->feeHead?->name ?? $charge?->description ?? 'Fee Charge';
+            } else {
+                $termName = 'General Fee Payment';
             }
 
             $paymentMode = $isSplit ? 'split' : $validated['payment_mode'];
@@ -430,6 +510,133 @@ class FeeController extends Controller
                 } else {
                     $paymentAccount = 'bank';
                 }
+            }
+
+            $splitPaymentSummary = $isSplit
+                ? 'Split: ' . implode(', ', array_map(fn($s) => ucfirst($s['payment_mode']) . ' (₹' . number_format((float)$s['amount'], 2) . ')', $splits))
+                : ucfirst($paymentMode);
+
+            // ── WATERFALL ALLOCATION AND EXCESS ADJUSTMENT ───────────
+            $remMoney = $netPayable;
+            $terms = $student->admission_fee_terms ?? [];
+            $adjustedTermsSummary = [];
+            $totalAdjusted = 0;
+            $excessSurplus = 0;
+
+            if (is_array($terms) && count($terms) > 0) {
+                // Determine order of terms for waterfall
+                $selectedTermIdx = null;
+                if ($termNumber !== null) {
+                    foreach ($terms as $idx => $t) {
+                        if (($t['term_number'] ?? null) == $termNumber) {
+                            $selectedTermIdx = $idx;
+                            break;
+                        }
+                    }
+                }
+
+                $orderOfTerms = [];
+                if ($selectedTermIdx !== null) {
+                    // Start from selected term, then subsequent upcoming terms, then earlier pending terms
+                    $orderOfTerms[] = $selectedTermIdx;
+                    for ($i = $selectedTermIdx + 1; $i < count($terms); $i++) {
+                        $orderOfTerms[] = $i;
+                    }
+                    for ($i = 0; $i < $selectedTermIdx; $i++) {
+                        $orderOfTerms[] = $i;
+                    }
+                } else {
+                    // General, full_annual, or admission_only: sequential 0, 1, 2...
+                    $orderOfTerms = range(0, count($terms) - 1);
+                }
+
+                $updatedTerms = $terms;
+
+                foreach ($orderOfTerms as $idx) {
+                    if ($remMoney <= 0) break;
+
+                    $t = &$updatedTerms[$idx];
+                    $tPending = (float)($t['pending'] ?? 0);
+                    if ($tPending <= 0) continue;
+
+                    $allocated = min($remMoney, $tPending);
+                    $newPaid = round((float)($t['paid'] ?? 0) + $allocated, 2);
+                    $newPending = max(0, round((float)($t['amount'] ?? 0) - $newPaid, 2));
+                    $newStatus = $newPending <= 0 ? 'paid' : 'partially_paid';
+
+                    $t['paid'] = $newPaid;
+                    $t['pending'] = $newPending;
+                    $t['status'] = $newStatus;
+                    $t['payment_mode'] = $splitPaymentSummary;
+                    $t['payment_date'] = $validated['payment_date'];
+
+                    $tName = $t['name'] ?? ('Term ' . ($t['term_number'] ?? ($idx + 1)));
+                    $adjustedTermsSummary[] = "{$tName}: ₹" . number_format($allocated, 2) . " (" . ($newPending <= 0 ? "Cleared" : "Remaining ₹" . number_format($newPending, 2)) . ")";
+
+                    $totalAdjusted = round($totalAdjusted + $allocated, 2);
+                    $remMoney = round($remMoney - $allocated, 2);
+                }
+
+                $student->admission_fee_terms = $updatedTerms;
+
+                // Any leftover money after all terms are paid in full is EXCESS AMOUNT
+                $excessSurplus = max(0, $remMoney);
+
+                // Update overall student fee summary
+                $student->admission_paid_amount = round(array_sum(array_map(fn($t) => (float)($t['paid'] ?? 0), $updatedTerms)), 2);
+                $student->admission_pending_amount = max(0, round(array_sum(array_map(fn($t) => (float)($t['pending'] ?? 0), $updatedTerms)), 2));
+                $student->payment_status = $student->admission_pending_amount <= 0 ? 'paid' : ($student->admission_paid_amount > 0 ? 'partially_paid' : 'pending');
+
+                if ($excessSurplus > 0) {
+                    $student->excess_amount = round((float)($student->excess_amount ?? 0) + $excessSurplus, 2);
+                }
+            } else {
+                // If student has no term breakdown, adjust against total admission fee or fee head
+                $pending = (float)($student->admission_pending_amount ?? $student->total_admission_fee ?? 0);
+                $allocated = min($remMoney, $pending);
+                $totalAdjusted = $allocated;
+                $excessSurplus = max(0, round($remMoney - $allocated, 2));
+
+                $student->admission_paid_amount = round((float)($student->admission_paid_amount ?? 0) + $allocated, 2);
+                $student->admission_pending_amount = max(0, round((float)($student->total_admission_fee ?? 0) - $student->admission_paid_amount, 2));
+                $student->payment_status = $student->admission_pending_amount <= 0 ? 'paid' : ($student->admission_paid_amount > 0 ? 'partially_paid' : 'pending');
+
+                if ($excessSurplus > 0) {
+                    $student->excess_amount = round((float)($student->excess_amount ?? 0) + $excessSurplus, 2);
+                }
+                $adjustedTermsSummary[] = ($termName ?: 'Fee Dues') . ": ₹" . number_format($allocated, 2);
+            }
+
+            // Save excess to fee_advance_payments as an advance credit balance
+            if ($excessSurplus > 0) {
+                $advSeq = DB::table('fee_advance_payments')->count() + 1;
+                $advReceipt = 'ADV-' . date('Ym') . '-' . str_pad($advSeq, 4, '0', STR_PAD_LEFT);
+                DB::table('fee_advance_payments')->insert([
+                    'student_id'       => $student->id,
+                    'academic_year_id' => $currentYear?->id,
+                    'amount'           => $excessSurplus,
+                    'applied_amount'   => 0,
+                    'remaining_amount' => $excessSurplus,
+                    'payment_date'     => $validated['payment_date'],
+                    'receipt_number'   => $advReceipt,
+                    'payment_mode'     => $paymentMode,
+                    'transaction_id'   => $isSplit ? null : ($validated['transaction_id'] ?? null),
+                    'notes'            => 'Excess payment received beyond fee dues; auto-adjusted to student advance balance',
+                    'recorded_by'      => Auth::id(),
+                    'created_at'       => now(),
+                    'updated_at'       => now(),
+                ]);
+            }
+
+            $student->save();
+
+            // Format remarks with adjustment details
+            $remarksCombined = $validated['remarks'] ? (trim($validated['remarks']) . ' | ') : '';
+            if (!empty($adjustedTermsSummary)) {
+                $remarksCombined .= 'Adjusted: ' . implode(', ', $adjustedTermsSummary);
+            }
+            if ($excessSurplus > 0) {
+                $remarksCombined .= ' | Excess Amount: ₹' . number_format($excessSurplus, 2) . ' credited to advance balance.';
             }
 
             $payment = FeePayment::create([
@@ -445,6 +652,8 @@ class FeeController extends Controller
                 'late_fee'         => 0, // Requirement 8: Late fee not used
                 'discount'         => $discount,
                 'amount_paid'      => $netPayable,
+                'amount_adjusted'  => $totalAdjusted,
+                'excess_amount'    => $excessSurplus,
                 'total_paid'       => $netPayable,
                 'payment_mode'     => $paymentMode,
                 'payment_account'  => $paymentAccount,
@@ -454,7 +663,7 @@ class FeeController extends Controller
                 'cheque_bank'      => $isSplit ? null : ($validated['cheque_bank'] ?? null),
                 'cheque_branch'    => $isSplit ? null : ($validated['cheque_branch'] ?? null),
                 'cheque_status'    => (!$isSplit && $paymentMode === 'cheque' && !empty($validated['cheque_number'])) ? 'pending' : null,
-                'remarks'          => $validated['remarks'] ?? null,
+                'remarks'          => $remarksCombined,
                 'collected_by'     => Auth::id(),
             ]);
 
@@ -485,38 +694,9 @@ class FeeController extends Controller
                 }
             }
 
-            // Update student admission fee terms and pending amounts
-            if ($termNumber !== null || str_starts_with($feeItemId, 'term_')) {
-                $terms = $student->admission_fee_terms ?? [];
-                $updatedTerms = [];
-                $splitPaymentSummary = $isSplit
-                    ? 'Split: ' . implode(', ', array_map(fn($s) => ucfirst($s['payment_mode']) . ' (₹' . number_format((float)$s['amount'], 2) . ')', $splits))
-                    : ucfirst($paymentMode);
-
-                if (is_array($terms) && count($terms) > 0) {
-                    foreach ($terms as $t) {
-                        if (($t['term_number'] ?? null) == $termNumber) {
-                            $newPaid = round((float)($t['paid'] ?? 0) + $netPayable, 2);
-                            $newPending = max(0, round((float)($t['amount'] ?? 0) - $newPaid, 2));
-                            $newStatus = $newPending <= 0 ? 'paid' : ($newPaid > 0 ? 'partially_paid' : 'pending');
-                            $t['paid'] = $newPaid;
-                            $t['pending'] = $newPending;
-                            $t['status'] = $newStatus;
-                            $t['payment_mode'] = $splitPaymentSummary;
-                            $t['payment_date'] = $validated['payment_date'];
-                        }
-                        $updatedTerms[] = $t;
-                    }
-                    $student->admission_fee_terms = $updatedTerms;
-                }
-
-                $student->admission_paid_amount = round((float)($student->admission_paid_amount ?? 0) + $netPayable, 2);
-                $student->admission_pending_amount = max(0, round((float)($student->total_admission_fee ?? 0) - $student->admission_paid_amount, 2));
-                $student->payment_status = $student->admission_pending_amount <= 0 ? 'paid' : 'partially_paid';
-                $student->save();
-            }
-
             DB::commit();
+
+            self::clearStatsCache();
 
             AuditLog::record('fee_payment_collected', $payment, [], [
                 'receipt_number' => $payment->receipt_number,
@@ -588,6 +768,52 @@ class FeeController extends Controller
     {
         $payment = FeePayment::with(['student.currentEnrollment.class', 'feeHead', 'collectedBy', 'splits'])->findOrFail($id);
         return view('fees.receipt', compact('payment'));
+    }
+
+    public function studentStatement(int $studentId)
+    {
+        $student = Student::with([
+            'currentEnrollment.class',
+            'currentEnrollment.section',
+            'currentEnrollment.academicYear',
+            'feePayments' => fn($q) => $q->where('is_cancelled', false)->with('collectedBy')->orderBy('payment_date', 'asc')->orderBy('id', 'asc'),
+        ])->findOrFail($studentId);
+
+        $currentYear = AcademicYear::current();
+
+        $totalFeesPayable = (float)($student->total_admission_fee ?? 0);
+        if ($totalFeesPayable <= 0 && !empty($student->admission_fee_terms)) {
+            $totalFeesPayable = array_sum(array_column($student->admission_fee_terms, 'amount'));
+        }
+
+        $allPayments = $student->feePayments;
+        $totalPaid = (float)$allPayments->sum('total_paid');
+        $totalAdjusted = (float)$allPayments->sum('amount_adjusted');
+        if ($totalAdjusted <= 0) {
+            $totalAdjusted = min($totalPaid, $totalFeesPayable);
+        }
+
+        $excessAmount = (float)($student->excess_amount ?? 0);
+        if ($excessAmount <= 0) {
+            $excessAmount = (float)DB::table('fee_advance_payments')
+                ->where('student_id', $student->id)
+                ->sum('remaining_amount');
+        }
+
+        $outstandingBalance = (float)($student->admission_pending_amount ?? max(0, $totalFeesPayable - $totalAdjusted));
+        $terms = $student->admission_fee_terms ?? [];
+
+        return view('fees.statement', compact(
+            'student',
+            'currentYear',
+            'totalFeesPayable',
+            'totalPaid',
+            'totalAdjusted',
+            'excessAmount',
+            'outstandingBalance',
+            'terms',
+            'allPayments'
+        ));
     }
 
     public function report(Request $request)

@@ -12,6 +12,10 @@
       <h1 class="page-title">Fee Receipt</h1>
     </div>
     <div class="flex gap-2">
+      <a href="{{ route('fees.student-statement', $payment->student_id) }}" class="btn btn-secondary btn-sm flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span>Fee Statement</span>
+      </a>
       <a href="{{ route('fees.receipt.duplicate', $payment->id) }}" class="btn btn-secondary btn-sm" target="_blank">Duplicate PDF</a>
       <button onclick="window.print()" class="btn btn-primary btn-sm">Print</button>
     </div>
@@ -55,6 +59,15 @@
           $rows[] = ['Discount', '- ₹' . number_format($payment->discount, 2)];
         }
         $rows[] = ['Total Paid', '₹' . number_format($payment->total_paid, 2)];
+        if ((float)($payment->amount_adjusted ?? 0) > 0) {
+          $rows[] = ['Amount Adjusted', '₹' . number_format($payment->amount_adjusted, 2)];
+        }
+        if ((float)($payment->excess_amount ?? 0) > 0) {
+          $rows[] = ['Excess Amount Received', '₹' . number_format($payment->excess_amount, 2) . ' (Credited to Advance Wallet)'];
+        }
+        if ($payment->remarks) {
+          $rows[] = ['Adjustment Details', $payment->remarks];
+        }
         $rows[] = ['Collected By', $payment->collectedBy?->name ?? 'Administrator'];
       @endphp
       @foreach($rows as [$l, $v])

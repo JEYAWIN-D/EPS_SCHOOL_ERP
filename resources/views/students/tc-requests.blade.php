@@ -99,7 +99,7 @@
               </form>
               @endif
               @if($r->status === 'issued')
-              <a href="{{ route('students.tc', $r->student_id) }}" class="btn btn-secondary btn-xs">View TC</a>
+              <a href="{{ route('students.tc.form', $r->student_id) }}" class="btn btn-secondary btn-xs">View / Print TC</a>
               @endif
             </div>
           </td>
