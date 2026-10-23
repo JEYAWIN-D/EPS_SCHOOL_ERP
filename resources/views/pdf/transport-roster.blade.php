@@ -190,7 +190,7 @@
       </td>
       <td class="kpi-cell" style="width: 25%;">
         <div class="kpi-title">Active Fleet Vans</div>
-        <div class="kpi-val">{{ $selectedVan === 'all' ? '5 Vans (TN33AX1001-1005)' : $selectedVan }}</div>
+        <div class="kpi-val">{{ $selectedVan === 'all' ? '5 Vans (Van 1 to Van 5)' : ($vansMeta[$selectedVan]['title'] ?? $selectedVan) }}</div>
       </td>
       <td class="kpi-cell" style="width: 25%;">
         <div class="kpi-title">Monthly Transport Billing</div>
@@ -206,7 +206,7 @@
   {{-- Van-by-Van Roster Tables --}}
   @foreach($passengers as $vanKey => $vanStudents)
   @php
-    $meta = $vansMeta[$vanKey] ?? ['title' => $vanKey, 'vehicle' => '—', 'route_no' => ''];
+    $meta = $vansMeta[$vanKey] ?? ['title' => $vanKey, 'vehicle' => $vanKey, 'route_no' => $vanKey];
     $vanFareSum = $vanStudents->sum('amount');
   @endphp
   <div class="van-section">
@@ -214,10 +214,9 @@
       <table>
         <tr>
           <td style="font-weight: bold; font-size: 9px;">
-            {{ $meta['title'] }} ({{ $meta['route_no'] }})
+            {{ $meta['title'] }}
           </td>
           <td style="text-align: right; font-size: 8px;">
-            Vehicle: <strong>{{ $meta['vehicle'] }}</strong> &nbsp;|&nbsp;
             Passengers: <strong>{{ $vanStudents->count() }}</strong> &nbsp;|&nbsp;
             Monthly Total: <strong>₹{{ number_format($vanFareSum, 2) }}</strong>
           </td>

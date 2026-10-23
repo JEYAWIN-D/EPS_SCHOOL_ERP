@@ -982,9 +982,9 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/bus-attendance/report',         [TransportController::class, 'busAttendanceReport'])->name('bus-attendance.report');
     });
 
-    // Admin URL aliases for transport
-    Route::redirect('/admin/transport', '/transport');
-    Route::redirect('/admin/transport/roster', '/transport/roster');
+    // Admin direct route & aliases for transport
+    Route::get('/admin/transport/roster', [TransportController::class, 'roster']);
+    Route::get('/admin/transport', [TransportController::class, 'index']);
     Route::redirect('/admin/transport/routes', '/transport/routes');
     Route::redirect('/admin/transport/vehicles', '/transport/vehicles');
     Route::redirect('/admin/transport/drivers', '/transport/drivers');

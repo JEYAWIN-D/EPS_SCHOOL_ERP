@@ -692,32 +692,55 @@ class TransportController extends Controller
 
     public function roster(Request $request)
     {
-        $selectedVan = $request->get('van', 'all');
+        $rawVan = trim((string)$request->get('van', 'all'));
+        $vanAliasMap = [
+            '1'      => 'VAN I',
+            'van 1'  => 'VAN I',
+            'van1'   => 'VAN I',
+            'van i'  => 'VAN I',
+            '2'      => 'VAN II',
+            'van 2'  => 'VAN II',
+            'van2'   => 'VAN II',
+            'van ii' => 'VAN II',
+            '3'      => 'VAN III',
+            'van 3'  => 'VAN III',
+            'van3'   => 'VAN III',
+            'van iii'=> 'VAN III',
+            '4'      => 'VAN IV',
+            'van 4'  => 'VAN IV',
+            'van4'   => 'VAN IV',
+            'van iv' => 'VAN IV',
+            '5'      => 'VAN V',
+            'van 5'  => 'VAN V',
+            'van5'   => 'VAN V',
+            'van v'  => 'VAN V',
+        ];
+        $selectedVan = $vanAliasMap[strtolower($rawVan)] ?? (in_array(strtoupper($rawVan), ['VAN I', 'VAN II', 'VAN III', 'VAN IV', 'VAN V']) ? strtoupper($rawVan) : 'all');
         $search = trim((string)$request->get('search', ''));
         $tripFilter = $request->get('trip', 'all');
 
         $vansList = [
             'VAN I'   => [
-                'name'       => 'Van I',
-                'route_no'   => 'VAN-01',
+                'name'       => 'Van 1',
+                'route_no'   => 'Van 1',
                 'route_id'   => 4,
                 'vehicle_id' => 5,
                 'reg'        => 'TN-33-AX-1001',
-                'route_name' => 'RN Pudur / Bhavani / Thindal Route',
+                'route_name' => 'RN Pudur / Bhavani / Thindal',
                 'driver'     => 'S. Murugesan',
                 'mobile'     => '98427 11001',
                 'license'    => 'TN33 20120004121',
                 'license_expiry' => '2028-06-15',
-                'address'    => '42, Gandhiji Road, Surampatti, Erode',
+                'address'    => 'Surampatti, Erode',
                 'attendant'  => 'S. Lakshmi',
                 'attendant_mobile' => '98428 22001',
-                'model'      => 'Cruiser (24 Seater)',
-                'capacity'   => 24,
+                'model'      => 'Van 1',
+                'capacity'   => 25,
                 'color'      => 'blue',
             ],
             'VAN II'  => [
-                'name'       => 'Van II',
-                'route_no'   => 'VAN-02',
+                'name'       => 'Van 2',
+                'route_no'   => 'Van 2',
                 'route_id'   => 5,
                 'vehicle_id' => 6,
                 'reg'        => 'TN-33-AX-1002',
@@ -726,16 +749,16 @@ class TransportController extends Controller
                 'mobile'     => '98427 11002',
                 'license'    => 'TN33 20140003892',
                 'license_expiry' => '2027-11-20',
-                'address'    => '15/3, Periyar Nagar, Erode',
+                'address'    => 'Periyar Nagar, Erode',
                 'attendant'  => 'M. Kalavathi',
                 'attendant_mobile' => '98428 22002',
-                'model'      => 'Cruiser (24 Seater)',
-                'capacity'   => 24,
+                'model'      => 'Van 2',
+                'capacity'   => 40,
                 'color'      => 'emerald',
             ],
             'VAN III' => [
-                'name'       => 'Van III',
-                'route_no'   => 'VAN-03',
+                'name'       => 'Van 3',
+                'route_no'   => 'Van 3',
                 'route_id'   => 6,
                 'vehicle_id' => 7,
                 'reg'        => 'TN-33-AX-1003',
@@ -744,16 +767,16 @@ class TransportController extends Controller
                 'mobile'     => '98427 11003',
                 'license'    => 'TN33 20150005431',
                 'license_expiry' => '2029-01-10',
-                'address'    => '88, Soolai Main Road, Erode',
+                'address'    => 'Soolai, Erode',
                 'attendant'  => 'R. Saraswathi',
                 'attendant_mobile' => '98428 22003',
-                'model'      => 'Cruiser (24 Seater)',
-                'capacity'   => 24,
+                'model'      => 'Van 3',
+                'capacity'   => 40,
                 'color'      => 'amber',
             ],
             'VAN IV'  => [
-                'name'       => 'Van IV',
-                'route_no'   => 'VAN-04',
+                'name'       => 'Van 4',
+                'route_no'   => 'Van 4',
                 'route_id'   => 7,
                 'vehicle_id' => 8,
                 'reg'        => 'TN-33-AX-1004',
@@ -762,16 +785,16 @@ class TransportController extends Controller
                 'mobile'     => '98427 11004',
                 'license'    => 'TN33 20160002198',
                 'license_expiry' => '2028-08-30',
-                'address'    => '27, Karungalpalayam, Erode',
+                'address'    => 'Karungalpalayam, Erode',
                 'attendant'  => 'P. Revathi',
                 'attendant_mobile' => '98428 22004',
-                'model'      => 'Cruiser (24 Seater)',
-                'capacity'   => 24,
+                'model'      => 'Van 4',
+                'capacity'   => 42,
                 'color'      => 'purple',
             ],
             'VAN V'   => [
-                'name'       => 'Van V',
-                'route_no'   => 'VAN-05',
+                'name'       => 'Van 5',
+                'route_no'   => 'Van 5',
                 'route_id'   => 8,
                 'vehicle_id' => 9,
                 'reg'        => 'TN-33-AX-1005',
@@ -780,11 +803,11 @@ class TransportController extends Controller
                 'mobile'     => '98427 11005',
                 'license'    => 'TN33 20100007812',
                 'license_expiry' => '2029-04-12',
-                'address'    => '12, Palayapalayam, Erode',
+                'address'    => 'Palayapalayam, Erode',
                 'attendant'  => 'D. Meena',
                 'attendant_mobile' => '98428 22005',
-                'model'      => 'Cruiser (24 Seater)',
-                'capacity'   => 24,
+                'model'      => 'Van 5',
+                'capacity'   => 25,
                 'color'      => 'rose',
             ],
         ];
@@ -1416,11 +1439,11 @@ class TransportController extends Controller
         $passengers = $passengersQuery->get()->groupBy('van_number');
 
         $vansMeta = [
-            'VAN I'   => ['title' => 'VAN I — RN Pudur / Bhavani / Thindal', 'vehicle' => 'TN33AX1001 (Cruiser 24)', 'route_no' => 'VAN-01'],
-            'VAN II'  => ['title' => 'VAN II — Moolapalayam / Periyar Nagar / Surampatti', 'vehicle' => 'TN33AX1002 (Cruiser 24)', 'route_no' => 'VAN-02'],
-            'VAN III' => ['title' => 'VAN III — Soolai / EPB Nagar / Mokkiayanpalayam', 'vehicle' => 'TN33AX1003 (Cruiser 24)', 'route_no' => 'VAN-03'],
-            'VAN IV'  => ['title' => 'VAN IV — Karungalpalayam / Thirunagar Colony', 'vehicle' => 'TN33AX1004 (Cruiser 24)', 'route_no' => 'VAN-04'],
-            'VAN V'   => ['title' => 'VAN V — Junior & KG Special Route', 'vehicle' => 'TN33AX1005 (Cruiser 24)', 'route_no' => 'VAN-05'],
+            'VAN I'   => ['title' => 'Van 1', 'vehicle' => 'Van 1', 'route_no' => 'Van 1'],
+            'VAN II'  => ['title' => 'Van 2', 'vehicle' => 'Van 2', 'route_no' => 'Van 2'],
+            'VAN III' => ['title' => 'Van 3', 'vehicle' => 'Van 3', 'route_no' => 'Van 3'],
+            'VAN IV'  => ['title' => 'Van 4', 'vehicle' => 'Van 4', 'route_no' => 'Van 4'],
+            'VAN V'   => ['title' => 'Van 5', 'vehicle' => 'Van 5', 'route_no' => 'Van 5'],
         ];
 
         $totalStudents = TransportRosterPassenger::where('is_active', true)->when($selectedVan !== 'all', fn($q) => $q->where('van_number', $selectedVan))->count();
@@ -1448,15 +1471,21 @@ class TransportController extends Controller
             ->get();
 
         $rows = [];
-        $rows[] = ['S.No', 'Van', 'Route Code', 'Bus Reg No', 'Student Name', 'Class', 'Area / Boarding Point', 'Morning Pickup', 'Evening Drop', 'Monthly Fare (₹)', 'Trip Type'];
+        $rows[] = ['S.No', 'Van', 'Student Name', 'Class', 'Area / Address', 'Morning Pickup', 'Evening Drop', 'Monthly Fare (₹)', 'Trip Type'];
+
+        $vanMap = [
+            'VAN I'   => 'Van 1',
+            'VAN II'  => 'Van 2',
+            'VAN III' => 'Van 3',
+            'VAN IV'  => 'Van 4',
+            'VAN V'   => 'Van 5',
+        ];
 
         foreach ($passengers as $p) {
             $isDropOnly = in_array(strtolower(trim((string)$p->morning_time)), ['eve', 'evening', '-', '']);
             $rows[] = [
                 $p->serial_no,
-                $p->van_number,
-                $p->route?->route_number ?? '—',
-                $p->vehicle?->vehicle_number ?? ($p->van_label ?? '—'),
+                $vanMap[$p->van_number] ?? $p->van_number,
                 $p->student_name,
                 $p->class_name,
                 $p->area,

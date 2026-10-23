@@ -35,7 +35,7 @@
         </h1>
       </div>
       <p class="text-sm text-slate-500 mt-1 ml-8">
-        Full student roster, assigned bus drivers, transit attendants, route stops, and schedule timings.
+        Student details neatly arranged from PDF into Van 1, Van 2, Van 3, Van 4, and Van 5.
       </p>
     </div>
 
@@ -99,9 +99,9 @@
         </svg>
       </div>
       <div>
-        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Passengers</p>
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Students</p>
         <h3 class="text-xl font-extrabold text-slate-900">{{ number_format($totalPassengers) }}</h3>
-        <p class="text-[11px] text-indigo-600 font-semibold mt-0.5">Across all 5 fleet vans</p>
+        <p class="text-[11px] text-indigo-600 font-semibold mt-0.5">From PDF Manifest</p>
       </div>
     </div>
 
@@ -112,9 +112,9 @@
         </svg>
       </div>
       <div>
-        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Fleet</p>
-        <h3 class="text-xl font-extrabold text-slate-900">5 School Vans</h3>
-        <p class="text-[11px] text-slate-500 mt-0.5">TN33AX1001 – TN33AX1005</p>
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Vans</p>
+        <h3 class="text-xl font-extrabold text-slate-900">5 Vans</h3>
+        <p class="text-[11px] text-slate-500 mt-0.5">Van 1, Van 2, Van 3, Van 4, Van 5</p>
       </div>
     </div>
 
@@ -162,23 +162,15 @@
         </span>
       </a>
 
-      {{-- Specific Van Tabs --}}
+      {{-- Specific Van Tabs (Van 1, Van 2, Van 3, Van 4, Van 5) --}}
       @foreach($vansList as $key => $vMeta)
       @php
         $count = $vanCounts->get($key)?->count ?? 0;
         $isActive = ($selectedVan === $key);
       @endphp
       <a href="{{ route('transport.roster', array_merge(request()->except('van'), ['van' => $key])) }}"
-         class="inline-flex items-center gap-3 px-3.5 py-2 rounded-xl text-xs transition whitespace-nowrap {{ $isActive ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-800 hover:bg-slate-100 border border-slate-200/70' }}">
-        <div class="text-left">
-          <div class="flex items-center gap-1.5">
-            <span class="font-extrabold text-xs {{ $isActive ? 'text-white' : 'text-slate-900' }}">{{ $vMeta['name'] }}</span>
-            <span class="text-[10px] px-1.5 py-0.2 rounded font-semibold {{ $isActive ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600' }}">{{ $vMeta['reg'] }}</span>
-          </div>
-          <div class="text-[10px] {{ $isActive ? 'text-slate-300' : 'text-slate-500' }} font-medium">
-            Driver: {{ $vMeta['driver'] }}
-          </div>
-        </div>
+         class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap {{ $isActive ? 'bg-slate-900 text-white shadow-md' : 'bg-slate-50 text-slate-800 hover:bg-slate-100 border border-slate-200/70' }}">
+        <span>{{ $vMeta['name'] }}</span>
         <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold {{ $isActive ? 'bg-amber-400 text-slate-950' : 'bg-slate-200 text-slate-700' }}">
           {{ $count }}
         </span>
@@ -187,205 +179,43 @@
     </div>
   </div>
 
-  {{-- ── WHEN A SPECIFIC VAN IS SELECTED: SHOWCASE DRIVER & VEHICLE & STOPS ── --}}
+  {{-- ── Van Header & Info (when specific Van is selected) ── --}}
   @if($activeVanMeta)
-  <div class="space-y-4">
-
-    {{-- 1. Prominent Driver & Vehicle Operations Card --}}
-    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-slate-800 relative overflow-hidden">
-      <div class="absolute -right-8 -top-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-
-        {{-- Left: Driver Identity --}}
-        <div class="flex items-start gap-4">
-          <div class="relative shrink-0">
-            <div class="w-16 h-16 rounded-2xl bg-indigo-600/30 border-2 border-indigo-400/40 text-indigo-300 flex items-center justify-center text-xl font-black shadow-inner">
-              {{ substr($activeVanMeta['driver'], 0, 1) }}
-            </div>
-            <span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-slate-900 flex items-center justify-center text-[10px] text-white" title="Verified Driver">
-              ✓
-            </span>
-          </div>
-
-          <div>
-            <div class="flex items-center gap-2.5 flex-wrap">
-              <span class="px-2.5 py-0.5 rounded-md text-[11px] font-extrabold bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 uppercase tracking-wide">
-                {{ $activeVanMeta['name'] }} Assigned Driver
-              </span>
-              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Police Verified
-              </span>
-            </div>
-
-            <h2 class="text-2xl font-black text-white mt-1.5 tracking-tight">
-              {{ $activeVanMeta['driver'] }}
-            </h2>
-
-            <div class="flex items-center gap-4 mt-2 text-xs text-slate-300 flex-wrap">
-              <a href="tel:{{ str_replace(' ', '', $activeVanMeta['mobile']) }}" class="inline-flex items-center gap-1.5 font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg border border-emerald-500/30 transition">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
-                <span>{{ $activeVanMeta['mobile'] }}</span>
-              </a>
-
-              <span class="text-slate-400">
-                DL: <strong class="text-slate-200">{{ $activeVanMeta['license'] }}</strong>
-                @if(!empty($activeVanMeta['license_expiry']))
-                  <span class="text-slate-400 text-[11px]">(Exp: {{ \Carbon\Carbon::parse($activeVanMeta['license_expiry'])->format('d M Y') }})</span>
-                @endif
-              </span>
-
-              @if(!empty($activeVanMeta['address']))
-              <span class="text-slate-400 truncate max-w-xs" title="{{ $activeVanMeta['address'] }}">
-                📍 {{ $activeVanMeta['address'] }}
-              </span>
-              @endif
-            </div>
-          </div>
-        </div>
-
-        {{-- Right: Transit Attendant & Bus Vehicle Profile --}}
-        <div class="flex items-center gap-4 lg:border-l lg:border-slate-800/80 lg:pl-6 flex-wrap">
-          {{-- Attendant --}}
-          <div class="bg-white/5 border border-white/10 rounded-2xl p-3 min-w-[160px]">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Transit Attendant</p>
-            <p class="font-bold text-sm text-white mt-0.5">{{ $activeVanMeta['attendant'] }}</p>
-            <a href="tel:{{ str_replace(' ', '', $activeVanMeta['attendant_mobile']) }}" class="text-[11px] text-indigo-300 hover:text-indigo-200 mt-0.5 block font-medium">
-              📞 {{ $activeVanMeta['attendant_mobile'] }}
-            </a>
-          </div>
-
-          {{-- Vehicle Card --}}
-          <div class="bg-white/5 border border-white/10 rounded-2xl p-3 min-w-[170px]">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assigned Bus</p>
-            <p class="font-extrabold text-sm text-amber-400 mt-0.5">{{ $activeVanMeta['reg'] }}</p>
-            <p class="text-[11px] text-slate-300 mt-0.5">{{ $activeVanMeta['model'] }}</p>
-          </div>
-
-          {{-- Quick Stats --}}
-          <div class="bg-white/5 border border-white/10 rounded-2xl p-3 min-w-[140px]">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Van Manifest</p>
-            <p class="font-black text-sm text-emerald-400 mt-0.5">{{ $passengers->count() }} Students</p>
-            <p class="text-[11px] text-slate-300 mt-0.5">₹{{ number_format($passengers->sum('amount')) }} / mo</p>
-          </div>
-        </div>
-
-      </div>
-
-      {{-- Route Path subtitle --}}
-      <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-300 flex-wrap gap-2">
-        <div class="flex items-center gap-2">
-          <span class="text-slate-400">Route Code:</span>
-          <span class="font-bold text-white">{{ $activeVanMeta['route_no'] }}</span>
-          <span class="text-slate-500">•</span>
-          <span class="text-slate-300 font-medium">{{ $activeVanMeta['route_name'] }}</span>
-        </div>
-        <div class="flex items-center gap-3 text-slate-400">
-          <span>Stops: <strong class="text-white">{{ $activeStops->count() }}</strong></span>
-          <span>•</span>
-          <span>Coverage: <strong class="text-emerald-400">Operational</strong></span>
-        </div>
-      </div>
-    </div>
-
-    {{-- 2. Boarding Stops Sequence Journey --}}
-    @if($activeStops->count() > 0)
-    <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs">
-      <div class="flex items-center justify-between mb-3 border-b border-slate-100 pb-2">
-        <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-          <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wide">
-            {{ $activeVanMeta['name'] }} Route Boarding Stops & Timetable ({{ $activeStops->count() }} Stops)
-          </h3>
-        </div>
-        <span class="text-xs text-slate-400">Boarding points in order of travel</span>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        @foreach($activeStops as $stop)
-        @php
-          $cleanStopName = strtoupper(trim($stop->name));
-          $studentCountAtStop = $stopStudentCounts[$cleanStopName] ?? 0;
-        @endphp
-        <div class="p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-indigo-300 hover:shadow-xs transition">
-          <div class="flex items-center justify-between gap-1 mb-1.5">
-            <span class="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-black flex items-center justify-center shrink-0">
-              {{ $stop->stop_order }}
-            </span>
-            <span class="text-[10px] font-bold px-1.5 py-0.2 rounded-full {{ $studentCountAtStop > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600' }}">
-              {{ $studentCountAtStop }} {{ Str::plural('Student', $studentCountAtStop) }}
-            </span>
-          </div>
-
-          <p class="font-extrabold text-xs text-slate-900 truncate" title="{{ $stop->name }}">
-            {{ $stop->name }}
-          </p>
-
-          <div class="mt-2 pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-600">
-            <span class="text-amber-700 font-semibold" title="Morning Pickup">
-              🌅 {{ $stop->pickup_time ? \Carbon\Carbon::parse($stop->pickup_time)->format('h:i A') : '—' }}
-            </span>
-            <span class="text-indigo-700 font-semibold" title="Evening Drop">
-              🌆 {{ $stop->drop_time ? \Carbon\Carbon::parse($stop->drop_time)->format('h:i A') : '—' }}
-            </span>
-          </div>
-
-          @if($stop->fare)
-          <div class="mt-1 text-right text-[10px] font-bold text-emerald-600">
-            ₹{{ number_format($stop->fare, 0) }} / mo
-          </div>
-          @endif
-        </div>
-        @endforeach
-      </div>
-    </div>
-    @endif
-
-  </div>
-  @else
-  {{-- ── ALL VANS FLEET OVERVIEW GRID (WHEN 'ALL VANS' IS SELECTED) ── --}}
-  <div class="space-y-3">
-    <div class="flex items-center justify-between">
-      <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-wide">
-        School Van Fleet Drivers & Route Profiles (Click any van to view Driver details & Students)
-      </h3>
-      <span class="text-xs text-slate-400">All 5 Vans Operational</span>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5">
-      @foreach($vansList as $vKey => $v)
-      @php
-        $vCount = $vanCounts->get($vKey)?->count ?? 0;
-        $vTotal = $vanCounts->get($vKey)?->sum_amount ?? 0;
-      @endphp
-      <a href="{{ route('transport.roster', ['van' => $vKey]) }}"
-         class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs hover:shadow-md hover:border-indigo-400 transition flex flex-col justify-between group">
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-50 text-indigo-700 group-hover:bg-indigo-600 group-hover:text-white transition">
-              {{ $v['name'] }}
-            </span>
-            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-              {{ $vCount }} Students
-            </span>
-          </div>
-
-          <p class="font-black text-sm text-slate-900">{{ $v['reg'] }}</p>
-          <p class="text-xs font-bold text-slate-700 mt-1">Driver: {{ $v['driver'] }}</p>
-          <p class="text-[11px] text-indigo-600 mt-0.5">📞 {{ $v['mobile'] }}</p>
-          <p class="text-[10px] text-slate-400 mt-2 line-clamp-2 leading-snug">{{ $v['route_name'] }}</p>
-        </div>
-
-        <div class="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-          <span class="font-bold text-emerald-600">₹{{ number_format($vTotal) }}</span>
-          <span class="text-indigo-600 font-semibold text-[11px] group-hover:translate-x-0.5 transition inline-flex items-center gap-0.5">
-            View &rarr;
+  <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/80 shadow-2xs">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wide">
+            {{ $activeVanMeta['name'] }}
+          </span>
+          <h2 class="text-lg font-extrabold text-slate-900">
+            Student Transport Details (from PDF)
+          </h2>
+          <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+            {{ $passengers->count() }} Students
           </span>
         </div>
-      </a>
-      @endforeach
+        <div class="flex items-center gap-3 mt-2 text-xs text-slate-600 flex-wrap">
+          <span class="inline-flex items-center gap-1 font-medium">
+            <span class="text-slate-400">Driver:</span>
+            <strong class="text-slate-800">{{ $activeVanMeta['driver'] }}</strong>
+            <a href="tel:{{ str_replace(' ', '', $activeVanMeta['mobile']) }}" class="text-indigo-600 hover:underline font-mono">({{ $activeVanMeta['mobile'] }})</a>
+          </span>
+          <span class="text-slate-300">•</span>
+          <span class="inline-flex items-center gap-1 font-medium">
+            <span class="text-slate-400">Transit Attendant:</span>
+            <strong class="text-slate-800">{{ $activeVanMeta['attendant'] }}</strong>
+            <a href="tel:{{ str_replace(' ', '', $activeVanMeta['attendant_mobile']) }}" class="text-indigo-600 hover:underline font-mono">({{ $activeVanMeta['attendant_mobile'] }})</a>
+          </span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4 shrink-0 sm:border-l sm:border-slate-100 sm:pl-4">
+        <div>
+          <p class="text-[10px] uppercase font-bold text-slate-400">Total Monthly Fare</p>
+          <p class="text-xl font-black text-emerald-700">₹{{ number_format($passengers->sum('amount'), 0) }}</p>
+        </div>
+      </div>
     </div>
   </div>
   @endif
@@ -395,7 +225,7 @@
     <form method="GET" action="{{ route('transport.roster') }}" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
       <input type="hidden" name="van" value="{{ $selectedVan }}">
 
-      {{-- Search bar --}}
+      {{-- Search bar with live instant filtering --}}
       <div class="sm:col-span-6 relative">
         <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -403,15 +233,17 @@
           </svg>
         </div>
         <input type="text"
+               id="livePassengerSearch"
                name="search"
                value="{{ $search }}"
-               placeholder="Search by student name, boarding stop/area, class..."
-               class="w-full pl-10 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50">
+               placeholder="Search by student name, class, area/address..."
+               class="w-full pl-10 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50"
+               onkeyup="filterPassengersTable()">
       </div>
 
       {{-- Trip Type Filter --}}
-      <div class="sm:col-span-3">
-        <select name="trip" class="w-full py-2 px-3 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-slate-50/50">
+      <div class="sm:col-span-4">
+        <select name="trip" onchange="this.form.submit()" class="w-full py-2 px-3 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-slate-50/50">
           <option value="all" {{ $tripFilter === 'all' ? 'selected' : '' }}>All Trip Types (Both & Drop Only)</option>
           <option value="both" {{ $tripFilter === 'both' ? 'selected' : '' }}>Both Morning & Evening Trips</option>
           <option value="drop_only" {{ $tripFilter === 'drop_only' ? 'selected' : '' }}>Evening Drop Only (EVE)</option>
@@ -419,7 +251,7 @@
       </div>
 
       {{-- Submit & Reset --}}
-      <div class="sm:col-span-3 flex items-center gap-2">
+      <div class="sm:col-span-2 flex items-center gap-2">
         <button type="submit" class="flex-1 py-2 px-3 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-xl transition shadow-2xs">
           Filter
         </button>
@@ -432,19 +264,19 @@
     </form>
   </div>
 
-  {{-- ── Master Roster Table ─────────────────────────────────── --}}
+  {{-- ── Master Roster Table (PDF Details Layout) ───────────── --}}
   <div class="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
     <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
       <div class="flex items-center gap-3">
         <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wide">
           @if($selectedVan === 'all')
-            All Vans Manifest — {{ $passengers->count() }} Students
+            All Vans (171 Students from PDF)
           @else
-            {{ $selectedVan }} Student Manifest — {{ $passengers->count() }} Students ({{ $vansList[$selectedVan]['reg'] ?? '' }})
+            {{ $vansList[$selectedVan]['name'] ?? $selectedVan }} — {{ $passengers->count() }} Students
           @endif
         </h2>
-        <span class="text-xs px-2.5 py-0.5 bg-indigo-50 text-indigo-700 font-semibold rounded-full">
-          Total Fee: ₹{{ number_format($passengers->sum('amount')) }}
+        <span class="text-xs px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold rounded-full">
+          Total Amount: ₹{{ number_format($passengers->sum('amount')) }}
         </span>
       </div>
       <div class="text-xs text-slate-400">
@@ -453,17 +285,19 @@
     </div>
 
     <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
+      <table class="w-full text-left border-collapse" id="rosterMasterTable">
         <thead>
           <tr class="bg-slate-50/75 border-b border-slate-200/80 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
             <th class="py-3.5 px-4 w-12 text-center">#</th>
             <th class="py-3.5 px-4">Student Name</th>
-            <th class="py-3.5 px-3">Class</th>
-            <th class="py-3.5 px-4">Boarding Area / Stop</th>
-            <th class="py-3.5 px-3">Pickup Time</th>
-            <th class="py-3.5 px-3">Drop Time</th>
-            <th class="py-3.5 px-4 text-right">Monthly Fee</th>
-            <th class="py-3.5 px-4">Assigned Van</th>
+            <th class="py-3.5 px-3 text-center">Class</th>
+            <th class="py-3.5 px-4">Area / Address</th>
+            <th class="py-3.5 px-3 text-center">Morning Pickup</th>
+            <th class="py-3.5 px-3 text-center">Evening Drop</th>
+            <th class="py-3.5 px-4 text-right">Amount (₹)</th>
+            @if($selectedVan === 'all')
+              <th class="py-3.5 px-4 text-center">Van</th>
+            @endif
             <th class="py-3.5 px-4 text-center w-20">Actions</th>
           </tr>
         </thead>
@@ -472,7 +306,7 @@
           @php
             $isDropOnly = in_array(strtolower(trim((string)$p->morning_time)), ['eve', 'evening', '-', '']);
           @endphp
-          <tr class="hover:bg-slate-50/70 transition">
+          <tr class="hover:bg-slate-50/70 transition passenger-row">
             {{-- Serial Number --}}
             <td class="py-3 px-4 text-center font-semibold text-slate-400">
               {{ $p->serial_no }}
@@ -547,23 +381,24 @@
               ₹{{ number_format($p->amount, 0) }}
             </td>
 
-            {{-- Assigned Van --}}
-            <td class="py-3 px-4">
+            {{-- Assigned Van (shown when All Vans is selected) --}}
+            @if($selectedVan === 'all')
+            <td class="py-3 px-4 text-center">
               @php
-                $badgeColors = [
-                  'VAN I'   => 'bg-blue-50 text-blue-700 border-blue-200',
-                  'VAN II'  => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                  'VAN III' => 'bg-amber-50 text-amber-800 border-amber-200',
-                  'VAN IV'  => 'bg-purple-50 text-purple-700 border-purple-200',
-                  'VAN V'   => 'bg-rose-50 text-rose-700 border-rose-200',
+                $vanLabelMap = [
+                  'VAN I'   => 'Van 1',
+                  'VAN II'  => 'Van 2',
+                  'VAN III' => 'Van 3',
+                  'VAN IV'  => 'Van 4',
+                  'VAN V'   => 'Van 5',
                 ];
-                $color = $badgeColors[$p->van_number] ?? 'bg-slate-50 text-slate-700 border-slate-200';
+                $vanName = $vanLabelMap[$p->van_number] ?? $p->van_number;
               @endphp
-              <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-semibold {{ $color }}">
-                <span>{{ $p->van_number }}</span>
-                <span class="opacity-60 text-[10px]">({{ $p->vehicle?->vehicle_number ?? ($vansList[$p->van_number]['reg'] ?? '') }})</span>
-              </div>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black bg-slate-100 text-slate-800 border border-slate-200">
+                {{ $vanName }}
+              </span>
             </td>
+            @endif
 
             {{-- Actions --}}
             <td class="py-3 px-4 text-center">
@@ -626,7 +461,7 @@
             <td class="py-3 px-4 text-right text-emerald-700 font-extrabold">
               ₹{{ number_format($passengers->sum('amount')) }}
             </td>
-            <td colspan="2" class="py-3 px-4 text-slate-400 font-normal">
+            <td colspan="{{ $selectedVan === 'all' ? 3 : 2 }}" class="py-3 px-4 text-slate-400 font-normal">
               Monthly Manifest Total
             </td>
           </tr>
@@ -635,6 +470,21 @@
       </table>
     </div>
   </div>
+
+  <script>
+    function filterPassengersTable() {
+      const q = document.getElementById('livePassengerSearch').value.toLowerCase().trim();
+      const rows = document.querySelectorAll('#rosterMasterTable tbody tr.passenger-row');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        if (!q || text.includes(q)) {
+          r.style.display = '';
+        } else {
+          r.style.display = 'none';
+        }
+      });
+    }
+  </script>
 
   {{-- ── Add Passenger Modal ─────────────────────────────────── --}}
   <div x-show="showAddModal"
@@ -659,13 +509,13 @@
 
         {{-- Van Selector --}}
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Select Van / Bus <span class="text-rose-500">*</span></label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Select Van <span class="text-rose-500">*</span></label>
           <select name="van_number" required class="w-full py-2 px-3 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500">
-            <option value="VAN I">VAN I — RN Pudur / Bhavani / Thindal (TN-33-AX-1001 • S. Murugesan)</option>
-            <option value="VAN II">VAN II — Moolapalayam / Periyar Nagar / Surampatti (TN-33-AX-1002 • K. Raman)</option>
-            <option value="VAN III">VAN III — Soolai / EPB Nagar / Mokkiayanpalayam (TN-33-AX-1003 • P. Velusamy)</option>
-            <option value="VAN IV">VAN IV — Karungalpalayam / Thirunagar Colony (TN-33-AX-1004 • M. Senthil Kumar)</option>
-            <option value="VAN V">VAN V — Junior & KG Special Route (TN-33-AX-1005 • A. Thangavel)</option>
+            <option value="VAN I">Van 1</option>
+            <option value="VAN II">Van 2</option>
+            <option value="VAN III">Van 3</option>
+            <option value="VAN IV">Van 4</option>
+            <option value="VAN V">Van 5</option>
           </select>
         </div>
 
@@ -742,13 +592,13 @@
 
         {{-- Van Selector --}}
         <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">Select Van / Bus <span class="text-rose-500">*</span></label>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Select Van <span class="text-rose-500">*</span></label>
           <select name="van_number" x-model="editData.van_number" required class="w-full py-2 px-3 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500">
-            <option value="VAN I">VAN I — RN Pudur / Bhavani / Thindal (TN-33-AX-1001 • S. Murugesan)</option>
-            <option value="VAN II">VAN II — Moolapalayam / Periyar Nagar / Surampatti (TN-33-AX-1002 • K. Raman)</option>
-            <option value="VAN III">VAN III — Soolai / EPB Nagar / Mokkiayanpalayam (TN-33-AX-1003 • P. Velusamy)</option>
-            <option value="VAN IV">VAN IV — Karungalpalayam / Thirunagar Colony (TN-33-AX-1004 • M. Senthil Kumar)</option>
-            <option value="VAN V">VAN V — Junior & KG Special Route (TN-33-AX-1005 • A. Thangavel)</option>
+            <option value="VAN I">Van 1</option>
+            <option value="VAN II">Van 2</option>
+            <option value="VAN III">Van 3</option>
+            <option value="VAN IV">Van 4</option>
+            <option value="VAN V">Van 5</option>
           </select>
         </div>
 
