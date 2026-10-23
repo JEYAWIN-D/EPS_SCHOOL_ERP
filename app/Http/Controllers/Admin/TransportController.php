@@ -697,39 +697,112 @@ class TransportController extends Controller
             'VAN I'   => [
                 'name'       => 'Van I',
                 'route_no'   => 'VAN-01',
-                'reg'        => 'TN33AX1001',
-                'route_name' => 'RN Pudur / Bhavani / Thindal',
+                'route_id'   => 4,
+                'vehicle_id' => 5,
+                'reg'        => 'TN-33-AX-1001',
+                'route_name' => 'RN Pudur / Bhavani / Thindal Route',
+                'driver'     => 'S. Murugesan',
+                'mobile'     => '98427 11001',
+                'license'    => 'TN33 20120004121',
+                'license_expiry' => '2028-06-15',
+                'address'    => '42, Gandhiji Road, Surampatti, Erode',
+                'attendant'  => 'S. Lakshmi',
+                'attendant_mobile' => '98428 22001',
+                'model'      => 'Cruiser (24 Seater)',
+                'capacity'   => 24,
                 'color'      => 'blue',
             ],
             'VAN II'  => [
                 'name'       => 'Van II',
                 'route_no'   => 'VAN-02',
-                'reg'        => 'TN33AX1002',
+                'route_id'   => 5,
+                'vehicle_id' => 6,
+                'reg'        => 'TN-33-AX-1002',
                 'route_name' => 'Moolapalayam / Periyar Nagar / Surampatti',
+                'driver'     => 'K. Raman',
+                'mobile'     => '98427 11002',
+                'license'    => 'TN33 20140003892',
+                'license_expiry' => '2027-11-20',
+                'address'    => '15/3, Periyar Nagar, Erode',
+                'attendant'  => 'M. Kalavathi',
+                'attendant_mobile' => '98428 22002',
+                'model'      => 'Cruiser (24 Seater)',
+                'capacity'   => 24,
                 'color'      => 'emerald',
             ],
             'VAN III' => [
                 'name'       => 'Van III',
                 'route_no'   => 'VAN-03',
-                'reg'        => 'TN33AX1003',
+                'route_id'   => 6,
+                'vehicle_id' => 7,
+                'reg'        => 'TN-33-AX-1003',
                 'route_name' => 'Soolai / EPB Nagar / Mokkiayanpalayam',
+                'driver'     => 'P. Velusamy',
+                'mobile'     => '98427 11003',
+                'license'    => 'TN33 20150005431',
+                'license_expiry' => '2029-01-10',
+                'address'    => '88, Soolai Main Road, Erode',
+                'attendant'  => 'R. Saraswathi',
+                'attendant_mobile' => '98428 22003',
+                'model'      => 'Cruiser (24 Seater)',
+                'capacity'   => 24,
                 'color'      => 'amber',
             ],
             'VAN IV'  => [
                 'name'       => 'Van IV',
                 'route_no'   => 'VAN-04',
-                'reg'        => 'TN33AX1004',
+                'route_id'   => 7,
+                'vehicle_id' => 8,
+                'reg'        => 'TN-33-AX-1004',
                 'route_name' => 'Karungalpalayam / Thirunagar Colony',
+                'driver'     => 'M. Senthil Kumar',
+                'mobile'     => '98427 11004',
+                'license'    => 'TN33 20160002198',
+                'license_expiry' => '2028-08-30',
+                'address'    => '27, Karungalpalayam, Erode',
+                'attendant'  => 'P. Revathi',
+                'attendant_mobile' => '98428 22004',
+                'model'      => 'Cruiser (24 Seater)',
+                'capacity'   => 24,
                 'color'      => 'purple',
             ],
             'VAN V'   => [
                 'name'       => 'Van V',
                 'route_no'   => 'VAN-05',
-                'reg'        => 'TN33AX1005',
+                'route_id'   => 8,
+                'vehicle_id' => 9,
+                'reg'        => 'TN-33-AX-1005',
                 'route_name' => 'Junior & KG Special Route',
+                'driver'     => 'A. Thangavel',
+                'mobile'     => '98427 11005',
+                'license'    => 'TN33 20100007812',
+                'license_expiry' => '2029-04-12',
+                'address'    => '12, Palayapalayam, Erode',
+                'attendant'  => 'D. Meena',
+                'attendant_mobile' => '98428 22005',
+                'model'      => 'Cruiser (24 Seater)',
+                'capacity'   => 24,
                 'color'      => 'rose',
             ],
         ];
+
+        // Sync with actual DB vehicles
+        $dbVehicles = Vehicle::whereIn('id', [5,6,7,8,9])->get()->keyBy('id');
+        foreach ($vansList as $k => &$vInfo) {
+            if (isset($dbVehicles[$vInfo['vehicle_id']])) {
+                $veh = $dbVehicles[$vInfo['vehicle_id']];
+                if ($veh->driver_name) $vInfo['driver'] = $veh->driver_name;
+                if ($veh->driver_mobile) $vInfo['mobile'] = $veh->driver_mobile;
+                if ($veh->driver_license) $vInfo['license'] = $veh->driver_license;
+                if ($veh->driver_license_expiry) $vInfo['license_expiry'] = $veh->driver_license_expiry;
+                if ($veh->driver_address) $vInfo['address'] = $veh->driver_address;
+                if ($veh->attendant_name) $vInfo['attendant'] = $veh->attendant_name;
+                if ($veh->attendant_mobile) $vInfo['attendant_mobile'] = $veh->attendant_mobile;
+                if ($veh->vehicle_number) $vInfo['reg'] = $veh->vehicle_number;
+                if ($veh->capacity) $vInfo['capacity'] = $veh->capacity;
+            }
+        }
+        unset($vInfo);
 
         // Overall KPIs
         $totalPassengers = TransportRosterPassenger::where('is_active', true)->count();
@@ -745,6 +818,34 @@ class TransportController extends Controller
             ->groupBy('van_number')
             ->get()
             ->keyBy('van_number');
+
+        // Active Van Details (when user clicks Van 1, Van 2, etc.)
+        $activeVanMeta = $vansList[$selectedVan] ?? null;
+        $activeRoute = null;
+        $activeVehicle = null;
+        $activeStops = collect();
+        $stopStudentCounts = [];
+
+        if ($activeVanMeta) {
+            $activeRoute = TransportRoute::find($activeVanMeta['route_id']);
+            $activeVehicle = $dbVehicles[$activeVanMeta['vehicle_id']] ?? null;
+            $activeStops = TransportStop::where('route_id', $activeVanMeta['route_id'])
+                ->orderBy('stop_order')
+                ->get();
+
+            // Count students per stop for this van
+            $vanPassengerAreas = TransportRosterPassenger::where('is_active', true)
+                ->where('van_number', $selectedVan)
+                ->pluck('area');
+            
+            foreach ($activeStops as $st) {
+                $cleanStopName = strtoupper(trim($st->name));
+                $stopStudentCounts[$cleanStopName] = $vanPassengerAreas->filter(function($a) use ($cleanStopName) {
+                    $cleanA = strtoupper(trim($a));
+                    return $cleanA === $cleanStopName || str_contains($cleanA, $cleanStopName) || str_contains($cleanStopName, $cleanA);
+                })->count();
+            }
+        }
 
         // Query passengers
         $query = TransportRosterPassenger::with(['student', 'vehicle', 'route'])
@@ -778,6 +879,11 @@ class TransportController extends Controller
             'passengers',
             'vansList',
             'selectedVan',
+            'activeVanMeta',
+            'activeRoute',
+            'activeVehicle',
+            'activeStops',
+            'stopStudentCounts',
             'search',
             'tripFilter',
             'totalPassengers',

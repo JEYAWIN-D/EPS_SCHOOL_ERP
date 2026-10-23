@@ -980,8 +980,16 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/bus-attendance',                [TransportController::class, 'busAttendance'])->name('bus-attendance');
         Route::post('/bus-attendance',               [TransportController::class, 'saveBusAttendance'])->name('bus-attendance.save');
         Route::get('/bus-attendance/report',         [TransportController::class, 'busAttendanceReport'])->name('bus-attendance.report');
-        Route::get('/bus-attendance/report/excel',   [TransportController::class, 'busAttendanceReportExcel'])->name('bus-attendance.report.excel');
     });
+
+    // Admin URL aliases for transport
+    Route::redirect('/admin/transport', '/transport');
+    Route::redirect('/admin/transport/roster', '/transport/roster');
+    Route::redirect('/admin/transport/routes', '/transport/routes');
+    Route::redirect('/admin/transport/vehicles', '/transport/vehicles');
+    Route::redirect('/admin/transport/drivers', '/transport/drivers');
+    Route::redirect('/admin/transport/stops', '/transport/stops');
+    Route::redirect('/admin/transport/allotment', '/transport/allotment');
 
     // ── Module 10 — Hostel ────────────────────────────────
     Route::middleware('permission:view hostel')->prefix('hostel')->name('hostel.')->group(function () {
