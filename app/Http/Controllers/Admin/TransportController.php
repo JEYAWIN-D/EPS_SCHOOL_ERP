@@ -11,6 +11,7 @@ use App\Models\Section;
 use App\Models\StudentEnrollment;
 use App\Models\TransportAllotment;
 use App\Models\TransportAttendant;
+use App\Models\TransportRosterPassenger;
 use App\Models\TransportRoute;
 use App\Models\TransportStop;
 use App\Models\Vehicle;
@@ -29,11 +30,13 @@ class TransportController extends Controller
 {
     public function index()
     {
-        $cachedData = Cache::remember('transport_index_stats_v1', 120, function () {
+        $cachedData = Cache::remember('transport_index_stats_v3', 120, function () {
+            $rosterStudents = TransportRosterPassenger::where('is_active', true)->count();
+            $allotmentStudents = TransportAllotment::where('is_active', true)->count();
             $stats = [
                 'routes'   => TransportRoute::where('is_active', true)->count(),
                 'vehicles' => Vehicle::where('is_active', true)->count(),
-                'students' => TransportAllotment::where('is_active', true)->count(),
+                'students' => max($rosterStudents, $allotmentStudents),
             ];
 
             try {
@@ -684,10 +687,195 @@ class TransportController extends Controller
         return back()->with('success', 'Fuel log added.');
     }
 
-    public function roster()
+    public function roster(Request $request)
     {
-        $routes   = TransportRoute::with(['vehicle', 'stops', 'allotments.enrollment.student'])->where('is_active', true)->get();
-        return view('transport.roster', compact('routes'));
+        $selectedVan = $request->get('van', 'all');
+        $search = trim((string)$request->get('search', ''));
+        $tripFilter = $request->get('trip', 'all');
+
+        $vansList = [
+            'VAN I'   => [
+                'name'       => 'Van I',
+                'route_no'   => 'VAN-01',
+                'reg'        => 'TN33AX1001',
+                'route_name' => 'RN Pudur / Bhavani / Thindal',
+                'color'      => 'blue',
+            ],
+            'VAN II'  => [
+                'name'       => 'Van II',
+                'route_no'   => 'VAN-02',
+                'reg'        => 'TN33AX1002',
+                'route_name' => 'Moolapalayam / Periyar Nagar / Surampatti',
+                'color'      => 'emerald',
+            ],
+            'VAN III' => [
+                'name'       => 'Van III',
+                'route_no'   => 'VAN-03',
+                'reg'        => 'TN33AX1003',
+                'route_name' => 'Soolai / EPB Nagar / Mokkiayanpalayam',
+                'color'      => 'amber',
+            ],
+            'VAN IV'  => [
+                'name'       => 'Van IV',
+                'route_no'   => 'VAN-04',
+                'reg'        => 'TN33AX1004',
+                'route_name' => 'Karungalpalayam / Thirunagar Colony',
+                'color'      => 'purple',
+            ],
+            'VAN V'   => [
+                'name'       => 'Van V',
+                'route_no'   => 'VAN-05',
+                'reg'        => 'TN33AX1005',
+                'route_name' => 'Junior & KG Special Route',
+                'color'      => 'rose',
+            ],
+        ];
+
+        // Overall KPIs
+        $totalPassengers = TransportRosterPassenger::where('is_active', true)->count();
+        $totalBilling = TransportRosterPassenger::where('is_active', true)->sum('amount');
+        $dropOnlyCount = TransportRosterPassenger::where('is_active', true)
+            ->whereIn(DB::raw('LOWER(morning_time)'), ['eve', 'evening', '-', ''])
+            ->count();
+        $bothTripsCount = $totalPassengers - $dropOnlyCount;
+
+        // Counts per van
+        $vanCounts = TransportRosterPassenger::where('is_active', true)
+            ->selectRaw('van_number, COUNT(*) as count, SUM(amount) as sum_amount')
+            ->groupBy('van_number')
+            ->get()
+            ->keyBy('van_number');
+
+        // Query passengers
+        $query = TransportRosterPassenger::with(['student', 'vehicle', 'route'])
+            ->where('is_active', true)
+            ->when($selectedVan !== 'all', fn($q) => $q->where('van_number', $selectedVan))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('student_name', 'like', "%{$search}%")
+                        ->orWhere('area', 'like', "%{$search}%")
+                        ->orWhere('class_name', 'like', "%{$search}%")
+                        ->orWhere('van_number', 'like', "%{$search}%");
+                });
+            })
+            ->when($tripFilter === 'drop_only', fn($q) => $q->whereIn(DB::raw('LOWER(morning_time)'), ['eve', 'evening', '-', '']))
+            ->when($tripFilter === 'both', fn($q) => $q->whereNotIn(DB::raw('LOWER(morning_time)'), ['eve', 'evening', '-', '']));
+
+        $passengers = $query->orderByRaw("CASE van_number 
+                WHEN 'VAN I' THEN 1 
+                WHEN 'VAN II' THEN 2 
+                WHEN 'VAN III' THEN 3 
+                WHEN 'VAN IV' THEN 4 
+                WHEN 'VAN V' THEN 5 
+                ELSE 6 END")
+            ->orderBy('serial_no')
+            ->get();
+
+        $routes   = TransportRoute::with(['vehicle', 'stops'])->where('is_active', true)->get();
+        $vehicles = Vehicle::where('is_active', true)->get();
+
+        return view('transport.roster', compact(
+            'passengers',
+            'vansList',
+            'selectedVan',
+            'search',
+            'tripFilter',
+            'totalPassengers',
+            'totalBilling',
+            'dropOnlyCount',
+            'bothTripsCount',
+            'vanCounts',
+            'routes',
+            'vehicles'
+        ));
+    }
+
+    public function storeRosterPassenger(Request $request)
+    {
+        $validated = $request->validate([
+            'van_number'   => 'required|string|in:VAN I,VAN II,VAN III,VAN IV,VAN V',
+            'student_name' => 'required|string|max:150',
+            'class_name'   => 'required|string|max:50',
+            'area'         => 'required|string|max:150',
+            'amount'       => 'required|numeric|min:0',
+            'morning_time' => 'nullable|string|max:50',
+            'evening_time' => 'nullable|string|max:50',
+        ]);
+
+        $routeMap = [
+            'VAN I'   => ['route_id' => 4, 'vehicle_id' => 5, 'label' => 'Van I (TN33AX1001)'],
+            'VAN II'  => ['route_id' => 5, 'vehicle_id' => 6, 'label' => 'Van II (TN33AX1002)'],
+            'VAN III' => ['route_id' => 6, 'vehicle_id' => 7, 'label' => 'Van III (TN33AX1003)'],
+            'VAN IV'  => ['route_id' => 7, 'vehicle_id' => 8, 'label' => 'Van IV (TN33AX1004)'],
+            'VAN V'   => ['route_id' => 8, 'vehicle_id' => 9, 'label' => 'Van V (TN33AX1005 - Junior & KG)'],
+        ];
+
+        $nextSerial = (int) TransportRosterPassenger::where('van_number', $validated['van_number'])->max('serial_no') + 1;
+        $map = $routeMap[$validated['van_number']] ?? [];
+
+        TransportRosterPassenger::create([
+            'van_number'   => $validated['van_number'],
+            'van_label'    => $map['label'] ?? $validated['van_number'],
+            'route_id'     => $map['route_id'] ?? null,
+            'vehicle_id'   => $map['vehicle_id'] ?? null,
+            'serial_no'    => $nextSerial,
+            'student_name' => strtoupper(trim($validated['student_name'])),
+            'class_name'   => strtoupper(trim($validated['class_name'])),
+            'area'         => strtoupper(trim($validated['area'])),
+            'amount'       => $validated['amount'],
+            'morning_time' => $validated['morning_time'] ?: '—',
+            'evening_time' => $validated['evening_time'] ?: '—',
+            'is_active'    => true,
+        ]);
+
+        return back()->with('success', "Passenger {$validated['student_name']} added to {$validated['van_number']} roster.");
+    }
+
+    public function updateRosterPassenger(Request $request, int $id)
+    {
+        $passenger = TransportRosterPassenger::findOrFail($id);
+        $validated = $request->validate([
+            'van_number'   => 'required|string|in:VAN I,VAN II,VAN III,VAN IV,VAN V',
+            'student_name' => 'required|string|max:150',
+            'class_name'   => 'required|string|max:50',
+            'area'         => 'required|string|max:150',
+            'amount'       => 'required|numeric|min:0',
+            'morning_time' => 'nullable|string|max:50',
+            'evening_time' => 'nullable|string|max:50',
+        ]);
+
+        $routeMap = [
+            'VAN I'   => ['route_id' => 4, 'vehicle_id' => 5, 'label' => 'Van I (TN33AX1001)'],
+            'VAN II'  => ['route_id' => 5, 'vehicle_id' => 6, 'label' => 'Van II (TN33AX1002)'],
+            'VAN III' => ['route_id' => 6, 'vehicle_id' => 7, 'label' => 'Van III (TN33AX1003)'],
+            'VAN IV'  => ['route_id' => 7, 'vehicle_id' => 8, 'label' => 'Van IV (TN33AX1004)'],
+            'VAN V'   => ['route_id' => 8, 'vehicle_id' => 9, 'label' => 'Van V (TN33AX1005 - Junior & KG)'],
+        ];
+
+        $map = $routeMap[$validated['van_number']] ?? [];
+
+        $passenger->update([
+            'van_number'   => $validated['van_number'],
+            'van_label'    => $map['label'] ?? $passenger->van_label,
+            'route_id'     => $map['route_id'] ?? $passenger->route_id,
+            'vehicle_id'   => $map['vehicle_id'] ?? $passenger->vehicle_id,
+            'student_name' => strtoupper(trim($validated['student_name'])),
+            'class_name'   => strtoupper(trim($validated['class_name'])),
+            'area'         => strtoupper(trim($validated['area'])),
+            'amount'       => $validated['amount'],
+            'morning_time' => $validated['morning_time'] ?: '—',
+            'evening_time' => $validated['evening_time'] ?: '—',
+        ]);
+
+        return back()->with('success', "Passenger {$passenger->student_name} updated successfully.");
+    }
+
+    public function deleteRosterPassenger(int $id)
+    {
+        $passenger = TransportRosterPassenger::findOrFail($id);
+        $name = $passenger->student_name;
+        $passenger->delete();
+        return back()->with('success', "Passenger {$name} removed from roster.");
     }
 
     public function createVehicle()
@@ -1101,38 +1289,77 @@ class TransportController extends Controller
 
     public function rosterPdf(Request $request)
     {
-        $routes = TransportRoute::with(['vehicle', 'stops', 'allotments.enrollment.student'])->where('is_active', true)->get();
+        $selectedVan = $request->get('van', 'all');
         $school = SchoolSetting::first();
-        $pdf = Pdf::loadView('pdf.transport-roster', compact('routes', 'school'));
+
+        $passengersQuery = TransportRosterPassenger::with(['route', 'vehicle'])
+            ->where('is_active', true)
+            ->when($selectedVan !== 'all', fn($q) => $q->where('van_number', $selectedVan))
+            ->orderByRaw("CASE van_number 
+                WHEN 'VAN I' THEN 1 
+                WHEN 'VAN II' THEN 2 
+                WHEN 'VAN III' THEN 3 
+                WHEN 'VAN IV' THEN 4 
+                WHEN 'VAN V' THEN 5 
+                ELSE 6 END")
+            ->orderBy('serial_no');
+
+        $passengers = $passengersQuery->get()->groupBy('van_number');
+
+        $vansMeta = [
+            'VAN I'   => ['title' => 'VAN I — RN Pudur / Bhavani / Thindal', 'vehicle' => 'TN33AX1001 (Cruiser 24)', 'route_no' => 'VAN-01'],
+            'VAN II'  => ['title' => 'VAN II — Moolapalayam / Periyar Nagar / Surampatti', 'vehicle' => 'TN33AX1002 (Cruiser 24)', 'route_no' => 'VAN-02'],
+            'VAN III' => ['title' => 'VAN III — Soolai / EPB Nagar / Mokkiayanpalayam', 'vehicle' => 'TN33AX1003 (Cruiser 24)', 'route_no' => 'VAN-03'],
+            'VAN IV'  => ['title' => 'VAN IV — Karungalpalayam / Thirunagar Colony', 'vehicle' => 'TN33AX1004 (Cruiser 24)', 'route_no' => 'VAN-04'],
+            'VAN V'   => ['title' => 'VAN V — Junior & KG Special Route', 'vehicle' => 'TN33AX1005 (Cruiser 24)', 'route_no' => 'VAN-05'],
+        ];
+
+        $totalStudents = TransportRosterPassenger::where('is_active', true)->when($selectedVan !== 'all', fn($q) => $q->where('van_number', $selectedVan))->count();
+        $totalFare = TransportRosterPassenger::where('is_active', true)->when($selectedVan !== 'all', fn($q) => $q->where('van_number', $selectedVan))->sum('amount');
+
+        $pdf = Pdf::loadView('pdf.transport-roster', compact('passengers', 'vansMeta', 'school', 'selectedVan', 'totalStudents', 'totalFare'));
         $pdf->setPaper('A4', 'landscape');
-        return $pdf->stream('transport-roster-' . now()->format('Y-m-d') . '.pdf');
+        return $pdf->stream('transport-roster-' . ($selectedVan !== 'all' ? str_replace(' ', '-', strtolower($selectedVan)) . '-' : '') . now()->format('Y-m-d') . '.pdf');
     }
 
     public function rosterExcel(Request $request)
     {
-        $routes = TransportRoute::with(['vehicle', 'stops', 'allotments.enrollment.student'])->where('is_active', true)->get();
+        $selectedVan = $request->get('van', 'all');
+        $passengers = TransportRosterPassenger::with(['route', 'vehicle'])
+            ->where('is_active', true)
+            ->when($selectedVan !== 'all', fn($q) => $q->where('van_number', $selectedVan))
+            ->orderByRaw("CASE van_number 
+                WHEN 'VAN I' THEN 1 
+                WHEN 'VAN II' THEN 2 
+                WHEN 'VAN III' THEN 3 
+                WHEN 'VAN IV' THEN 4 
+                WHEN 'VAN V' THEN 5 
+                ELSE 6 END")
+            ->orderBy('serial_no')
+            ->get();
+
         $rows = [];
-        foreach ($routes as $route) {
-            $rows[] = ['=== ' . strtoupper($route->route_name) . ' ===' , '', '', ''];
-            $rows[] = ['Stop', 'Pickup Time', 'Student', 'Class'];
-            foreach ($route->stops->sortBy('sequence') as $stop) {
-                $studentsAtStop = $route->allotments->filter(fn($a) => $a->stop_id == $stop->id);
-                if ($studentsAtStop->isEmpty()) {
-                    $rows[] = [$stop->stop_name, $stop->pickup_time ?? '—', '(No students)', ''];
-                } else {
-                    foreach ($studentsAtStop as $allotment) {
-                        $rows[] = [
-                            $stop->stop_name,
-                            $stop->pickup_time ?? '—',
-                            $allotment->enrollment?->student?->full_name ?? '—',
-                            $allotment->enrollment?->class?->name ?? '—',
-                        ];
-                    }
-                }
-            }
-            $rows[] = ['', '', '', ''];
+        $rows[] = ['S.No', 'Van', 'Route Code', 'Bus Reg No', 'Student Name', 'Class', 'Area / Boarding Point', 'Morning Pickup', 'Evening Drop', 'Monthly Fare (₹)', 'Trip Type'];
+
+        foreach ($passengers as $p) {
+            $isDropOnly = in_array(strtolower(trim((string)$p->morning_time)), ['eve', 'evening', '-', '']);
+            $rows[] = [
+                $p->serial_no,
+                $p->van_number,
+                $p->route?->route_number ?? '—',
+                $p->vehicle?->vehicle_number ?? ($p->van_label ?? '—'),
+                $p->student_name,
+                $p->class_name,
+                $p->area,
+                $isDropOnly ? 'Evening Drop Only' : ($p->morning_time ?: '—'),
+                $p->evening_time ?: '—',
+                number_format($p->amount, 2),
+                $isDropOnly ? 'Evening Drop Only' : 'Both Morning & Evening',
+            ];
         }
-        return Excel::download(new ArrayExport($rows, ['Stop / Info', 'Time', 'Student', 'Class']), 'transport-roster-' . now()->format('Y-m-d') . '.xlsx');
+
+        $filename = 'transport-roster-' . ($selectedVan !== 'all' ? str_replace(' ', '-', strtolower($selectedVan)) . '-' : '') . now()->format('Y-m-d') . '.xlsx';
+        return Excel::download(new ArrayExport($rows), $filename);
     }
 
     /* ------------------------------------------------------------------ */

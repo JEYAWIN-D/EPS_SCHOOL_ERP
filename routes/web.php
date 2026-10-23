@@ -968,6 +968,10 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         // Roster exports
         Route::get('/roster/pdf',         [TransportController::class, 'rosterPdf'])->name('roster.pdf');
         Route::get('/roster/excel',       [TransportController::class, 'rosterExcel'])->name('roster.excel');
+        // Roster Passenger Management
+        Route::post('/roster/passenger',        [TransportController::class, 'storeRosterPassenger'])->name('roster.passenger.store');
+        Route::put('/roster/passenger/{id}',    [TransportController::class, 'updateRosterPassenger'])->name('roster.passenger.update');
+        Route::delete('/roster/passenger/{id}', [TransportController::class, 'deleteRosterPassenger'])->name('roster.passenger.delete');
         // Maintenance cost per vehicle report
         Route::get('/maintenance-cost',        [TransportController::class, 'maintenanceCostReport'])->name('maintenance-cost');
         Route::get('/maintenance-cost/pdf',    [TransportController::class, 'maintenanceCostPdf'])->name('maintenance-cost.pdf');
