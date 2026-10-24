@@ -721,6 +721,19 @@ class AdmissionController extends Controller
 
     public function store(Request $request)
     {
+        // Prevent duplicate admissions if user retries or double-clicks submit
+        $submissionToken = $request->input('submission_token');
+        if ($submissionToken) {
+            $existingStudentId = Cache::get("admission_sub_{$submissionToken}");
+            if ($existingStudentId) {
+                $existingStudent = \App\Models\Student::find($existingStudentId);
+                if ($existingStudent) {
+                    return redirect()->route('admissions.submission-summary', $existingStudent->id)
+                        ->with('info', 'Admission record was already submitted. Displaying admission summary.');
+                }
+            }
+        }
+
         // Sanitize & normalize section_id if string like "section_a" or non-numeric
         if ($request->has('section_id') && $request->section_id && !is_numeric($request->section_id)) {
             $secStr = str_replace(['section_', 'Section ', 'sec_'], '', strtolower($request->section_id));
@@ -835,6 +848,11 @@ class AdmissionController extends Controller
             'doc_pan_id'             => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'additional_items'       => 'nullable|array',
             'additional_items.*'     => 'nullable|integer|min:0',
+            'payment_verified'       => 'nullable',
+            'payment_verified_at'    => 'nullable|string|max:100',
+            'payment_verified_by'    => 'nullable|string|max:100',
+            'payment_verification_notes' => 'nullable|string',
+            'submission_token'       => 'nullable|string|max:100',
         ], [
             'first_name.required'       => 'Student First Name is required.',
             'first_name.min'            => 'Student First Name must be at least 2 characters.',
@@ -1184,8 +1202,9 @@ class AdmissionController extends Controller
             $guardianPhotoPath = $request->file('guardian_photo')->store('parents/photos', 'public');
         }
 
-        DB::transaction(function () use ($validated, $currentYear, $totalFee, $amountCollected, $pendingAmount, $paymentMode, $paymentAccount, $paymentDate, $paymentTerms, $overallStatus, $terms, $issuedItemsSummary, $request, $photoPath, $fatherPhotoPath, $motherPhotoPath, $guardianPhotoPath, $isAsp, $aspFee, $transportFee, $concessionAmount, $customKitItems, &$student) {
-            $studentFullName = trim($request->first_name . ' ' . ($request->last_name ?? ''));
+        try {
+            DB::transaction(function () use ($validated, $currentYear, $totalFee, $amountCollected, $pendingAmount, $paymentMode, $paymentAccount, $paymentDate, $paymentTerms, $overallStatus, $terms, $issuedItemsSummary, $request, $photoPath, $fatherPhotoPath, $motherPhotoPath, $guardianPhotoPath, $isAsp, $aspFee, $transportFee, $concessionAmount, $customKitItems, &$student) {
+                $studentFullName = trim($request->first_name . ' ' . ($request->last_name ?? ''));
 
             // Save Enquiry
             $enquiry = Enquiry::create(array_merge($validated, [
@@ -1256,7 +1275,7 @@ class AdmissionController extends Controller
                 'admission_date'           => $paymentDate,
                 'roll_number'              => $autoRollNo,
                 'first_name'               => $request->first_name,
-                'last_name'                => $request->last_name,
+                'last_name'                => $request->filled('last_name') ? $request->last_name : ($request->input('last_name') ?: '.'),
                 'dob'                      => $request->dob,
                 'gender'                   => $request->gender,
                 'photo'                    => $photoPath,
@@ -1301,7 +1320,7 @@ class AdmissionController extends Controller
                 'is_qualified_promotion'   => $request->is_qualified_promotion,
                 'year_of_passing'          => $request->year_of_passing,
                 'status'                   => $studentStatus,
-                'student_type'             => $request->filled('transport_route_id') ? 'transport' : ($isAsp ? 'asp' : 'day_scholar'),
+                'student_type'             => in_array($request->input('student_type'), ['day_scholar', 'hosteller', 'day_boarder']) ? $request->input('student_type') : 'day_scholar',
                 'emis_no'                  => $request->emis_no,
                 'identification_mark_1'    => $request->identification_mark_1,
                 'identification_mark_2'    => $request->identification_mark_2,
@@ -1409,6 +1428,13 @@ class AdmissionController extends Controller
                     default => 'cash',
                 };
 
+                $feeRemarks = 'Admission Fee Payment for ' . ($classModel?->name ? 'Class ' . $classModel->name : 'New Admission') . ' (' . str_replace('_', ' ', strtoupper($paymentTerms)) . ')';
+                if ($request->filled('payment_verified') && $request->payment_verified) {
+                    $vBy = $request->input('payment_verified_by') ?: (Auth::user()?->name ?? 'Admin');
+                    $vAt = $request->input('payment_verified_at') ?: now()->toDayDateTimeString();
+                    $feeRemarks .= " [VERIFIED by {$vBy} at {$vAt}]";
+                }
+
                 \App\Models\FeePayment::create([
                     'student_id'       => $student->id,
                     'academic_year_id' => $currentYear?->id,
@@ -1421,7 +1447,7 @@ class AdmissionController extends Controller
                     'payment_account'  => $paymentAccount,
                     'term_name'        => 'Admission Fee',
                     'transaction_id'   => $request->input('transaction_id') ?: $request->input('upi_ref_no'),
-                    'remarks'          => 'Admission Fee Payment for ' . ($classModel?->name ? 'Class ' . $classModel->name : 'New Admission') . ' (' . str_replace('_', ' ', strtoupper($paymentTerms)) . ')',
+                    'remarks'          => $feeRemarks,
                     'collected_by'     => Auth::id(),
                 ]);
             }
@@ -1519,10 +1545,20 @@ class AdmissionController extends Controller
                 \Illuminate\Support\Facades\Log::warning("Books & Notes admission snapshot error: " . $e->getMessage());
             }
         });
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Admission enrollment error: ' . $e->getMessage(), ['exception' => $e]);
+            return back()->withInput()->withErrors([
+                'general' => 'Admission could not be processed due to a server error: ' . $e->getMessage() . '. All your inputs have been retained. Please review and try submitting again.'
+            ]);
+        }
 
         $successMsg = $this->requireApprovalWorkflow
             ? 'Admission application submitted successfully! It has been forwarded to the Principal for formal review and approval.'
             : 'Student admitted and enrolled successfully! Admission slip and register entry created.';
+
+        if ($submissionToken && isset($student?->id)) {
+            Cache::put("admission_sub_{$submissionToken}", $student->id, 180);
+        }
 
         return redirect()->route('admissions.submission-summary', $student->id)
             ->with('success', $successMsg);

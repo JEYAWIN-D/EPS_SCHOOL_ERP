@@ -1109,7 +1109,23 @@
         </div>
 
         {{-- Workload Grid --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          <div>
+            <label class="label text-xs font-semibold" for="max_daily_periods">
+              Max Periods / Day (Daily Quota) <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <input type="number" id="max_daily_periods" name="max_daily_periods" value="{{ old('max_daily_periods', 6) }}" min="1" max="10"
+                   class="input font-bold text-indigo-700" placeholder="e.g. 6">
+            <span class="text-[10px] text-slate-400 mt-0.5 block">Prevents teacher daily fatigue (Default: 6)</span>
+          </div>
+          <div>
+            <label class="label text-xs font-semibold" for="max_weekly_periods">
+              Max Periods / Week (Workload) <span class="text-rose-500 font-bold">*</span>
+            </label>
+            <input type="number" id="max_weekly_periods" name="max_weekly_periods" value="{{ old('max_weekly_periods', 30) }}" min="1" max="50"
+                   class="input font-bold text-indigo-700" placeholder="e.g. 30">
+            <span class="text-[10px] text-slate-400 mt-0.5 block">Standard full-time workload (Default: 30)</span>
+          </div>
           <div>
             <label class="label text-xs font-semibold" for="kg_experience_years">
               KG / Early Childhood Exp (Years)
@@ -1117,12 +1133,52 @@
             <input type="number" id="kg_experience_years" name="kg_experience_years" value="{{ old('kg_experience_years', 0) }}" min="0" max="40"
                    class="input" placeholder="e.g. 2">
           </div>
-          <div>
-            <label class="label text-xs font-semibold" for="max_weekly_periods">
-              Max Periods / Week (Workload)
-            </label>
-            <input type="number" id="max_weekly_periods" name="max_weekly_periods" value="{{ old('max_weekly_periods', 30) }}" min="1" max="50"
-                   class="input font-bold text-indigo-700" placeholder="e.g. 30">
+        </div>
+
+        {{-- Availability & Preferred Working Days / Periods --}}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+          {{-- Preferred vs Unavailable Working Days --}}
+          <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div>
+              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>🗓️ Working Days Preference &amp; Availability</span>
+              </span>
+              <span class="text-[10px] text-slate-500 block">Mark days teacher is unavailable or exclusively preferred</span>
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-rose-700 block mb-1">🚫 Unavailable Working Days (Leave unchecked if available all days):</label>
+              <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                @foreach(['1' => 'Mon', '2' => 'Tue', '3' => 'Wed', '4' => 'Thu', '5' => 'Fri', '6' => 'Sat'] as $num => $day)
+                  <label class="px-2 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 flex items-center gap-1 cursor-pointer hover:border-rose-300">
+                    <input type="checkbox" name="unavailable_days[]" value="{{ $num }}" class="rounded text-rose-600 focus:ring-rose-500"
+                           @checked(is_array(old('unavailable_days')) && in_array($num, old('unavailable_days')))>
+                    <span>{{ $day }}</span>
+                  </label>
+                @endforeach
+              </div>
+            </div>
+          </div>
+
+          {{-- Preferred vs Unavailable Periods --}}
+          <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3">
+            <div>
+              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <span>⏰ Period Slot Restrictions</span>
+              </span>
+              <span class="text-[10px] text-slate-500 block">E.g., duty blocks, morning assembly duties, or part-time timings</span>
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-rose-700 block mb-1">🚫 Unavailable Periods (Checked periods will be blocked in Timetable):</label>
+              <div class="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                @for($p = 1; $p <= 8; $p++)
+                  <label class="px-1.5 py-1 rounded-lg border border-slate-200 bg-white text-[10.5px] font-semibold text-slate-700 flex items-center justify-center gap-1 cursor-pointer hover:border-rose-300">
+                    <input type="checkbox" name="unavailable_periods[]" value="{{ $p }}" class="rounded text-rose-600 focus:ring-rose-500"
+                           @checked(is_array(old('unavailable_periods')) && in_array($p, old('unavailable_periods')))>
+                    <span>P{{ $p }}</span>
+                  </label>
+                @endfor
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1271,6 +1327,111 @@
               ⚠️ Requires Class &amp; Section selection
             </div>
           </div>
+        </div>
+
+        {{-- Multi-Class & Multi-Subject Combinations Builder (Section 14 Enhanced) --}}
+        <div class="p-4 rounded-2xl bg-white border border-indigo-200/80 shadow-xs space-y-3"
+             x-data="{
+               allocations: [],
+               classesList: [
+                 @if(isset($classes))
+                   @foreach($classes as $c)
+                     { id: {{ $c->id }}, name: '{{ $c->name }}', sections: [
+                       @foreach($c->sections as $s)
+                         { id: {{ $s->id }}, name: '{{ $s->name }}' },
+                       @endforeach
+                     ] },
+                   @endforeach
+                 @endif
+               ],
+               subjectsList: [
+                 @if(isset($subjects))
+                   @foreach($subjects as $s)
+                     { id: {{ $s->id }}, name: '{{ $s->name }}', code: '{{ $s->code }}' },
+                   @endforeach
+                 @endif
+               ],
+               addAllocation() {
+                 this.allocations.push({
+                   class_id: '',
+                   section_id: '',
+                   subject_id: ''
+                 });
+               },
+               removeAllocation(index) {
+                 this.allocations.splice(index, 1);
+               },
+               getSectionsForClass(classId) {
+                 const c = this.classesList.find(item => String(item.id) === String(classId));
+                 return c ? c.sections : [];
+               }
+             }">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div>
+              <span class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <span>📚 Teaching Eligibility Matrix (Multi-Class &amp; Multi-Subject Combinations)</span>
+              </span>
+              <p class="text-[11px] text-slate-500 mt-0.5">Explicitly declare which subjects this faculty is certified and approved to teach in specific classes and sections.</p>
+            </div>
+            <button type="button" @click="addAllocation()"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition flex items-center gap-1.5 cursor-pointer">
+              <span>➕ Add Subject Allocation</span>
+            </button>
+          </div>
+
+          <template x-if="allocations.length === 0">
+            <div class="py-4 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+              <span>No additional class-subject allocations added yet. Click <strong>➕ Add Subject Allocation</strong> to configure specific teaching combinations.</span>
+            </div>
+          </template>
+
+          <template x-if="allocations.length > 0">
+            <div class="space-y-2">
+              <template x-for="(alloc, idx) in allocations" :key="idx">
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 items-center">
+                  <div class="sm:col-span-4">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Class</label>
+                    <select :name="'allocations[' + idx + '][class_id]'" x-model="alloc.class_id" required
+                            class="select text-xs w-full h-8 px-2 mt-0.5">
+                      <option value="">-- Select Class --</option>
+                      <template x-for="c in classesList" :key="c.id">
+                        <option :value="c.id" x-text="c.name"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <div class="sm:col-span-3">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Section</label>
+                    <select :name="'allocations[' + idx + '][section_id]'" x-model="alloc.section_id"
+                            class="select text-xs w-full h-8 px-2 mt-0.5">
+                      <option value="">All Sections</option>
+                      <template x-for="s in getSectionsForClass(alloc.class_id)" :key="s.id">
+                        <option :value="s.id" x-text="'Section ' + s.name"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <div class="sm:col-span-4">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase">Subject</label>
+                    <select :name="'allocations[' + idx + '][subject_id]'" x-model="alloc.subject_id" required
+                            class="select text-xs w-full h-8 px-2 mt-0.5">
+                      <option value="">-- Select Subject --</option>
+                      <template x-for="sb in subjectsList" :key="sb.id">
+                        <option :value="sb.id" x-text="sb.name + (sb.code ? ' (' + sb.code + ')' : '')"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <div class="sm:col-span-1 flex items-end justify-center pt-3 sm:pt-0">
+                    <button type="button" @click="removeAllocation(idx)"
+                            class="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition cursor-pointer" title="Remove Allocation">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
         </div>
       </div>
     </div>

@@ -2173,6 +2173,31 @@ class HrController extends Controller
                     }
                 }
 
+                if ($request->filled('max_daily_periods')) {
+                    $data['max_daily_periods'] = (int) $request->input('max_daily_periods');
+                }
+                if ($request->filled('max_weekly_periods')) {
+                    $data['max_weekly_periods'] = (int) $request->input('max_weekly_periods');
+                }
+                if ($request->has('preferred_days')) {
+                    $data['preferred_days'] = $request->input('preferred_days');
+                }
+                if ($request->has('preferred_periods')) {
+                    $data['preferred_periods'] = $request->input('preferred_periods');
+                }
+                if ($request->has('unavailable_days')) {
+                    $data['unavailable_days'] = $request->input('unavailable_days');
+                }
+                if ($request->has('unavailable_periods')) {
+                    $data['unavailable_periods'] = $request->input('unavailable_periods');
+                }
+                if ($request->has('eligible_classes')) {
+                    $data['eligible_classes'] = $request->input('eligible_classes');
+                }
+                if ($request->has('eligible_subjects')) {
+                    $data['eligible_subjects'] = $request->input('eligible_subjects');
+                }
+
                 $employee = Employee::create(array_merge($data, [
                     'approval_status' => 'approved',
                     'status'          => 'active',
@@ -2282,7 +2307,25 @@ class HrController extends Controller
                         'class_id'         => (int) $request->assigned_class_id,
                         'section_id'       => $request->assigned_section_id ? (int) $request->assigned_section_id : null,
                         'academic_year_id' => $currentYear?->id,
+                        'created_by'       => Auth::id(),
                     ]);
+                }
+
+                // Multi-class and multi-subject combinations allocations (Section 14)
+                if ($employee->employee_type === 'teaching' && $request->has('allocations') && is_array($request->input('allocations'))) {
+                    $currentYear = AcademicYear::current() ?? AcademicYear::first();
+                    foreach ($request->input('allocations') as $alloc) {
+                        if (!empty($alloc['class_id']) && !empty($alloc['subject_id'])) {
+                            TeacherSubjectAllocation::firstOrCreate([
+                                'employee_id'      => $employee->id,
+                                'class_id'         => (int) $alloc['class_id'],
+                                'section_id'       => !empty($alloc['section_id']) ? (int) $alloc['section_id'] : null,
+                                'subject_id'       => (int) $alloc['subject_id'],
+                                'academic_year_id' => $currentYear?->id,
+                                'created_by'       => Auth::id(),
+                            ]);
+                        }
+                    }
                 }
 
                 // Initial Class Teacher Responsibility if specified - Teaching staff only
@@ -2629,66 +2672,92 @@ class HrController extends Controller
         $type = strtolower($employee->employee_type ?? 'teaching');
         $desig = strtolower($employee->designation ?? '');
 
-        if ($type !== 'teaching') {
+        // 1. Drivers / Transport Staff
+        if ($type === 'driver' || str_contains($desig, 'driver') || str_contains($desig, 'transport')) {
             return [
-                'category_key'   => 'non_teaching',
-                'category_name'  => 'Non-Teaching Staff',
-                'theme_label'    => 'NON-TEACHING',
-                'theme_badge'    => 'NON-TEACHING THEME',
-                'badge_class'    => 'bg-slate-100 text-slate-800 border-slate-300',
-                'header_bg'      => 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
-                'header_color'   => '#1e293b',
-                'accent_color'   => '#475569',
-                'text_accent'    => 'text-slate-700',
-                'bg_accent'      => 'bg-slate-600',
-                'border_color'   => '#475569',
-            ];
-        }
-
-        if (str_contains($desig, 'hod') || str_contains($desig, 'head of department')) {
-            return [
-                'category_key'   => 'hod',
-                'category_name'  => 'Head of Department (HOD)',
-                'theme_label'    => 'HOD',
-                'theme_badge'    => 'HOD THEME',
+                'category_key'   => 'driver',
+                'category_name'  => 'Transport / Drivers',
+                'theme_label'    => 'TRANSPORT / DRIVER',
+                'theme_badge'    => 'DRIVER BADGE',
                 'badge_class'    => 'bg-amber-100 text-amber-900 border-amber-300 font-bold',
-                'header_bg'      => 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
-                'header_color'   => '#1e1b4b',
-                'accent_color'   => '#4338ca',
-                'text_accent'    => 'text-indigo-600',
-                'bg_accent'      => 'bg-indigo-700',
-                'border_color'   => '#312e81',
+                'header_bg'      => 'linear-gradient(135deg, #b45309 0%, #d97706 100%)',
+                'header_color'   => '#b45309',
+                'accent_color'   => '#d97706',
+                'text_accent'    => 'text-amber-700',
+                'bg_accent'      => 'bg-amber-600',
+                'border_color'   => '#b45309',
+                'icon'           => '🚌',
             ];
         }
 
-        if (str_contains($desig, 'senior') || str_contains($desig, 'sr.') || str_contains($desig, 'pgt') || ($employee->experience_years ?? 0) >= 8) {
+        // 2. Nannies / Caretakers
+        if ($type === 'nanny' || str_contains($desig, 'nanni') || str_contains($desig, 'naani') || str_contains($desig, 'caretaker') || str_contains($desig, 'caregiver')) {
             return [
-                'category_key'   => 'senior_teacher',
-                'category_name'  => 'Senior Teacher',
-                'theme_label'    => 'SENIOR',
-                'theme_badge'    => 'SENIOR THEME',
+                'category_key'   => 'nanny',
+                'category_name'  => 'Caretakers / Nannies',
+                'theme_label'    => 'CARETAKER / NANNY',
+                'theme_badge'    => 'NANNY BADGE',
+                'badge_class'    => 'bg-pink-100 text-pink-900 border-pink-300 font-bold',
+                'header_bg'      => 'linear-gradient(135deg, #be185d 0%, #db2777 100%)',
+                'header_color'   => '#be185d',
+                'accent_color'   => '#db2777',
+                'text_accent'    => 'text-pink-700',
+                'bg_accent'      => 'bg-pink-600',
+                'border_color'   => '#be185d',
+                'icon'           => '👶',
+            ];
+        }
+
+        // 3. Cleaners / Housekeeping Staff
+        if ($type === 'cleaner' || str_contains($desig, 'cleaner') || str_contains($desig, 'housekeeping') || str_contains($desig, 'sanitation') || str_contains($desig, 'grounds')) {
+            return [
+                'category_key'   => 'cleaner',
+                'category_name'  => 'Housekeeping / Cleaners',
+                'theme_label'    => 'HOUSEKEEPING / CLEANER',
+                'theme_badge'    => 'CLEANER BADGE',
                 'badge_class'    => 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold',
-                'header_bg'      => 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)',
-                'header_color'   => '#064e3b',
+                'header_bg'      => 'linear-gradient(135deg, #047857 0%, #059669 100%)',
+                'header_color'   => '#047857',
                 'accent_color'   => '#059669',
                 'text_accent'    => 'text-emerald-700',
                 'bg_accent'      => 'bg-emerald-700',
-                'border_color'   => '#065f46',
+                'border_color'   => '#047857',
+                'icon'           => '🧹',
             ];
         }
 
+        // 4. Non-Teaching Administrative Staff
+        if ($type === 'non_teaching' || $type === 'administrative' || str_contains($desig, 'account') || str_contains($desig, 'admin') || str_contains($desig, 'manager') || str_contains($desig, 'clerk') || str_contains($desig, 'receptionist') || str_contains($desig, 'librarian') || str_contains($desig, 'office') || str_contains($desig, 'store') || str_contains($desig, 'assistant')) {
+            return [
+                'category_key'   => 'non_teaching',
+                'category_name'  => 'Non-Teaching Staff',
+                'theme_label'    => 'NON-TEACHING STAFF',
+                'theme_badge'    => 'NON-TEACHING THEME',
+                'badge_class'    => 'bg-teal-100 text-teal-900 border-teal-300 font-bold',
+                'header_bg'      => 'linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)',
+                'header_color'   => '#0f766e',
+                'accent_color'   => '#0f766e',
+                'text_accent'    => 'text-teal-700',
+                'bg_accent'      => 'bg-teal-700',
+                'border_color'   => '#0f766e',
+                'icon'           => '🏢',
+            ];
+        }
+
+        // 5. Teaching Faculty (Default)
         return [
-            'category_key'   => 'teacher',
-            'category_name'  => 'Teacher / Faculty',
-            'theme_label'    => 'TEACHER',
+            'category_key'   => 'teaching',
+            'category_name'  => 'Teaching Faculty',
+            'theme_label'    => 'TEACHING FACULTY',
             'theme_badge'    => 'TEACHER THEME',
-            'badge_class'    => 'bg-blue-100 text-blue-900 border-blue-300 font-bold',
-            'header_bg'      => 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)',
-            'header_color'   => '#1d4ed8',
-            'accent_color'   => '#2563eb',
-            'text_accent'    => 'text-blue-600',
-            'bg_accent'      => 'bg-blue-600',
-            'border_color'   => '#1d4ed8',
+            'badge_class'    => 'bg-rose-100 text-rose-950 border-rose-300 font-bold',
+            'header_bg'      => 'linear-gradient(135deg, #8C2826 0%, #b91c1c 100%)',
+            'header_color'   => '#8C2826',
+            'accent_color'   => '#8C2826',
+            'text_accent'    => 'text-rose-900',
+            'bg_accent'      => 'bg-rose-800',
+            'border_color'   => '#8C2826',
+            'icon'           => '🎓',
         ];
     }
 
@@ -2699,6 +2768,8 @@ class HrController extends Controller
         $categoryFilter = $request->get('category', 'all');
         $deptFilter = $request->get('department_id');
         $search = $request->get('search');
+        $style = in_array($request->get('style'), ['portrait', 'landscape']) ? $request->get('style') : 'landscape';
+        $side = in_array($request->get('side'), ['both', 'front', 'back']) ? $request->get('side') : 'both';
 
         $empQuery = Employee::with('department')->where('is_active', true);
 
@@ -2707,18 +2778,31 @@ class HrController extends Controller
         }
         if ($search) {
             $empQuery->where(function($q) use ($search) {
-                $q->where('first_name', 'like', "%$search%")
-                  ->orWhere('last_name', 'like', "%$search%")
-                  ->orWhere('employee_code', 'like', "%$search%")
-                  ->orWhere('designation', 'like', "%$search%");
+                $q->where('first_name', 'ilike', "%$search%")
+                  ->orWhere('last_name', 'ilike', "%$search%")
+                  ->orWhere('employee_code', 'ilike', "%$search%")
+                  ->orWhere('designation', 'ilike', "%$search%");
             });
         }
 
         $allEmployees = $empQuery->orderBy('first_name')->get();
 
-        // Map category metadata
+        // Map category metadata & QR codes
         $allEmployees->each(function($emp) {
             $emp->theme_meta = $this->getStaffCategoryMetadata($emp);
+            $qrData = implode(' | ', array_filter([
+                'ID: ' . ($emp->employee_code ?? 'EMP-' . $emp->id),
+                'Name: ' . $emp->full_name,
+                'Role: ' . ($emp->designation ?? $emp->theme_meta['theme_label'] ?? 'Staff'),
+                'Dept: ' . ($emp->department?->name ?? 'General'),
+                'Blood: ' . ($emp->blood_group ?? ''),
+                'Emergency Ph: ' . ($emp->emergency_contact_phone ?? $emp->mobile ?? ''),
+            ]));
+            try {
+                $emp->_qrCodeSvg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(90)->margin(0)->generate($qrData);
+            } catch (\Throwable) {
+                $emp->_qrCodeSvg = '';
+            }
         });
 
         // Filter by category
@@ -2739,18 +2823,35 @@ class HrController extends Controller
 
         if ($employee) {
             $employee->theme_meta = $this->getStaffCategoryMetadata($employee);
+            $qrData = implode(' | ', array_filter([
+                'ID: ' . ($employee->employee_code ?? 'EMP-' . $employee->id),
+                'Name: ' . $employee->full_name,
+                'Role: ' . ($employee->designation ?? $employee->theme_meta['theme_label'] ?? 'Staff'),
+                'Dept: ' . ($employee->department?->name ?? 'General'),
+                'Blood: ' . ($employee->blood_group ?? ''),
+                'Emergency Ph: ' . ($employee->emergency_contact_phone ?? $employee->mobile ?? ''),
+            ]));
+            try {
+                $employee->_qrCodeSvg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(95)->margin(0)->generate($qrData);
+            } catch (\Throwable) {
+                $employee->_qrCodeSvg = '';
+            }
         }
 
-        // Category counts
+        // Category counts matching requested roles: Teaching, Non-Teaching, Drivers, Nannies, Cleaners
         $counts = [
-            'all'            => $allEmployees->count(),
-            'hod'            => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'hod')->count(),
-            'senior_teacher' => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'senior_teacher')->count(),
-            'teacher'        => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'teacher')->count(),
-            'non_teaching'   => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'non_teaching')->count(),
+            'all'          => $allEmployees->count(),
+            'teaching'     => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'teaching')->count(),
+            'non_teaching' => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'non_teaching')->count(),
+            'driver'       => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'driver')->count(),
+            'nanny'        => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'nanny')->count(),
+            'cleaner'      => $allEmployees->filter(fn($e) => $e->theme_meta['category_key'] === 'cleaner')->count(),
         ];
 
-        return view('hr.employee-id-card-studio', compact('employee', 'filteredEmployees', 'allEmployees', 'school', 'departments', 'categoryFilter', 'deptFilter', 'counts'));
+        return view('hr.employee-id-card-studio', compact(
+            'employee', 'filteredEmployees', 'allEmployees', 'school', 'departments',
+            'categoryFilter', 'deptFilter', 'counts', 'style', 'side', 'search'
+        ));
     }
 
     public function singleEmployeeIdCard(int $id)
@@ -2760,9 +2861,15 @@ class HrController extends Controller
 
     public function generateStaffIdCards(Request $request)
     {
+        ini_set('memory_limit', '512M');
+        set_time_limit(180);
+
         $categoryFilter = $request->get('category', 'all');
         $deptFilter     = $request->get('department_id');
         $ids            = $request->get('ids');
+        $style          = in_array($request->get('style'), ['portrait', 'landscape']) ? $request->get('style') : 'landscape';
+        $side           = in_array($request->get('side'), ['both', 'front', 'back']) ? $request->get('side') : 'both';
+        $search         = $request->get('search');
 
         $query = Employee::with('department')->where('is_active', true);
 
@@ -2773,10 +2880,31 @@ class HrController extends Controller
         if ($deptFilter) {
             $query->where('department_id', $deptFilter);
         }
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('first_name', 'ilike', "%{$search}%")
+                  ->orWhere('last_name', 'ilike', "%{$search}%")
+                  ->orWhere('employee_code', 'ilike', "%{$search}%")
+                  ->orWhere('designation', 'ilike', "%{$search}%");
+            });
+        }
 
         $employees = $query->orderBy('first_name')->get();
         $employees->each(function($emp) {
             $emp->theme_meta = $this->getStaffCategoryMetadata($emp);
+            $qrData = implode(' | ', array_filter([
+                'ID: ' . ($emp->employee_code ?? 'EMP-' . $emp->id),
+                'Name: ' . $emp->full_name,
+                'Dept: ' . ($emp->department?->name ?? ''),
+                'Role: ' . ($emp->designation ?? ''),
+                'Blood: ' . ($emp->blood_group ?? ''),
+                'Phone: ' . ($emp->emergency_contact_phone ?? $emp->mobile ?? ''),
+            ]));
+            try {
+                $emp->_qrCodeSvg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(80)->margin(0)->generate($qrData);
+            } catch (\Throwable) {
+                $emp->_qrCodeSvg = '';
+            }
         });
 
         if ($categoryFilter && $categoryFilter !== 'all') {
@@ -2786,26 +2914,16 @@ class HrController extends Controller
         $school = \App\Models\SchoolSetting::first();
         $validUntil = now()->addYear()->format('M Y');
 
-        foreach ($employees as $emp) {
-            $qrData = implode(' | ', array_filter([
-                'ID: ' . ($emp->employee_code ?? 'EMP-' . $emp->id),
-                'Name: ' . $emp->full_name,
-                'Dept: ' . ($emp->department?->name ?? $emp->department ?? ''),
-                'Role: ' . ($emp->designation ?? ''),
-                'Blood: ' . ($emp->blood_group ?? ''),
-            ]));
-            try {
-                $emp->_qrCode = base64_encode(
-                    QrCode::format('png')->size(80)->generate($qrData)
-                );
-            } catch (\Exception $e) {
-                $emp->_qrCode = null;
-            }
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.staff-id-cards', compact('employees', 'school', 'validUntil', 'style', 'side', 'categoryFilter'));
+        
+        if ($style === 'landscape') {
+            $pdf->setPaper('A4', 'landscape');
+        } else {
+            $pdf->setPaper('A4', 'portrait');
         }
 
-        $pdf = Pdf::loadView('pdf.staff-id-cards', compact('employees', 'school', 'validUntil', 'categoryFilter'));
-        $pdf->setPaper('A4', 'portrait');
-        return $pdf->stream('staff-id-cards-' . ($categoryFilter ?: 'all') . '.pdf');
+        $catName = str_replace('_', '-', $categoryFilter);
+        return $pdf->download("staff-id-cards-{$catName}-{$style}-{$side}.pdf");
     }
 
     public function syncEmployeeQualification($employee): void
@@ -3134,11 +3252,20 @@ class HrController extends Controller
 
     public function editEmployee(int $id)
     {
-        $employee = Employee::findOrFail($id);
+        $employee = Employee::with([
+            'teacherSubjectAllocations.subject',
+            'teacherSubjectAllocations.class',
+            'teacherSubjectAllocations.section',
+            'eligibleTeachingLevels'
+        ])->findOrFail($id);
         $departments = Department::where('is_active', true)->orderBy('name')->get();
         $designations = Designation::where('is_active', true)->orderBy('name')->get();
         $managers = Employee::where('is_active', true)->where('id', '!=', $id)->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'designation', 'employee_code']);
-        return view('hr.employees-edit', compact('employee', 'departments', 'designations', 'managers'));
+        $classes = Classes::active()->with(['teachingLevel', 'sections' => fn($q) => $q->where('is_active', true)->orderBy('name')])->orderBy('sort_order')->orderBy('numeric_value')->get();
+        $sections = Section::where('is_active', true)->orderBy('class_id')->orderBy('name')->get();
+        $subjects = Subject::where('is_active', true)->orderBy('name')->get();
+        $teachingLevels = TeachingLevel::active()->get();
+        return view('hr.employees-edit', compact('employee', 'departments', 'designations', 'managers', 'classes', 'sections', 'subjects', 'teachingLevels'));
     }
 
     public function updateEmployee(Request $request, int $id)
@@ -3507,9 +3634,82 @@ class HrController extends Controller
         $data['emergency_contact_name'] = $data['name_of_contact_person'];
         $data['emergency_contact_mobile'] = $data['contact_no'];
         $data['pf_account_no'] = $data['epf_no'];
-        $data['is_active'] = $request->has('is_active') ? $request->boolean('is_active') : $employee->is_active;
+
+        $newStatus = $request->input('status', $employee->status ?? 'active');
+        $newIsActive = $request->has('is_active') ? $request->boolean('is_active') : $employee->is_active;
+
+        // Employment Status Enforcement: Check active timetable allocations if becoming inactive or relieved
+        if ((in_array($newStatus, ['inactive', 'relieved', 'terminated']) || !$newIsActive) && ($employee->is_active || $employee->status === 'active')) {
+            $conflictService = app(\App\Services\TimetableConflictService::class);
+            $check = $conflictService->checkInactiveStaffAllocations($employee->id);
+            if (!$check['can_deactivate']) {
+                $count = $check['total_allocations'];
+                $sample = collect($check['allocations'])->take(4)->map(fn($a) => "Class {$a['class_name']}" . ($a['section_name'] ? "-{$a['section_name']}" : '') . " (Period {$a['period_number']}, {$a['day_name']})")->implode('; ');
+                return back()->withInput()->with('error', "Status Change Blocked: {$employee->full_name} has {$count} active timetable assignments ({$sample}...). To prevent student disruption and timetable corruption, please reassign these timetable slots in Academics > Timetables or resolve them before marking this staff member as Inactive or Relieved.");
+            }
+        }
+
+        $data['status'] = $newStatus;
+        $data['is_active'] = $newIsActive;
+
+        if ($request->has('max_daily_periods')) {
+            $data['max_daily_periods'] = (int) $request->input('max_daily_periods');
+        }
+        if ($request->has('max_weekly_periods')) {
+            $data['max_weekly_periods'] = (int) $request->input('max_weekly_periods');
+        }
+        if ($request->has('preferred_days')) {
+            $data['preferred_days'] = $request->input('preferred_days');
+        }
+        if ($request->has('preferred_periods')) {
+            $data['preferred_periods'] = $request->input('preferred_periods');
+        }
+        if ($request->has('unavailable_days')) {
+            $data['unavailable_days'] = $request->input('unavailable_days');
+        }
+        if ($request->has('unavailable_periods')) {
+            $data['unavailable_periods'] = $request->input('unavailable_periods');
+        }
+        if ($request->has('eligible_classes')) {
+            $data['eligible_classes'] = $request->input('eligible_classes');
+        }
+        if ($request->has('eligible_subjects')) {
+            $data['eligible_subjects'] = $request->input('eligible_subjects');
+        }
 
         $employee->update($data);
+
+        // Teaching Level Eligibility sync - Teaching staff only
+        if ($employee->employee_type === 'teaching' && $request->has('teaching_levels')) {
+            TeacherLevelEligibility::where('employee_id', $employee->id)->delete();
+            foreach ($request->input('teaching_levels', []) as $levelId) {
+                TeacherLevelEligibility::create([
+                    'employee_id'       => $employee->id,
+                    'teaching_level_id' => (int) $levelId,
+                    'is_approved'       => true,
+                    'approved_by'       => Auth::id()
+                ]);
+            }
+        }
+
+        // Multi-class and multi-subject combinations allocations (Section 14)
+        if ($employee->employee_type === 'teaching' && $request->has('allocations') && is_array($request->input('allocations'))) {
+            $currentYear = AcademicYear::current() ?? AcademicYear::first();
+            TeacherSubjectAllocation::where('employee_id', $employee->id)->delete();
+            foreach ($request->input('allocations') as $alloc) {
+                if (!empty($alloc['class_id']) && !empty($alloc['subject_id'])) {
+                    TeacherSubjectAllocation::create([
+                        'employee_id'      => $employee->id,
+                        'class_id'         => (int) $alloc['class_id'],
+                        'section_id'       => !empty($alloc['section_id']) ? (int) $alloc['section_id'] : null,
+                        'subject_id'       => (int) $alloc['subject_id'],
+                        'academic_year_id' => $currentYear?->id,
+                        'created_by'       => Auth::id(),
+                        'updated_by'       => Auth::id(),
+                    ]);
+                }
+            }
+        }
 
         // Sync to relational EmployeeQualification records
         if (!empty($employee->academic_qualification)) {
@@ -5005,46 +5205,12 @@ class HrController extends Controller
 
     public function staffIdCards(Request $request)
     {
-        $departments = \App\Models\Department::orderBy('name')->get();
-        $employees   = \App\Models\Employee::with('department')
-            ->when($request->department_id, fn($q, $v) => $q->where('department_id', $v))
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
-        return view('hr.staff-id-cards', compact('employees', 'departments'));
+        return $this->employeeIdCardStudio($request);
     }
 
     public function downloadStaffIdCards(Request $request)
     {
-        $employees = \App\Models\Employee::with('department')
-            ->when($request->department_id, fn($q, $v) => $q->where('department_id', $v))
-            ->when($request->ids, fn($q, $v) => $q->whereIn('id', explode(',', $v)))
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get();
-
-        $school = \App\Models\SchoolSetting::first();
-        $validUntil = now()->addYear()->format('M Y');
-
-        foreach ($employees as $emp) {
-            $qrData = implode(' | ', array_filter([
-                'ID: ' . ($emp->employee_id ?? $emp->id),
-                'Name: ' . $emp->name,
-                'Dept: ' . ($emp->department?->name ?? ''),
-                'Blood: ' . ($emp->blood_group ?? ''),
-            ]));
-            try {
-                $emp->_qrCode = base64_encode(
-                    \SimpleSoftwareIO\QrCode\Facades\QrCode::format('png')->size(80)->generate($qrData)
-                );
-            } catch (\Exception $e) {
-                $emp->_qrCode = null;
-            }
-        }
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.staff-id-cards', compact('employees', 'school', 'validUntil'));
-        $pdf->setPaper('A4', 'portrait');
-        return $pdf->stream('staff-id-cards.pdf');
+        return $this->generateStaffIdCards($request);
     }
 
     // ── Overtime Entry ────────────────────────────────────

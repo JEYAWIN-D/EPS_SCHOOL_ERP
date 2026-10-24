@@ -680,4 +680,14 @@
   </div>
 
 </div>
+
+<script>
+  // Clean up any admission form draft from localStorage once saved successfully
+  try {
+    localStorage.removeItem('dasa_admission_draft_v2');
+    localStorage.removeItem('dasa_admission_form_draft_v1');
+  } catch (e) {
+    console.debug('LocalStorage cleanup error:', e);
+  }
+</script>
 @endsection

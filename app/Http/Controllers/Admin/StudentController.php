@@ -1216,11 +1216,14 @@ class StudentController extends Controller
 
     public function idCards(Request $request)
     {
-        $classes  = Classes::active()->get();
+        $classes  = Classes::active()->orderBy('numeric_value')->orderBy('name')->get();
         $currentYear = AcademicYear::current();
         $wingFilter = $request->get('wing', 'all');
         $classFilter = $request->get('class_id');
         $sectionFilter = $request->get('section_id');
+        $style = in_array($request->get('style'), ['portrait', 'landscape']) ? $request->get('style') : 'landscape';
+        $side = in_array($request->get('side'), ['both', 'front', 'back']) ? $request->get('side') : 'both';
+        $search = $request->get('search');
 
         // Attach wing meta to all classes
         $classes->each(function($cls) {
@@ -1229,7 +1232,7 @@ class StudentController extends Controller
 
         $sections = collect();
         if ($classFilter) {
-            $sections = Section::where('class_id', $classFilter)->get();
+            $sections = Section::where('class_id', $classFilter)->orderBy('name')->get();
         }
 
         $q = StudentEnrollment::with(['student', 'class', 'section'])
@@ -1237,18 +1240,54 @@ class StudentController extends Controller
             ->whereHas('student', fn($sq) => $sq->where('status', 'active'))
             ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id));
 
+        // Enforce ScopeToUser: restrict class/subject teachers or parents to assigned scope
+        if ($request->is_scoped) {
+            if (!empty($request->scope_student_ids)) {
+                $q->whereIn('student_id', $request->scope_student_ids);
+            } elseif (!empty($request->scope_class_ids)) {
+                $q->whereIn('class_id', $request->scope_class_ids);
+            } else {
+                $q->whereRaw('1 = 0');
+            }
+        }
+
         if ($classFilter) {
             $q->where('class_id', $classFilter);
         }
         if ($sectionFilter) {
             $q->where('section_id', $sectionFilter);
         }
+        if ($search) {
+            $q->whereHas('student', function($sq) use ($search) {
+                $sq->where(function($query) use ($search) {
+                    $query->where('first_name', 'ilike', "%{$search}%")
+                          ->orWhere('last_name', 'ilike', "%{$search}%")
+                          ->orWhere('admission_no', 'ilike', "%{$search}%")
+                          ->orWhere('roll_number', 'ilike', "%{$search}%");
+                });
+            });
+        }
 
         $enrollments = $q->get();
 
-        // Map wing metadata to each enrollment
+        // Map wing metadata & QR codes to each enrollment
         $enrollments->each(function($e) {
             $e->wing_meta = $this->getWingMetadata($e->class);
+            $s = $e->student;
+            if ($s) {
+                $qrData = implode(' | ', array_filter([
+                    'ID: ' . ($s->admission_number ?: $s->admission_no),
+                    'Name: ' . $s->full_name,
+                    'Class: ' . ($e->class?->name ?? '') . ($e->section ? '-' . $e->section->name : ''),
+                    'Blood: ' . ($s->blood_group ?? ''),
+                    'Parent Ph: ' . ($s->father_mobile ?? $s->mother_mobile ?? $s->mobile ?? ''),
+                ]));
+                try {
+                    $s->_qrCodeSvg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(90)->margin(0)->generate($qrData);
+                } catch (\Throwable) {
+                    $s->_qrCodeSvg = '';
+                }
+            }
         });
 
         // Filter by wing if specified
@@ -1258,6 +1297,8 @@ class StudentController extends Controller
         }
 
         $school = \App\Models\SchoolSetting::first();
+        $targetClass = $classFilter ? Classes::find($classFilter) : null;
+        $targetSection = $sectionFilter ? Section::find($sectionFilter) : null;
 
         // Wing counts
         $wingCounts = [
@@ -1271,7 +1312,8 @@ class StudentController extends Controller
 
         return view('students.id-cards', compact(
             'classes', 'sections', 'filteredEnrollments', 'enrollments',
-            'currentYear', 'school', 'wingFilter', 'classFilter', 'sectionFilter', 'wingCounts'
+            'currentYear', 'school', 'wingFilter', 'classFilter', 'sectionFilter',
+            'wingCounts', 'style', 'side', 'search', 'targetClass', 'targetSection'
         ));
     }
 
@@ -1280,33 +1322,29 @@ class StudentController extends Controller
         $this->assertStudentInScope($request, $id);
         $student = Student::with(['currentEnrollment.class', 'currentEnrollment.section'])->findOrFail($id);
         
-        // Strict locking: ID card can only be generated after Principal approval and Admin final confirmation
-        if ($student->status !== 'active') {
-            return redirect()->route('students.show', $student->id)
-                ->with('error', 'ID Card generation is locked. Student admission must be fully approved by the Principal and confirmed by Admin before an official ID card can be generated.');
-        }
-
         $enrollment = $student->currentEnrollment;
         $classModel = $enrollment?->class;
         $wingMeta = $this->getWingMetadata($classModel);
         $school = \App\Models\SchoolSetting::first();
         $currentYear = AcademicYear::current();
+        $style = in_array($request->get('style'), ['portrait', 'landscape']) ? $request->get('style') : 'landscape';
+        $side = in_array($request->get('side'), ['both', 'front', 'back']) ? $request->get('side') : 'both';
 
-        // Base64 QR code
         $qrData = implode(' | ', array_filter([
-            'ID: ' . $student->admission_number,
+            'ID: ' . ($student->admission_number ?: $student->admission_no),
             'Name: ' . $student->full_name,
             'Class: ' . ($classModel?->name ?? '') . ' ' . ($enrollment?->section?->name ?? ''),
             'Blood: ' . ($student->blood_group ?? ''),
+            'Parent Ph: ' . ($student->father_mobile ?? $student->mother_mobile ?? $student->mobile ?? ''),
         ]));
 
         try {
-            $qrCode = base64_encode(QrCode::format('png')->size(90)->generate($qrData));
-        } catch (\Exception $e) {
-            $qrCode = null;
+            $qrCodeSvg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(95)->margin(0)->generate($qrData);
+        } catch (\Throwable $e) {
+            $qrCodeSvg = '';
         }
 
-        return view('students.single-id-card', compact('student', 'enrollment', 'classModel', 'wingMeta', 'school', 'currentYear', 'qrCode'));
+        return view('students.single-id-card', compact('student', 'enrollment', 'classModel', 'wingMeta', 'school', 'currentYear', 'qrCodeSvg', 'style', 'side'));
     }
 
     public function visitorCard(Request $request, int $id)
@@ -1329,47 +1367,94 @@ class StudentController extends Controller
 
     public function downloadIdCards(Request $request)
     {
+        ini_set('memory_limit', '512M');
+        set_time_limit(180);
+
         $currentYear = AcademicYear::current();
+        $classFilter = $request->get('class_id');
+        $sectionFilter = $request->get('section_id');
         $wingFilter  = $request->get('wing', 'all');
+        $style = in_array($request->get('style'), ['portrait', 'landscape']) ? $request->get('style') : 'landscape';
+        $side = in_array($request->get('side'), ['both', 'front', 'back']) ? $request->get('side') : 'both';
+        $search = $request->get('search');
+        $singleStudentId = $request->get('student_id');
+
         $q = StudentEnrollment::with(['student', 'class', 'section'])
             ->where('status', 'active')
-            ->whereHas('student', fn($sq) => $sq->where('status', 'active'));
-        if ($request->class_id) $q->where('class_id', $request->class_id);
-        if ($request->section_id) $q->where('section_id', $request->section_id);
-        if ($currentYear) $q->where('academic_year_id', $currentYear->id);
+            ->whereHas('student', fn($sq) => $sq->where('status', 'active'))
+            ->when($currentYear, fn($q) => $q->where('academic_year_id', $currentYear->id));
+
+        if ($singleStudentId) {
+            $this->assertStudentInScope($request, (int)$singleStudentId);
+            $q->where('student_id', $singleStudentId);
+        } else {
+            // Enforce ScopeToUser: restrict class/subject teachers or parents to assigned scope
+            if ($request->is_scoped) {
+                if (!empty($request->scope_student_ids)) {
+                    $q->whereIn('student_id', $request->scope_student_ids);
+                } elseif (!empty($request->scope_class_ids)) {
+                    $q->whereIn('class_id', $request->scope_class_ids);
+                } else {
+                    $q->whereRaw('1 = 0');
+                }
+            }
+
+            if ($classFilter) $q->where('class_id', $classFilter);
+            if ($sectionFilter) $q->where('section_id', $sectionFilter);
+            if ($search) {
+                $q->whereHas('student', function($sq) use ($search) {
+                    $sq->where(function($query) use ($search) {
+                        $query->where('first_name', 'ilike', "%{$search}%")
+                              ->orWhere('last_name', 'ilike', "%{$search}%")
+                              ->orWhere('admission_no', 'ilike', "%{$search}%")
+                              ->orWhere('roll_number', 'ilike', "%{$search}%");
+                    });
+                });
+            }
+        }
 
         $enrollments = $q->get();
         $enrollments->each(function($e) {
             $e->wing_meta = $this->getWingMetadata($e->class);
+            $s = $e->student;
+            if ($s) {
+                $qrData = implode(' | ', array_filter([
+                    'ID: ' . ($s->admission_number ?: $s->admission_no),
+                    'Name: ' . $s->full_name,
+                    'Class: ' . ($e->class?->name ?? '') . ($e->section ? '-' . $e->section->name : ''),
+                    'Blood: ' . ($s->blood_group ?? ''),
+                    'Parent Ph: ' . ($s->father_mobile ?? $s->mother_mobile ?? $s->mobile ?? ''),
+                ]));
+                try {
+                    $s->_qrCodeSvg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(85)->margin(0)->generate($qrData);
+                } catch (\Throwable) {
+                    $s->_qrCodeSvg = '';
+                }
+            }
         });
 
-        if ($wingFilter && $wingFilter !== 'all') {
+        if (!$classFilter && $wingFilter && $wingFilter !== 'all') {
             $enrollments = $enrollments->filter(fn($e) => $e->wing_meta['key'] === $wingFilter)->values();
         }
 
-        $students = $enrollments->map(fn($e) => $e->student)->filter();
-        $school   = \App\Models\SchoolSetting::first();
+        $school = \App\Models\SchoolSetting::first();
+        $targetClass = $classFilter ? Classes::find($classFilter) : null;
+        $targetSection = $sectionFilter ? Section::find($sectionFilter) : null;
 
-        // Pre-generate QR codes for each student
-        $qrCodes = [];
-        foreach ($students as $s) {
-            try {
-                $qrData = implode(' | ', array_filter([
-                    'ID: ' . $s->admission_number,
-                    'Name: ' . $s->full_name,
-                    $s->student_id ?? '',
-                ]));
-                $qrCodes[$s->id] = base64_encode(QrCode::format('png')->size(80)->generate($qrData));
-            } catch (\Exception $e) {
-                $qrCodes[$s->id] = null;
-            }
+        $pdf = Pdf::loadView('pdf.student-id-card', compact('school', 'enrollments', 'currentYear', 'style', 'side', 'targetClass', 'targetSection'));
+        
+        if ($style === 'landscape') {
+            $pdf->setPaper('A4', 'landscape');
+        } else {
+            $pdf->setPaper('A4', 'portrait');
         }
 
-        // Pass template settings to PDF
-        $template = $school;
-        $pdf = Pdf::loadView('pdf.student-id-card', compact('school', 'students', 'enrollments', 'currentYear', 'qrCodes', 'template', 'wingFilter'));
-        $pdf->setPaper('A4', 'portrait');
-        return $pdf->download('student-id-cards-' . ($wingFilter ?: 'all') . '.pdf');
+        $label = $targetClass ? ('Class-' . str_replace(' ', '-', $targetClass->name)) : ($wingFilter !== 'all' ? $wingFilter : 'All-Students');
+        if ($targetSection) {
+            $label .= '-Sec-' . $targetSection->name;
+        }
+
+        return $pdf->download("student-id-cards-{$label}-{$style}-{$side}.pdf");
     }
 
     public function idCardTemplate()

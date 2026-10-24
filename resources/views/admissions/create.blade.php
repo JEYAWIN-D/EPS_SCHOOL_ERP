@@ -74,8 +74,8 @@
   activitiesData: {{ json_encode($activities) }},
   admissionKitsData: {{ json_encode($admissionKits ?? []) }},
   transportRoutesData: {{ json_encode($transportRoutes ?? []) }},
-  selectedClassId: '{{ request("class_id", "") }}',
-  selectedSectionId: '',
+  selectedClassId: '{{ old("class_id", request("class_id", "")) }}',
+  selectedSectionId: '{{ old("section_id", "") }}',
 
   // Books & Notes Master Checklist State
   academicYearId: '{{ $academicYear?->id ?? "" }}',
@@ -186,6 +186,25 @@
     this.$watch('selectedClassId', () => {
       this.syncGroupFromStream();
       this.fetchBooksNotesChecklist();
+      if (!this.userHasEditedAmountCollected) {
+        this.userAmountCollected = String(this.term1Amount);
+      }
+      if (!this.userHasEditedConcession && this.concessionType !== 'none') {
+        this.concessionAmountInput = String(this.calculatedConcession);
+      }
+    });
+    this.$watch('paymentTerms', () => {
+      if (!this.userHasEditedAmountCollected) {
+        this.userAmountCollected = String(this.term1Amount);
+      }
+    });
+    this.$watch('concessionType', (newVal) => {
+      if (newVal === 'none') {
+        this.concessionAmountInput = '0';
+      } else if (!this.userHasEditedConcession) {
+        this.concessionAmountInput = String(this.calculatedConcession);
+      }
+      this.isPaymentVerified = false;
     });
     this.$watch('selectedGender', () => {
       this.fetchBooksNotesChecklist();
@@ -203,23 +222,27 @@
       this.syncGroupFromStream();
       this.fetchBooksNotesChecklist();
     }
+    if (!this.userAmountCollected && this.selectedClassId) {
+      this.userAmountCollected = String(this.term1Amount);
+    }
   },
 
   // After School Program (ASP) State — replaces Hostel per school requirement
-  aspRequired: false,
-  aspTerm: '',         // 'term1' | 'term2' | 'both'
+  aspRequired: {{ old("is_asp") ? 'true' : 'false' }},
+  aspTerm: '{{ old("asp_term", "") }}',
   aspTermFee: 4000,    // per term ₹4,000 (Term I: Jul–Oct, Term II: Nov–Feb)
   aspInfoOpen: false,  // toggle timetable preview
 
   // School Transport Facility State (Stopping, Km, Fee)
-  transportRequired: false,
-  selectedRouteId: '',
-  selectedStopId: '',
+  transportRequired: {{ old("transport_route_id") ? 'true' : 'false' }},
+  selectedRouteId: '{{ old("transport_route_id", "") }}',
+  selectedStopId: '{{ old("transport_stop_id", "") }}',
 
   // Concession Categories State (Staff kid, Topper, Sports, Single shot, Referral, Sibling)
-  concessionType: 'none',
-  concessionAmountInput: '',
-  concessionRemarks: '',
+  concessionType: '{{ old("concession_type", "none") }}',
+  concessionAmountInput: '{{ old("concession_amount", "") }}',
+  concessionRemarks: '{{ old("concession_remarks", "") }}',
+  userHasEditedConcession: {{ old("concession_amount") !== null && old("concession_amount") !== '' ? 'true' : 'false' }},
 
   // Sibling in Same School
   hasSibling: {{ old('has_sibling') || old('sibling_name') || old('sibling_admission_no') || old('sibling_roll_no') ? 'true' : 'false' }},
@@ -267,52 +290,158 @@
   },
 
   // Extra Curricular Activities (ECA) — Complimentary per school requirement
-  selectedActivities: [],
-  additionalItems: {},
+  selectedActivities: {{ json_encode(old('activities', [])) }},
+  additionalItems: {{ json_encode(old('additional_items', [])) }},
 
-  // Live Student & Parent Photo Previews
+  // Universal File Preview Modal State (Files remain hidden by default)
   formsDropdownOpen: false,
+  previewModalOpen: false,
+  previewModalTitle: '',
+  previewModalUrl: '',
+  previewModalType: 'image', // 'image' | 'pdf'
+
+  openPreview(url, title, type = 'image') {
+    this.previewModalUrl = url;
+    this.previewModalTitle = title;
+    this.previewModalType = type;
+    this.previewModalOpen = true;
+  },
+  closePreview() {
+    this.previewModalOpen = false;
+    this.previewModalUrl = '';
+    this.previewModalTitle = '';
+  },
+
+  // Student & Parent Photo State (Hidden by default, opened via View button)
   photoPreview: null,
   photoFileName: '',
+  photoFileSize: '',
   handlePhotoChange(event) {
     const file = event.target.files[0];
     if (file) {
       this.photoPreview = URL.createObjectURL(file);
       this.photoFileName = file.name;
+      this.photoFileSize = (file.size / 1024 > 1024 ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(file.size / 1024) + ' KB');
     }
   },
   clearPhoto() {
     this.photoPreview = null;
     this.photoFileName = '';
+    this.photoFileSize = '';
     const input = document.getElementById('student_photo_input');
     if (input) input.value = '';
   },
+  viewStudentPhoto() {
+    if (this.photoPreview) {
+      this.openPreview(this.photoPreview, 'Student Passport Photo — ' + (this.photoFileName || 'passport_photo.jpg'), 'image');
+    }
+  },
+
   fatherPhotoPreview: null,
   fatherPhotoFileName: '',
+  fatherPhotoFileSize: '',
   handleFatherPhotoChange(event) {
     const file = event.target.files[0];
     if (file) {
       this.fatherPhotoPreview = URL.createObjectURL(file);
       this.fatherPhotoFileName = file.name;
+      this.fatherPhotoFileSize = (file.size / 1024 > 1024 ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(file.size / 1024) + ' KB');
     }
   },
+  clearFatherPhoto() {
+    this.fatherPhotoPreview = null;
+    this.fatherPhotoFileName = '';
+    this.fatherPhotoFileSize = '';
+    const input = document.getElementById('father_photo_input');
+    if (input) input.value = '';
+  },
+  viewFatherPhoto() {
+    if (this.fatherPhotoPreview) {
+      this.openPreview(this.fatherPhotoPreview, 'Father Photo — ' + (this.fatherPhotoFileName || 'father_photo.jpg'), 'image');
+    }
+  },
+
   motherPhotoPreview: null,
   motherPhotoFileName: '',
+  motherPhotoFileSize: '',
   handleMotherPhotoChange(event) {
     const file = event.target.files[0];
     if (file) {
       this.motherPhotoPreview = URL.createObjectURL(file);
       this.motherPhotoFileName = file.name;
+      this.motherPhotoFileSize = (file.size / 1024 > 1024 ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(file.size / 1024) + ' KB');
     }
   },
+  clearMotherPhoto() {
+    this.motherPhotoPreview = null;
+    this.motherPhotoFileName = '';
+    this.motherPhotoFileSize = '';
+    const input = document.getElementById('mother_photo_input');
+    if (input) input.value = '';
+  },
+  viewMotherPhoto() {
+    if (this.motherPhotoPreview) {
+      this.openPreview(this.motherPhotoPreview, 'Mother Photo — ' + (this.motherPhotoFileName || 'mother_photo.jpg'), 'image');
+    }
+  },
+
   guardianPhotoPreview: null,
   guardianPhotoFileName: '',
+  guardianPhotoFileSize: '',
   handleGuardianPhotoChange(event) {
     const file = event.target.files[0];
     if (file) {
       this.guardianPhotoPreview = URL.createObjectURL(file);
       this.guardianPhotoFileName = file.name;
+      this.guardianPhotoFileSize = (file.size / 1024 > 1024 ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(file.size / 1024) + ' KB');
     }
+  },
+  clearGuardianPhoto() {
+    this.guardianPhotoPreview = null;
+    this.guardianPhotoFileName = '';
+    this.guardianPhotoFileSize = '';
+    const input = document.getElementById('guardian_photo_input');
+    if (input) input.value = '';
+  },
+  viewGuardianPhoto() {
+    if (this.guardianPhotoPreview) {
+      this.openPreview(this.guardianPhotoPreview, 'Guardian Photo — ' + (this.guardianPhotoFileName || 'guardian_photo.jpg'), 'image');
+    }
+  },
+
+  // Document Uploads State (Hidden by default, viewable via View button)
+  uploadedDocs: {
+    doc_birth_certificate: null,
+    doc_aadhaar: null,
+    doc_caste: null,
+    doc_tc: null,
+    doc_marksheet: null,
+    doc_pan_id: null,
+  },
+  handleDocChange(event, key, label) {
+    const file = event.target.files[0];
+    if (file) {
+      this.uploadedDocs[key] = {
+        name: file.name,
+        size: (file.size / 1024 > 1024 ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(file.size / 1024) + ' KB'),
+        type: file.type.includes('pdf') ? 'pdf' : 'image',
+        url: URL.createObjectURL(file),
+        label: label
+      };
+    } else {
+      this.uploadedDocs[key] = null;
+    }
+  },
+  viewDoc(key) {
+    const doc = this.uploadedDocs[key];
+    if (doc) {
+      this.openPreview(doc.url, doc.label + ' — ' + doc.name, doc.type);
+    }
+  },
+  clearDoc(key) {
+    this.uploadedDocs[key] = null;
+    const input = document.getElementById(key);
+    if (input) input.value = '';
   },
   docUploadMode: 'desk',
 
@@ -420,20 +549,74 @@
   },
 
   // Payment Terms & Account Destination State
-  paymentTerms: '3_terms',
-  paymentMode: 'UPI',
-  paymentAccount: 'upi',
-  upiRefNo: '',
+  paymentTerms: '{{ old("payment_terms", "3_terms") }}',
+  paymentMode: '{{ old("payment_mode", "UPI") }}',
+  paymentAccount: '{{ old("payment_account", "upi") }}',
+  upiRefNo: '{{ old("transaction_id", "") }}',
   setAccount(account, mode) {
     this.paymentAccount = account;
     this.paymentMode = mode;
+    this.isPaymentVerified = false;
   },
-  paymentDate: '{{ date("Y-m-d") }}',
-  term2DueDate: '2026-08-05',
-  term3DueDate: '2026-12-05',
-  userAmountCollected: null,
-  isIntegrated: false,
-  includeAdmissionFee: true,
+  paymentDate: '{{ old("payment_date", date("Y-m-d")) }}',
+  term2DueDate: '{{ old("term_2_due_date", "2026-08-05") }}',
+  term3DueDate: '{{ old("term_3_due_date", "2026-12-05") }}',
+  userAmountCollected: '{{ old("amount_collected", "") }}',
+  userHasEditedAmountCollected: {{ old("amount_collected") !== null && old("amount_collected") !== '' ? 'true' : 'false' }},
+  isIntegrated: {{ old("is_integrated") ? 'true' : 'false' }},
+  includeAdmissionFee: {{ old("include_admission_fee", "1") == "1" ? 'true' : 'false' }},
+
+  // Form Submission Lock
+  isSubmitting: false,
+
+  // Fee Payment Verification State
+  isPaymentVerified: false,
+  verificationStatus: 'Pending Verification',
+  verifiedAt: '',
+  verifiedBy: '',
+  verificationNotes: '',
+  verificationHistory: [],
+  verificationModalOpen: false,
+
+  verifyPayment() {
+    let amt = this.amountCollected;
+    if (this.userAmountCollected === '' || isNaN(amt) || amt < 0) {
+      alert('Please enter a valid numerical payment amount before verifying.');
+      return;
+    }
+    this.isPaymentVerified = true;
+    this.verificationStatus = 'Verified';
+    let now = new Date();
+    this.verifiedAt = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ', ' + now.toLocaleDateString('en-IN');
+    this.verifiedBy = '{{ Auth::user()?->name ?? "Admissions Officer" }}';
+    this.verificationNotes = `Verified collection of ₹${amt.toLocaleString('en-IN')} via ${this.paymentMode} (${this.paymentAccount}).`;
+
+    this.verificationHistory.unshift({
+      timestamp: this.verifiedAt,
+      amount: amt,
+      formattedAmount: this.formatMoney(amt),
+      mode: this.paymentMode,
+      account: this.paymentAccount === 'cash_box_1' ? 'Front Office Cash (Box 1)' : (this.paymentAccount === 'cash_box_2' ? 'Accounts Vault (Box 2)' : 'UPI Digital Account'),
+      status: 'Verified',
+      verifier: this.verifiedBy,
+      pending: this.formatMoney(this.pendingAmount),
+      excess: this.formatMoney(this.excessAmount),
+    });
+
+    this.verificationModalOpen = true;
+  },
+
+  onAmountCollectedChanged(val) {
+    this.userAmountCollected = val;
+    this.userHasEditedAmountCollected = true;
+    this.isPaymentVerified = false;
+  },
+
+  setAmountPreset(val) {
+    this.userAmountCollected = String(val);
+    this.userHasEditedAmountCollected = true;
+    this.isPaymentVerified = false;
+  },
 
   get availableSections() {
     if (!this.selectedClassId) return [];
@@ -599,10 +782,11 @@
     return 0;
   },
   get concessionAmount() {
-    if (this.concessionAmountInput !== '' && !isNaN(Number(this.concessionAmountInput))) {
-      return Number(this.concessionAmountInput);
+    if (this.concessionAmountInput !== '' && this.concessionAmountInput !== null) {
+      let n = parseFloat(this.concessionAmountInput);
+      return isNaN(n) ? 0 : Math.max(0, n);
     }
-    return this.calculatedConcession;
+    return this.concessionType === 'none' ? 0 : this.calculatedConcession;
   },
   get grandTotal() {
     return Math.max(0, this.subTotal - this.concessionAmount);
@@ -669,7 +853,8 @@
 
   get amountCollected() {
     if (this.userAmountCollected !== null && this.userAmountCollected !== '') {
-      return Number(this.userAmountCollected) || 0;
+      let n = parseFloat(this.userAmountCollected);
+      return isNaN(n) ? 0 : Math.max(0, n);
     }
     return this.term1Amount;
   },
@@ -796,6 +981,37 @@
   <form id="admissionCreateForm" method="POST" action="{{ route('admissions.store') }}" enctype="multipart/form-data" class="space-y-10" novalidate>
     @csrf
 
+    {{-- Idempotency Token and Payment Verification Hidden State --}}
+    <input type="hidden" name="submission_token" id="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">
+    <input type="hidden" name="payment_verified" id="payment_verified" :value="isPaymentVerified ? '1' : '0'">
+    <input type="hidden" name="payment_verified_at" id="payment_verified_at" :value="verifiedAt">
+    <input type="hidden" name="payment_verified_by" id="payment_verified_by" :value="verifiedBy">
+    <input type="hidden" name="payment_verification_notes" id="payment_verification_notes" :value="verificationNotes">
+
+    {{-- Auto-Draft Recovery Notice Banner --}}
+    <div id="draftRecoveryBanner" class="hidden p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-start sm:items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div>
+          <h4 class="text-xs sm:text-sm font-extrabold text-amber-900 flex items-center gap-2">
+            <span>Unsaved Admission Draft Restored</span>
+            <span class="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">Auto-Saved</span>
+          </h4>
+          <p class="text-[11px] sm:text-xs text-amber-800 mt-0.5" id="draftTimestampText">Your previously entered form inputs have been preserved. You can continue editing or start fresh.</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
+        <button type="button" onclick="document.getElementById('draftRecoveryBanner').classList.add('hidden')" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-2xs cursor-pointer">
+          Keep Draft Data
+        </button>
+        <button type="button" onclick="discardDraftAndReset()" class="px-3.5 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-amber-200 hover:border-rose-300 text-xs font-bold transition shadow-2xs cursor-pointer">
+          Discard &amp; Start Fresh
+        </button>
+      </div>
+    </div>
+
     {{-- Server Validation Error Banner --}}
     @if ($errors->any())
       <div id="serverValidationAlert" class="p-5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 shadow-md flex items-start gap-4">
@@ -872,15 +1088,16 @@
 
         {{-- Row 1: Student Passport Photo Uploader Bar --}}
         <div class="p-4 sm:p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row items-center gap-5">
-          {{-- Passport Photo Preview Frame --}}
+          {{-- Passport Photo Preview Frame (Hidden by default, opened via View Photo button) --}}
           <div class="relative shrink-0 cursor-pointer group" @click="$refs.studentPhotoInput.click()">
             <div class="w-24 h-28 rounded-2xl bg-white border-2 border-dashed border-slate-300 group-hover:border-[#8C2826] flex items-center justify-center overflow-hidden shadow-xs transition-all duration-200">
               <template x-if="photoPreview">
-                <div class="w-full h-full relative">
-                  <img :src="photoPreview" class="w-full h-full object-cover" alt="Student Passport Photo">
-                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
-                    <span>Change</span>
+                <div class="w-full h-full bg-emerald-50/70 border border-emerald-200 rounded-2xl flex flex-col items-center justify-center text-center p-2.5">
+                  <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm mb-1.5 shadow-2xs">
+                    ✓
                   </div>
+                  <span class="text-[10px] font-extrabold text-emerald-900 uppercase tracking-wider block">Attached</span>
+                  <span class="text-[9px] text-emerald-700 font-medium">Click View</span>
                 </div>
               </template>
               <template x-if="!photoPreview">
@@ -906,18 +1123,29 @@
               <label class="block text-xs font-extrabold text-slate-900 uppercase tracking-wide">Student Passport Photograph</label>
               <span class="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">Optional at Desk</span>
             </div>
-            <p class="text-xs text-slate-500 leading-relaxed">Upload a clear formal color passport photograph against a plain background (JPEG, PNG &bull; max 3MB). Rendered on student ID card, academic register, and transfer records.</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Upload a clear formal color passport photograph against a plain background (JPEG, PNG &bull; max 3MB). Stored securely and kept hidden on form by default.</p>
             
-            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-3 pt-1">
+            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
               <button type="button" @click="$refs.studentPhotoInput.click()"
-                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 shadow-2xs hover:border-[#8C2826] transition cursor-pointer">
+                      class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 font-bold text-xs border border-slate-200 shadow-2xs hover:border-[#8C2826] transition cursor-pointer">
                 <svg class="w-4 h-4 text-[#8C2826]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                <span x-text="photoPreview ? 'Change Photograph' : 'Upload Photograph'"></span>
+                <span x-text="photoPreview ? 'Change Photo' : 'Upload Photograph'"></span>
               </button>
+
+              {{-- Explicit View Button --}}
+              <template x-if="photoPreview">
+                <button type="button" @click="viewStudentPhoto()"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 shadow-2xs transition cursor-pointer">
+                  <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span>View Photo</span>
+                </button>
+              </template>
 
               <template x-if="photoFileName">
                 <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs max-w-[280px]">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
                   <span class="truncate" x-text="photoFileName"></span>
+                  <span class="text-[10px] text-slate-400 font-semibold" x-text="photoFileSize"></span>
                   <button type="button" @click="clearPhoto()" class="text-slate-400 hover:text-rose-600 ml-1 cursor-pointer transition" title="Remove">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
@@ -1400,7 +1628,7 @@
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Percentage / CGPA</label>
                 <div class="relative">
-                  <input type="number" step="0.01" min="0" max="100" name="previous_percentage" placeholder="e.g. 91.5" value="{{ old('previous_percentage') }}"
+                  <input type="number" step="0.01" min="0" max="100" id="previous_percentage" name="previous_percentage" placeholder="e.g. 91.5" value="{{ old('previous_percentage') }}"
                          class="w-full pl-3 pr-8 py-2.5 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-xs font-bold text-slate-900 bg-white">
                   <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-xs font-bold text-slate-400">%</span>
                 </div>
@@ -1800,11 +2028,14 @@
           <span class="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full shadow-2xs">Authorized Visitor Pass Escort #1</span>
         </div>
 
-        {{-- Father Photo Upload for Visitor Pass --}}
+        {{-- Father Photo Upload for Visitor Pass (Hidden by default, viewable via View button) --}}
         <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-200">
           <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
             <template x-if="fatherPhotoPreview">
-              <img :src="fatherPhotoPreview" class="w-full h-full object-cover" alt="Father Photo Preview">
+              <div class="w-full h-full bg-emerald-50/70 flex flex-col items-center justify-center text-center p-1">
+                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs">✓</span>
+                <span class="text-[8px] font-extrabold text-emerald-800 uppercase mt-0.5">Attached</span>
+              </div>
             </template>
             <template x-if="!fatherPhotoPreview">
               <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -1812,10 +2043,27 @@
           </div>
           <div class="flex-1 min-w-0">
             <label class="block text-xs font-bold text-slate-800">Father Photograph (For Campus Visitor Pass)</label>
-            <p class="text-[11px] text-slate-500 mt-0.5">Used for the physical &amp; digital Parent Visitor Pass for campus security access</p>
-            <div class="mt-2">
-              <input type="file" name="father_photo" accept="image/*" @change="handleFatherPhotoChange($event)"
-                     class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+            <p class="text-[11px] text-slate-500 mt-0.5">Used for physical &amp; digital Parent Visitor Pass for campus security access. Uploaded photo remains hidden by default.</p>
+            <div class="mt-2.5">
+              <div x-show="!fatherPhotoPreview">
+                <input type="file" id="father_photo_input" name="father_photo" accept="image/*" @change="handleFatherPhotoChange($event)"
+                       class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="fatherPhotoPreview" class="flex items-center gap-2 flex-wrap">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span class="truncate max-w-[180px]" x-text="fatherPhotoFileName"></span>
+                  <span class="text-[10px] text-slate-400" x-text="fatherPhotoFileSize"></span>
+                </div>
+                <button type="button" @click="viewFatherPhoto()"
+                        class="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span>View</span>
+                </button>
+                <button type="button" @click="clearFatherPhoto()" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                  ✕
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1911,11 +2159,14 @@
           <span class="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full shadow-2xs">Authorized Visitor Pass Escort #2</span>
         </div>
 
-        {{-- Mother Photo Upload for Visitor Pass --}}
+        {{-- Mother Photo Upload for Visitor Pass (Hidden by default, viewable via View button) --}}
         <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-200">
           <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
             <template x-if="motherPhotoPreview">
-              <img :src="motherPhotoPreview" class="w-full h-full object-cover" alt="Mother Photo Preview">
+              <div class="w-full h-full bg-emerald-50/70 flex flex-col items-center justify-center text-center p-1">
+                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs">✓</span>
+                <span class="text-[8px] font-extrabold text-emerald-800 uppercase mt-0.5">Attached</span>
+              </div>
             </template>
             <template x-if="!motherPhotoPreview">
               <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -1923,10 +2174,27 @@
           </div>
           <div class="flex-1 min-w-0">
             <label class="block text-xs font-bold text-slate-800">Mother Photograph (For Campus Visitor Pass)</label>
-            <p class="text-[11px] text-slate-500 mt-0.5">Used for the physical &amp; digital Parent Visitor Pass for campus security access</p>
-            <div class="mt-2">
-              <input type="file" name="mother_photo" accept="image/*" @change="handleMotherPhotoChange($event)"
-                     class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+            <p class="text-[11px] text-slate-500 mt-0.5">Used for physical &amp; digital Parent Visitor Pass for campus security access. Uploaded photo remains hidden by default.</p>
+            <div class="mt-2.5">
+              <div x-show="!motherPhotoPreview">
+                <input type="file" id="mother_photo_input" name="mother_photo" accept="image/*" @change="handleMotherPhotoChange($event)"
+                       class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="motherPhotoPreview" class="flex items-center gap-2 flex-wrap">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span class="truncate max-w-[180px]" x-text="motherPhotoFileName"></span>
+                  <span class="text-[10px] text-slate-400" x-text="motherPhotoFileSize"></span>
+                </div>
+                <button type="button" @click="viewMotherPhoto()"
+                        class="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span>View</span>
+                </button>
+                <button type="button" @click="clearMotherPhoto()" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                  ✕
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1993,11 +2261,14 @@
       <div class="space-y-6 pt-8 border-t border-slate-100">
         <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Local Guardian Profile <span class="text-slate-400 font-medium normal-case tracking-normal">(If Applicable)</span></h3>
 
-        {{-- Guardian Photo Upload for Visitor Pass --}}
+        {{-- Guardian Photo Upload for Visitor Pass (Hidden by default, viewable via View button) --}}
         <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5 rounded-2xl bg-slate-50/70 border border-slate-200">
           <div class="w-16 h-16 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
             <template x-if="guardianPhotoPreview">
-              <img :src="guardianPhotoPreview" class="w-full h-full object-cover" alt="Guardian Preview">
+              <div class="w-full h-full bg-emerald-50/70 flex flex-col items-center justify-center text-center p-1">
+                <span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shadow-2xs">✓</span>
+                <span class="text-[8px] font-extrabold text-emerald-800 uppercase mt-0.5">Attached</span>
+              </div>
             </template>
             <template x-if="!guardianPhotoPreview">
               <svg class="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -2005,10 +2276,27 @@
           </div>
           <div class="flex-1 min-w-0">
             <label class="block text-xs font-bold text-slate-800">Guardian Photograph (For Campus Visitor Pass)</label>
-            <p class="text-[11px] text-slate-500 mt-0.5">Will appear on the Parent &amp; Guardian Visitor Pass</p>
-            <div class="mt-2">
-              <input type="file" name="guardian_photo" accept="image/*" @change="handleGuardianPhotoChange($event)"
-                     class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+            <p class="text-[11px] text-slate-500 mt-0.5">Will appear on the Parent &amp; Guardian Visitor Pass. Uploaded photo remains hidden by default.</p>
+            <div class="mt-2.5">
+              <div x-show="!guardianPhotoPreview">
+                <input type="file" id="guardian_photo_input" name="guardian_photo" accept="image/*" @change="handleGuardianPhotoChange($event)"
+                       class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="guardianPhotoPreview" class="flex items-center gap-2 flex-wrap">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-medium shadow-2xs">
+                  <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span class="truncate max-w-[180px]" x-text="guardianPhotoFileName"></span>
+                  <span class="text-[10px] text-slate-400" x-text="guardianPhotoFileSize"></span>
+                </div>
+                <button type="button" @click="viewGuardianPhoto()"
+                        class="px-3 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                  <span>View</span>
+                </button>
+                <button type="button" @click="clearGuardianPhoto()" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                  ✕
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2870,11 +3158,15 @@
 
           <div>
             <label class="block text-xs font-bold text-slate-700 mb-2">Discount Amount (₹)</label>
-            <input type="number" step="0.01" min="0" name="concession_amount"
-                   :value="concessionAmount"
-                   @input="concessionAmountInput = $event.target.value"
-                   placeholder="0.00"
-                   class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm font-bold transition text-emerald-700 tabular-nums">
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-xs font-bold text-emerald-600 select-none">₹</span>
+              <input type="number" step="any" min="0" id="concession_amount" name="concession_amount"
+                     x-model="concessionAmountInput"
+                     @input="userHasEditedConcession = true; isPaymentVerified = false;"
+                     placeholder="0.00"
+                     class="w-full pl-8 pr-4 py-3 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 text-sm font-bold transition text-emerald-700 tabular-nums bg-white outline-none">
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1 font-medium">Freely editable; defaults to category standard discount.</p>
           </div>
 
           <div>
@@ -2928,63 +3220,195 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {{-- Birth Certificate --}}
-            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Birth Certificate</span>
-                <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Mandatory</span>
+                <span class="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">Mandatory</span>
               </div>
-              <input type="file" name="doc_birth_certificate" accept=".pdf,image/*"
-                     class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              <div x-show="!uploadedDocs.doc_birth_certificate">
+                <input type="file" id="doc_birth_certificate" name="doc_birth_certificate" accept=".pdf,image/*"
+                       @change="handleDocChange($event, 'doc_birth_certificate', 'Birth Certificate')"
+                       class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="uploadedDocs.doc_birth_certificate" class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">✓</span>
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900 truncate" x-text="uploadedDocs.doc_birth_certificate?.name"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="uploadedDocs.doc_birth_certificate?.size"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" @click="viewDoc('doc_birth_certificate')"
+                          class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <span>View</span>
+                  </button>
+                  <button type="button" @click="clearDoc('doc_birth_certificate')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
 
-            {{-- Student / Parent Aadhaar --}}
-            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+            {{-- Student Aadhaar Card --}}
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Student Aadhaar Card</span>
-                <span class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded">Mandatory</span>
+                <span class="text-[10px] font-bold text-[#8C2826] bg-[#FFF5F5] px-2 py-0.5 rounded border border-[#FECACA]">Mandatory</span>
               </div>
-              <input type="file" name="doc_aadhaar" accept=".pdf,image/*"
-                     class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              <div x-show="!uploadedDocs.doc_aadhaar">
+                <input type="file" id="doc_aadhaar" name="doc_aadhaar" accept=".pdf,image/*"
+                       @change="handleDocChange($event, 'doc_aadhaar', 'Student Aadhaar Card')"
+                       class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="uploadedDocs.doc_aadhaar" class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">✓</span>
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900 truncate" x-text="uploadedDocs.doc_aadhaar?.name"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="uploadedDocs.doc_aadhaar?.size"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" @click="viewDoc('doc_aadhaar')"
+                          class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <span>View</span>
+                  </button>
+                  <button type="button" @click="clearDoc('doc_aadhaar')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
 
             {{-- Community / Caste Certificate --}}
-            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Community Certificate</span>
-                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">If Applicable</span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">If Applicable</span>
               </div>
-              <input type="file" name="doc_caste" accept=".pdf,image/*"
-                     class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              <div x-show="!uploadedDocs.doc_caste">
+                <input type="file" id="doc_caste" name="doc_caste" accept=".pdf,image/*"
+                       @change="handleDocChange($event, 'doc_caste', 'Community Certificate')"
+                       class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="uploadedDocs.doc_caste" class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">✓</span>
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900 truncate" x-text="uploadedDocs.doc_caste?.name"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="uploadedDocs.doc_caste?.size"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" @click="viewDoc('doc_caste')"
+                          class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <span>View</span>
+                  </button>
+                  <button type="button" @click="clearDoc('doc_caste')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
 
             {{-- Transfer Certificate (TC) --}}
-            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Transfer Certificate (TC)</span>
-                <span class="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">Std 1 &amp; Above</span>
+                <span class="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">Std 1 &amp; Above</span>
               </div>
-              <input type="file" name="doc_tc" accept=".pdf,image/*"
-                     class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              <div x-show="!uploadedDocs.doc_tc">
+                <input type="file" id="doc_tc" name="doc_tc" accept=".pdf,image/*"
+                       @change="handleDocChange($event, 'doc_tc', 'Transfer Certificate (TC)')"
+                       class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="uploadedDocs.doc_tc" class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">✓</span>
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900 truncate" x-text="uploadedDocs.doc_tc?.name"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="uploadedDocs.doc_tc?.size"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" @click="viewDoc('doc_tc')"
+                          class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <span>View</span>
+                  </button>
+                  <button type="button" @click="clearDoc('doc_tc')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
 
             {{-- Previous Marksheet --}}
-            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Previous Marksheet / Progress Card</span>
-                <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">Academic</span>
+                <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">Academic</span>
               </div>
-              <input type="file" name="doc_marksheet" accept=".pdf,image/*"
-                     class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              <div x-show="!uploadedDocs.doc_marksheet">
+                <input type="file" id="doc_marksheet" name="doc_marksheet" accept=".pdf,image/*"
+                       @change="handleDocChange($event, 'doc_marksheet', 'Previous Marksheet / Progress Card')"
+                       class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="uploadedDocs.doc_marksheet" class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">✓</span>
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900 truncate" x-text="uploadedDocs.doc_marksheet?.name"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="uploadedDocs.doc_marksheet?.size"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" @click="viewDoc('doc_marksheet')"
+                          class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <span>View</span>
+                  </button>
+                  <button type="button" @click="clearDoc('doc_marksheet')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
 
             {{-- Parent ID Proof --}}
-            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2">
+            <div class="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-bold text-slate-800">Parent PAN / ID Proof</span>
-                <span class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded">Finance / 80G</span>
+                <span class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">Finance / 80G</span>
               </div>
-              <input type="file" name="doc_pan_id" accept=".pdf,image/*"
-                     class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              <div x-show="!uploadedDocs.doc_pan_id">
+                <input type="file" id="doc_pan_id" name="doc_pan_id" accept=".pdf,image/*"
+                       @change="handleDocChange($event, 'doc_pan_id', 'Parent PAN / ID Proof')"
+                       class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-[#8C2826] file:text-white hover:file:bg-[#731E1C] cursor-pointer">
+              </div>
+              <div x-show="uploadedDocs.doc_pan_id" class="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0">✓</span>
+                  <div class="min-w-0">
+                    <p class="text-xs font-bold text-slate-900 truncate" x-text="uploadedDocs.doc_pan_id?.name"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="uploadedDocs.doc_pan_id?.size"></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" @click="viewDoc('doc_pan_id')"
+                          class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 transition flex items-center gap-1 shadow-2xs cursor-pointer">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                    <span>View</span>
+                  </button>
+                  <button type="button" @click="clearDoc('doc_pan_id')" class="px-2 py-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition cursor-pointer" title="Remove file">
+                    ✕
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3270,28 +3694,64 @@
                 <label class="block text-xs font-bold text-slate-700">Amount Collected Today (₹) <span class="text-rose-500">*</span></label>
                 {{-- Quick Presets --}}
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <button type="button" @click="userAmountCollected = (admissionFeeTotal > 0 ? admissionFeeTotal : Math.round(grandTotal * 0.2))"
-                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition">
+                  <button type="button" @click="setAmountPreset(admissionFeeTotal > 0 ? admissionFeeTotal : Math.round(grandTotal * 0.2))"
+                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition cursor-pointer">
                     🎓 Admission Only
                   </button>
-                  <button type="button" @click="userAmountCollected = term1Amount"
-                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition">
+                  <button type="button" @click="setAmountPreset(term1Amount)"
+                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition cursor-pointer">
                     📅 Term 1 Fee
                   </button>
-                  <button type="button" @click="userAmountCollected = grandTotal"
-                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition">
+                  <button type="button" @click="setAmountPreset(grandTotal)"
+                          class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer">
                     🏆 Full Fee
                   </button>
                 </div>
               </div>
 
-              <input type="number" step="0.01" min="0" id="amount_collected" name="amount_collected" required
-                     :value="userAmountCollected !== null ? userAmountCollected : term1Amount"
-                     @input="userAmountCollected = $event.target.value"
-                     placeholder="0.00"
-                     class="w-full px-4 py-3 rounded-xl border @error('amount_collected') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-bold transition text-slate-900 tabular-nums bg-white">
+              {{-- Amount Input + Explicit Verify Button --}}
+              <div class="flex items-stretch gap-2.5">
+                <div class="relative flex-1">
+                  <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-xs font-bold text-slate-400 select-none">₹</span>
+                  <input type="number" step="any" min="0" id="amount_collected" name="amount_collected" required
+                         x-model="userAmountCollected"
+                         @input="onAmountCollectedChanged($event.target.value)"
+                         placeholder="0.00"
+                         class="w-full pl-8 pr-4 py-3 rounded-xl border @error('amount_collected') border-rose-400 @else border-slate-200 @enderror focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-bold transition text-slate-900 tabular-nums bg-white outline-none">
+                </div>
+                <button type="button" @click="verifyPayment()"
+                        :class="isPaymentVerified ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-200 shadow-sm' : 'bg-[#8C2826] hover:bg-[#731E1C] text-white shadow-sm'"
+                        class="px-4 py-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition shrink-0 cursor-pointer">
+                  <template x-if="isPaymentVerified">
+                    <span class="flex items-center gap-1.5">
+                      <svg class="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                      <span>Verified</span>
+                    </span>
+                  </template>
+                  <template x-if="!isPaymentVerified">
+                    <span class="flex items-center gap-1.5">
+                      <svg class="w-4 h-4 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      <span>Verify</span>
+                    </span>
+                  </template>
+                </button>
+              </div>
               @error('amount_collected') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
               <p id="amount_collected_client_err" class="text-xs text-rose-500 mt-1 font-semibold hidden"></p>
+
+              {{-- Verified Status Ribbon --}}
+              <div x-show="isPaymentVerified" x-transition class="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between shadow-2xs">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">✓</span>
+                  <div class="truncate">
+                    <span>Payment amount <strong class="font-extrabold" x-text="formatMoney(amountCollected)"></strong> is <strong class="text-emerald-700">Verified</strong></span>
+                    <span class="text-[10px] text-emerald-700 block sm:inline sm:ml-1 font-medium" x-text="'by ' + verifiedBy + ' • ' + verifiedAt"></span>
+                  </div>
+                </div>
+                <button type="button" @click="verificationModalOpen = true" class="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline shrink-0 ml-3 cursor-pointer">
+                  Audit History
+                </button>
+              </div>
 
               {{-- Live Waterfall Notice --}}
               <div x-show="amountCollected > term1Amount && amountCollected < grandTotal && paymentTerms !== 'single'" class="mt-2 p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/80 text-[11px] text-blue-800 flex items-center gap-2">
@@ -3307,8 +3767,8 @@
           </div>
         </div>
 
-        {{-- Live Collection Status Summary Tiles --}}
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5 p-5 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-2xs">
+        {{-- Live Collection Status Summary Tiles (5-Tile Comprehensive Audit Matrix) --}}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 p-5 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-2xs">
           <div>
             <span class="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">Collected Today</span>
             <p class="text-xl sm:text-2xl font-black text-emerald-700 tabular-nums mt-1" x-text="formatMoney(amountCollected)"></p>
@@ -3329,6 +3789,23 @@
                :class="paymentStatus === 'Paid' ? 'text-emerald-600' : (paymentStatus === 'Partially Paid' ? 'text-amber-600' : 'text-slate-600')"
                x-text="excessAmount > 0 ? 'Advance Paid' : paymentStatus">
             </p>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold text-indigo-900 uppercase tracking-wider">Verification Status</span>
+            <div class="mt-1.5">
+              <template x-if="isPaymentVerified">
+                <span class="inline-flex items-center gap-1 text-emerald-700 font-extrabold text-sm">
+                  <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                  <span>Verified</span>
+                </span>
+              </template>
+              <template x-if="!isPaymentVerified">
+                <span class="inline-flex items-center gap-1.5 text-amber-700 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <span>Pending Verify</span>
+                </span>
+              </template>
+            </div>
           </div>
         </div>
       </div>
@@ -3363,14 +3840,181 @@
           <a href="{{ route('admissions.index') }}" class="px-5 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold border border-slate-200 text-xs transition flex items-center justify-center shadow-2xs">
             Cancel
           </a>
-          <button type="submit" class="px-8 h-12 rounded-xl bg-gradient-to-r from-[#8C2826] to-[#A13431] hover:from-[#731E1C] hover:to-[#8C2826] text-white font-extrabold text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-            <span>Submit &amp; Enroll Student</span>
+          <button type="submit" :disabled="isSubmitting"
+                  class="px-8 h-12 rounded-xl bg-gradient-to-r from-[#8C2826] to-[#A13431] hover:from-[#731E1C] hover:to-[#8C2826] text-white font-extrabold text-xs shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+            <template x-if="!isSubmitting">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                <span>Submit &amp; Enroll Student</span>
+              </span>
+            </template>
+            <template x-if="isSubmitting">
+              <span class="flex items-center gap-2">
+                <svg class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                <span>Saving Admission Record...</span>
+              </span>
+            </template>
           </button>
         </div>
       </div>
     </div>
   </form>
+
+  {{-- ── Universal File Preview Modal (Photos & Documents remain hidden by default) ── --}}
+  <div x-show="previewModalOpen" x-cloak
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @keydown.escape.window="closePreview()"
+       class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div @click.away="closePreview()"
+         class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+      {{-- Modal Header --}}
+      <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-slate-900 truncate" x-text="previewModalTitle"></h4>
+            <p class="text-[10px] text-slate-400 font-medium">Uploaded file preview • Secure student record</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <a :href="previewModalUrl" target="_blank" download class="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition flex items-center gap-1 shadow-2xs">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            <span>Download</span>
+          </a>
+          <button type="button" @click="closePreview()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition cursor-pointer font-bold">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {{-- Modal Body --}}
+      <div class="p-6 overflow-auto flex-1 flex items-center justify-center bg-slate-100/50 min-h-[350px]">
+        <template x-if="previewModalType === 'image'">
+          <div class="max-w-full text-center">
+            <img :src="previewModalUrl" class="max-h-[70vh] max-w-full rounded-2xl object-contain shadow-md mx-auto border border-slate-200" alt="Preview">
+          </div>
+        </template>
+        <template x-if="previewModalType === 'pdf'">
+          <iframe :src="previewModalUrl" class="w-full h-[70vh] rounded-2xl border border-slate-200 bg-white shadow-md"></iframe>
+        </template>
+      </div>
+
+      {{-- Modal Footer --}}
+      <div class="px-6 py-3.5 bg-white border-t border-slate-100 flex items-center justify-between shrink-0 text-xs text-slate-500">
+        <span>Files remain hidden on the form by default to preserve cleanliness and privacy.</span>
+        <button type="button" @click="closePreview()" class="px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer">
+          Close Preview
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {{-- ── Payment Verification Audit Modal ── --}}
+  <div x-show="verificationModalOpen" x-cloak
+       x-transition:enter="transition ease-out duration-200"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-150"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       @keydown.escape.window="verificationModalOpen = false"
+       class="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div @click.away="verificationModalOpen = false"
+         class="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden flex flex-col">
+      {{-- Modal Header --}}
+      <div class="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          </div>
+          <div>
+            <h4 class="text-sm font-extrabold tracking-tight">Payment Verification Summary</h4>
+            <p class="text-[11px] text-emerald-100">Official fee collection cross-check &amp; ledger audit</p>
+          </div>
+        </div>
+        <button type="button" @click="verificationModalOpen = false" class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer font-bold">
+          ✕
+        </button>
+      </div>
+
+      {{-- Modal Body --}}
+      <div class="p-6 space-y-5 bg-white overflow-y-auto max-h-[75vh]">
+        {{-- Amount Verified Highlight Card --}}
+        <div class="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex items-center justify-between">
+          <div>
+            <span class="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Verified Collection Amount</span>
+            <p class="text-3xl font-black text-emerald-800 tabular-nums mt-0.5" x-text="formatMoney(amountCollected)"></p>
+          </div>
+          <div class="text-right">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white font-extrabold text-xs shadow-2xs">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              <span>Verified</span>
+            </span>
+            <p class="text-[10px] text-emerald-700 font-medium mt-1" x-text="verifiedAt"></p>
+          </div>
+        </div>
+
+        {{-- Verification Audit Details Grid --}}
+        <div class="space-y-3">
+          <h5 class="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Verification Audit Record</h5>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-semibold block">Verified By</span>
+              <span class="font-extrabold text-slate-800" x-text="verifiedBy"></span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-semibold block">Deposit Account</span>
+              <span class="font-extrabold text-slate-800 capitalize" x-text="paymentAccount === 'cash_box_1' ? 'Front Office Cash (Box 1)' : (paymentAccount === 'cash_box_2' ? 'Accounts Vault (Box 2)' : 'UPI Digital Account')"></span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-semibold block">Remaining Balance</span>
+              <span class="font-extrabold text-amber-700" x-text="formatMoney(pendingAmount)"></span>
+            </div>
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="text-[10px] text-slate-400 font-semibold block">Grand Total Fees</span>
+              <span class="font-extrabold text-slate-900" x-text="formatMoney(grandTotal)"></span>
+            </div>
+          </div>
+        </div>
+
+        {{-- Verification History Log --}}
+        <div class="space-y-2 pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-slate-800 uppercase tracking-wide">Verification History (Audit Trail)</span>
+            <span class="text-[10px] text-slate-400 font-semibold" x-text="verificationHistory.length + ' entries logged'"></span>
+          </div>
+          <div class="space-y-2 max-h-48 overflow-y-auto">
+            <template x-for="(entry, idx) in verificationHistory" :key="idx">
+              <div class="p-3 rounded-xl bg-slate-50/70 border border-slate-200 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">✓</span>
+                  <div>
+                    <p class="font-bold text-slate-900" x-text="entry.formattedAmount + ' verified (' + entry.mode + ')'"></p>
+                    <p class="text-[10px] text-slate-400 font-medium" x-text="'Verified by ' + entry.verifier + ' • ' + entry.timestamp"></p>
+                  </div>
+                </div>
+                <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Confirmed</span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      {{-- Modal Footer --}}
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end shrink-0">
+        <button type="button" @click="verificationModalOpen = false" class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer">
+          Done &amp; Continue
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 
@@ -4079,9 +4723,170 @@
           } else if (clientAlert) {
             clientAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
+
+          // Preserve draft buffer immediately so no data is lost on validation failure
+          saveAdmissionDraft();
+        } else {
+          // Client validation passed!
+          // Double-submission lock:
+          const alpineRoot = document.querySelector('[x-data]');
+          if (alpineRoot && window.Alpine) {
+            const alpineData = Alpine.$data(alpineRoot);
+            if (alpineData) alpineData.isSubmitting = true;
+          }
+          // Save draft right before submitting as buffer against connection drops
+          saveAdmissionDraft();
         }
       });
     }
+
+    // ── Resilient Auto-Draft Storage Engine ──────────────────────────
+    const DRAFT_KEY = 'dasa_admission_draft_v2';
+    let draftSaveTimer = null;
+
+    function saveAdmissionDraft() {
+      const formEl = document.getElementById('admissionCreateForm');
+      if (!formEl) return;
+
+      const draft = {
+        savedAt: new Date().toISOString(),
+        fields: {},
+        alpine: {}
+      };
+
+      // Collect standard form fields (excluding files and tokens)
+      const elements = formEl.elements;
+      for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (!el.name || el.type === 'file' || el.name === '_token') continue;
+        if (el.type === 'checkbox') {
+          draft.fields[el.name] = el.checked;
+        } else if (el.type === 'radio') {
+          if (el.checked) draft.fields[el.name] = el.value;
+        } else {
+          draft.fields[el.name] = el.value;
+        }
+      }
+
+      // Collect reactive Alpine state
+      const alpineRoot = document.querySelector('[x-data]');
+      if (alpineRoot && window.Alpine) {
+        const ad = Alpine.$data(alpineRoot);
+        if (ad) {
+          draft.alpine = {
+            selectedClassId: ad.selectedClassId || '',
+            selectedSectionId: ad.selectedSectionId || '',
+            userAmountCollected: ad.userAmountCollected || '',
+            concessionType: ad.concessionType || 'none',
+            concessionAmountInput: ad.concessionAmountInput || '',
+            concessionRemarks: ad.concessionRemarks || '',
+            aspRequired: ad.aspRequired || false,
+            aspTerm: ad.aspTerm || '',
+            transportRequired: ad.transportRequired || false,
+            selectedRouteId: ad.selectedRouteId || '',
+            selectedStopId: ad.selectedStopId || '',
+            isPaymentVerified: ad.isPaymentVerified || false,
+            verifiedAt: ad.verifiedAt || '',
+            verifiedBy: ad.verifiedBy || '',
+            verificationNotes: ad.verificationNotes || '',
+            verificationHistory: ad.verificationHistory || []
+          };
+        }
+      }
+
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      } catch (err) {
+        console.warn('Draft save error:', err);
+      }
+    }
+
+    function saveAdmissionDraftDebounced() {
+      clearTimeout(draftSaveTimer);
+      draftSaveTimer = setTimeout(saveAdmissionDraft, 500);
+    }
+
+    // Auto-save draft on every user keystroke / selection change
+    if (form) {
+      form.addEventListener('input', saveAdmissionDraftDebounced);
+      form.addEventListener('change', saveAdmissionDraftDebounced);
+    }
+    window.addEventListener('beforeunload', saveAdmissionDraft);
+
+    // Auto-restore draft on page load
+    const hasServerErrors = {{ $errors->any() ? 'true' : 'false' }};
+    if (hasServerErrors) {
+      // Server returned with errors — Laravel old() has already filled form fields.
+      // Sync latest data into draft storage.
+      saveAdmissionDraft();
+    } else {
+      // Fresh load or refresh — check if local draft exists
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          const firstNameInput = document.getElementById('first_name');
+          // If first_name or mobile was entered in draft and current first_name is empty, restore!
+          if (draft && draft.fields && (draft.fields['first_name'] || draft.fields['parent_mobile'] || draft.fields['class_id'])) {
+            if (firstNameInput && !firstNameInput.value.trim()) {
+              // Populate form fields
+              for (const [name, val] of Object.entries(draft.fields)) {
+                const el = form.elements[name];
+                if (!el) continue;
+                if (el.type === 'checkbox') {
+                  el.checked = Boolean(val);
+                } else if (el.type === 'radio') {
+                  if (el.value === val) el.checked = true;
+                } else {
+                  el.value = val;
+                }
+              }
+
+              // Restore Alpine reactive state
+              const alpineRoot = document.querySelector('[x-data]');
+              if (alpineRoot && window.Alpine && draft.alpine) {
+                const ad = Alpine.$data(alpineRoot);
+                if (ad) {
+                  if (draft.alpine.selectedClassId) ad.selectedClassId = draft.alpine.selectedClassId;
+                  if (draft.alpine.selectedSectionId) ad.selectedSectionId = draft.alpine.selectedSectionId;
+                  if (draft.alpine.userAmountCollected) ad.userAmountCollected = draft.alpine.userAmountCollected;
+                  if (draft.alpine.concessionType) ad.concessionType = draft.alpine.concessionType;
+                  if (draft.alpine.concessionAmountInput) ad.concessionAmountInput = draft.alpine.concessionAmountInput;
+                  if (draft.alpine.concessionRemarks) ad.concessionRemarks = draft.alpine.concessionRemarks;
+                  if (draft.alpine.aspRequired !== undefined) ad.aspRequired = draft.alpine.aspRequired;
+                  if (draft.alpine.transportRequired !== undefined) ad.transportRequired = draft.alpine.transportRequired;
+                  if (draft.alpine.isPaymentVerified !== undefined) ad.isPaymentVerified = draft.alpine.isPaymentVerified;
+                  if (draft.alpine.verifiedAt) ad.verifiedAt = draft.alpine.verifiedAt;
+                  if (draft.alpine.verifiedBy) ad.verifiedBy = draft.alpine.verifiedBy;
+                  if (draft.alpine.verificationHistory) ad.verificationHistory = draft.alpine.verificationHistory;
+                }
+              }
+
+              // Display recovery banner
+              const banner = document.getElementById('draftRecoveryBanner');
+              const timeText = document.getElementById('draftTimestampText');
+              if (banner && timeText && draft.savedAt) {
+                const savedDate = new Date(draft.savedAt);
+                timeText.innerText = `Previously entered data from ${savedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} (${savedDate.toLocaleDateString('en-IN')}) was restored. You can continue without retyping.`;
+                banner.classList.remove('hidden');
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Draft restoration error:', e);
+      }
+    }
   });
+
+  // Discard draft and reset form
+  function discardDraftAndReset() {
+    if (confirm('Are you sure you want to discard all unsaved admission data and start fresh?')) {
+      try {
+        localStorage.removeItem('dasa_admission_draft_v2');
+      } catch (e) {}
+      window.location.href = "{{ route('admissions.create') }}";
+    }
+  }
 </script>
 @endsection

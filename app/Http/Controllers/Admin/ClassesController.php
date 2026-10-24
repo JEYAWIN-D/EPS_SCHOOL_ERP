@@ -506,95 +506,36 @@ class ClassesController extends Controller
             'room'                   => 'nullable|string|max:50',
             'period_type'            => 'nullable|string|in:class,free,substitution,activity,holiday,practical',
             'notes'                  => 'nullable|string|max:255',
-            'force_conflict'         => 'nullable|boolean',
         ]);
 
         $currentYear = AcademicYear::where('is_current', true)->first()
             ?? AcademicYear::latest('id')->first();
 
-        $periodTimings = self::getPeriodTimings();
-        $timings = $periodTimings[$validated['period_number']] ?? ['09:10:00', '09:50:00'];
         $periodType = $validated['period_type'] ?? 'class';
-
-        // If subject_id is not provided (e.g. for free period or holiday), fallback to first subject
-        $subjectId = $validated['subject_id'] ?? Subject::first()?->id;
-
         $effectiveTeacherId = $periodType === 'substitution' && !empty($validated['substitute_teacher_id'])
             ? $validated['substitute_teacher_id']
             : ($periodType === 'free' || $periodType === 'holiday' ? null : ($request->input('teacher_id') ?: null));
 
-        // Consecutive period validation: the same teacher cannot be assigned to adjacent periods on the same day
-        if ($effectiveTeacherId && !in_array($periodType, ['free', 'holiday'])) {
-            $consecutiveConflict = self::checkConsecutiveTeacherConflict(
-                (int) $validated['class_id'],
-                (int) $validated['section_id'],
-                (int) $validated['day_of_week'],
-                (int) $currentYear->id,
-                [[
-                    'period_number' => (int) $validated['period_number'],
-                    'teacher_id'    => $effectiveTeacherId,
-                    'period_type'   => $periodType,
-                ]]
-            );
-
-            if ($consecutiveConflict) {
-                return response()->json([
-                    'success'              => false,
-                    'consecutive_conflict' => true,
-                    'message'              => $consecutiveConflict,
-                ], 422);
-            }
-        }
-
-        // Conflict detection: verify teacher is not already assigned to another class during this period
-        if ($effectiveTeacherId && !in_array($periodType, ['free', 'holiday']) && !$request->boolean('force_conflict')) {
-            $conflict = Timetable::where('academic_year_id', $currentYear->id)
-                ->where('day_of_week', $validated['day_of_week'])
-                ->where('period_number', $validated['period_number'])
-                ->where('teacher_id', $effectiveTeacherId)
-                ->where('is_active', true)
-                ->whereNotIn('period_type', ['holiday', 'free'])
-                ->where(function ($q) use ($validated) {
-                    $q->where('class_id', '!=', $validated['class_id'])
-                      ->orWhere('section_id', '!=', $validated['section_id']);
-                })
-                ->with(['class', 'section', 'subject', 'teacher'])
-                ->first();
-
-            if ($conflict) {
-                $teacherName = $conflict->teacher ? ($conflict->teacher->first_name . ' ' . $conflict->teacher->last_name) : 'Faculty member';
-                $conflictClass = ($conflict->class?->name ?? 'Class') . ' - Section ' . ($conflict->section?->name ?? 'A');
-                $conflictSubject = $conflict->subject?->name ?? 'another session';
-                $dayNames = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
-                $dayName = $dayNames[$validated['day_of_week']] ?? 'this day';
-
-                return response()->json([
-                    'success'  => false,
-                    'conflict' => true,
-                    'message'  => "Teacher Conflict: {$teacherName} is already assigned to {$conflictClass} ({$conflictSubject}) during Period {$validated['period_number']} on {$dayName}."
-                ], 422);
-            }
-        }
-
-        $timetable = Timetable::updateOrCreate(
-            [
-                'class_id'         => $validated['class_id'],
-                'section_id'       => $validated['section_id'],
-                'day_of_week'      => $validated['day_of_week'],
-                'period_number'    => $validated['period_number'],
+        try {
+            $conflictService = app(\App\Services\TimetableConflictService::class);
+            $timetable = $conflictService->atomicSaveSlot([
+                'class_id'         => (int) $validated['class_id'],
+                'section_id'       => (int) $validated['section_id'],
+                'day_of_week'      => (int) $validated['day_of_week'],
+                'period_number'    => (int) $validated['period_number'],
+                'subject_id'       => !empty($validated['subject_id']) ? (int) $validated['subject_id'] : null,
+                'teacher_id'       => $effectiveTeacherId,
+                'room'             => $request->input('room'),
+                'period_type'      => $periodType,
                 'academic_year_id' => $currentYear->id,
-            ],
-            [
-                'subject_id'     => $subjectId,
-                'teacher_id'     => $effectiveTeacherId,
-                'start_time'     => $timings[0],
-                'end_time'       => $timings[1],
-                'room'           => $periodType === 'holiday' ? 'Holiday' : ($request->input('room') ?: 'Room 1-A'),
-                'is_active'      => true,
-                'period_type'    => $periodType,
-                'effective_from' => '2025-06-01',
-            ]
-        );
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success'  => false,
+                'conflict' => true,
+                'message'  => $e->getMessage(),
+            ], 422);
+        }
 
         self::clearCache();
 
@@ -662,115 +603,34 @@ class ClassesController extends Controller
             'slots.*.teacher_id'    => 'nullable',
             'slots.*.room'          => 'nullable|string|max:50',
             'slots.*.period_type'   => 'nullable|string|in:class,free,substitution,activity,holiday,practical',
-            'force_conflict'        => 'nullable|boolean',
         ]);
 
         $currentYear = AcademicYear::where('is_current', true)->first()
             ?? AcademicYear::latest('id')->first();
 
-        $periodTimings = self::getPeriodTimings();
-        $forceConflict = $request->boolean('force_conflict');
-
-        // Consecutive period validation: the same teacher cannot be assigned to adjacent periods on the same day
-        $consecutiveConflict = self::checkConsecutiveTeacherConflict(
-            (int) $validated['class_id'],
-            (int) $validated['section_id'],
-            (int) $validated['day_of_week'],
-            (int) $currentYear->id,
-            $validated['slots']
-        );
-
-        if ($consecutiveConflict) {
+        try {
+            $conflictService = app(\App\Services\TimetableConflictService::class);
+            $savedTimetables = $conflictService->atomicSaveDay([
+                'class_id'         => (int) $validated['class_id'],
+                'section_id'       => (int) $validated['section_id'],
+                'day_of_week'      => (int) $validated['day_of_week'],
+                'slots'            => $validated['slots'],
+                'academic_year_id' => $currentYear->id,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            $isConsecutive = str_contains($e->getMessage(), 'Consecutive Period Conflict');
             return response()->json([
                 'success'              => false,
-                'consecutive_conflict' => true,
-                'message'              => $consecutiveConflict,
+                'conflict'             => true,
+                'consecutive_conflict' => $isConsecutive,
+                'message'              => $e->getMessage(),
             ], 422);
         }
 
-        // Conflict detection: verify no assigned teacher has a collision in another class/section
-        if (!$forceConflict) {
-            foreach ($validated['slots'] as $slotData) {
-                $teacherId = !empty($slotData['teacher_id']) ? (int) $slotData['teacher_id'] : null;
-                $periodType = $slotData['period_type'] ?? 'class';
-                $periodNum = (int) $slotData['period_number'];
-
-                if ($teacherId && !in_array($periodType, ['free', 'holiday'])) {
-                    $conflict = Timetable::where('academic_year_id', $currentYear->id)
-                        ->where('day_of_week', $validated['day_of_week'])
-                        ->where('period_number', $periodNum)
-                        ->where('teacher_id', $teacherId)
-                        ->where('is_active', true)
-                        ->whereNotIn('period_type', ['holiday', 'free'])
-                        ->where(function ($q) use ($validated) {
-                            $q->where('class_id', '!=', $validated['class_id'])
-                              ->orWhere('section_id', '!=', $validated['section_id']);
-                        })
-                        ->with(['class', 'section', 'subject', 'teacher'])
-                        ->first();
-
-                    if ($conflict) {
-                        $teacherName = $conflict->teacher ? ($conflict->teacher->first_name . ' ' . $conflict->teacher->last_name) : 'Faculty member';
-                        $conflictClass = ($conflict->class?->name ?? 'Class') . ' - Section ' . ($conflict->section?->name ?? 'A');
-                        $conflictSubject = $conflict->subject?->name ?? 'another session';
-                        $dayNames = [1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday', 4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday'];
-                        $dayName = $dayNames[$validated['day_of_week']] ?? 'this day';
-
-                        return response()->json([
-                            'success'  => false,
-                            'conflict' => true,
-                            'message'  => "Teacher Conflict: {$teacherName} is already assigned to {$conflictClass} ({$conflictSubject}) during Period {$periodNum} on {$dayName}."
-                        ], 422);
-                    }
-                }
-            }
-        }
-
         $savedSlots = [];
-        $firstSubject = Subject::first();
-
-        foreach ($validated['slots'] as $slotData) {
-            $periodNum = (int) $slotData['period_number'];
-            $timings = $periodTimings[$periodNum] ?? ['09:10:00', '09:50:00'];
-            $periodType = $slotData['period_type'] ?? 'class';
-            $subjectId = !empty($slotData['subject_id']) ? (int) $slotData['subject_id'] : ($firstSubject?->id ?? 1);
-            $teacherId = (!empty($slotData['teacher_id']) && !in_array($periodType, ['free', 'holiday'])) ? (int) $slotData['teacher_id'] : null;
-            $room = $slotData['room'] ?? ($periodType === 'holiday' ? 'Holiday' : 'Room 1-A');
-
-            $timetable = Timetable::updateOrCreate(
-                [
-                    'class_id'         => $validated['class_id'],
-                    'section_id'       => $validated['section_id'],
-                    'day_of_week'      => $validated['day_of_week'],
-                    'period_number'    => $periodNum,
-                    'academic_year_id' => $currentYear->id,
-                ],
-                [
-                    'subject_id'     => $subjectId,
-                    'teacher_id'     => $teacherId,
-                    'start_time'     => $timings[0],
-                    'end_time'       => $timings[1],
-                    'room'           => $room,
-                    'is_active'      => true,
-                    'period_type'    => $periodType,
-                    'effective_from' => '2025-06-01',
-                ]
-            );
-
-            // Ensure TeacherSubjectAllocation exists if both subject and teacher are set
-            if ($subjectId && $teacherId && $periodType === 'class') {
-                try {
-                    \App\Models\TeacherSubjectAllocation::firstOrCreate([
-                        'subject_id'       => $subjectId,
-                        'employee_id'      => $teacherId,
-                        'class_id'         => $validated['class_id'],
-                    ], [
-                        'academic_year_id' => $currentYear?->id,
-                    ]);
-                } catch (\Throwable $e) {}
-            }
-
+        foreach ($savedTimetables as $timetable) {
             $timetable->load(['subject', 'teacher']);
+            $periodType = $timetable->period_type ?? 'class';
             $subjectName = $timetable->subject?->name ?? 'Academic Class';
             $teacherName = $timetable->teacher ? ($timetable->teacher->first_name . ' ' . $timetable->teacher->last_name) : 'Faculty';
 
@@ -804,10 +664,82 @@ class ClassesController extends Controller
 
         return response()->json([
             'success'     => true,
-            'message'     => 'Timetable saved successfully!',
+            'message'     => 'Timetable saved successfully! No conflicts detected.',
             'slots'       => $savedSlots,
             'day_periods' => $savedSlots,
         ]);
+    }
+
+    /**
+     * API to fetch eligible and completely available staff for a specific period slot.
+     * Dynamic dropdown filter & Smart Timetable Assistance engine.
+     */
+    public function eligibleStaff(Request $request)
+    {
+        $validated = $request->validate([
+            'class_id'      => 'required|exists:classes,id',
+            'section_id'    => 'nullable|exists:sections,id',
+            'subject_id'    => 'nullable|exists:subjects,id',
+            'day_of_week'   => 'required|integer|min:1|max:7',
+            'period_number' => 'nullable|integer|min:1|max:8',
+        ]);
+
+        $conflictService = app(\App\Services\TimetableConflictService::class);
+        $classId = (int) $validated['class_id'];
+        $sectionId = !empty($validated['section_id']) ? (int) $validated['section_id'] : null;
+        $subjectId = !empty($validated['subject_id']) ? (int) $validated['subject_id'] : null;
+        $dayOfWeek = (int) $validated['day_of_week'];
+
+        if (!empty($validated['period_number'])) {
+            $result = $conflictService->getEligibleAndAvailableStaff(
+                $classId,
+                $sectionId,
+                $subjectId,
+                $dayOfWeek,
+                (int) $validated['period_number']
+            );
+            return response()->json(array_merge(['success' => true], $result));
+        }
+
+        $byPeriod = [];
+        for ($p = 1; $p <= 8; $p++) {
+            $byPeriod[$p] = $conflictService->getEligibleAndAvailableStaff(
+                $classId,
+                $sectionId,
+                $subjectId,
+                $dayOfWeek,
+                $p
+            );
+        }
+
+        return response()->json(['success' => true, 'periods' => $byPeriod]);
+    }
+
+    /**
+     * API to resolve an existing timetable conflict record.
+     */
+    public function resolveConflict(Request $request)
+    {
+        if (!self::canManageTimetable(auth()->user())) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'timetable_id'   => 'required|exists:timetables,id',
+            'resolution'     => 'required|in:free_period,reassign',
+            'new_teacher_id' => 'nullable|required_if:resolution,reassign|exists:employees,id',
+        ]);
+
+        $conflictService = app(\App\Services\TimetableConflictService::class);
+        $result = $conflictService->resolveConflict(
+            (int) $validated['timetable_id'],
+            $validated['resolution'],
+            !empty($validated['new_teacher_id']) ? (int) $validated['new_teacher_id'] : null
+        );
+
+        self::clearCache();
+
+        return response()->json($result, $result['success'] ? 200 : 422);
     }
 
     /**

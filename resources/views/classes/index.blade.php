@@ -1248,62 +1248,86 @@
                         <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider" x-show="period.period_type === 'free'">Unassigned</span>
                       </div>
 
-                      {{-- 1. Academic Teaching Faculty --}}
-                      <select x-show="period.period_type === 'class'" x-model.number="period.teacher_id" @change="markUnsaved()"
-                              :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-slate-300 bg-slate-50 text-slate-900 focus:ring-blue-500'"
-                              class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
-                        <option value="">-- Select Teacher --</option>
-                        <optgroup label="👩‍🏫 Academic Teaching Faculty">
-                          @foreach($academicTeachers as $t)
-                            <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
-                          @endforeach
-                        </optgroup>
-                        @if($allTeachers->diff($academicTeachers)->isNotEmpty())
-                          <optgroup label="── Other Staff ──">
-                            @foreach($allTeachers->diff($academicTeachers) as $t)
-                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
-                            @endforeach
+                      {{-- Dynamic Smart Teacher Select when availability API is loaded --}}
+                      <div x-show="staffAvailability[period.period_number] && period.period_type !== 'free'">
+                        <select x-model.number="period.teacher_id" @change="markUnsaved()"
+                                :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-slate-300 bg-slate-50 text-slate-900 focus:ring-blue-500'"
+                                class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                          <option value="">-- Select Teacher --</option>
+                          <optgroup label="✅ Available &amp; Eligible Faculty">
+                            <template x-for="st in (staffAvailability[period.period_number]?.available_staff || [])" :key="st.id">
+                              <option :value="st.id" x-text="st.name + ' (' + (st.designation || 'Teacher') + ') • Today: ' + st.current_daily_periods + '/' + st.max_daily_periods"></option>
+                            </template>
                           </optgroup>
-                        @endif
-                      </select>
+                          <template x-if="staffAvailability[period.period_number]?.blocked_staff && staffAvailability[period.period_number].blocked_staff.length > 0">
+                            <optgroup label="🚫 Unavailable / Conflicted">
+                              <template x-for="st in (staffAvailability[period.period_number]?.blocked_staff || [])" :key="st.id">
+                                <option :value="st.id" disabled class="text-rose-500 bg-slate-100" x-text="'⛔ ' + st.name + ' — ' + st.blocked_reason"></option>
+                              </template>
+                            </optgroup>
+                          </template>
+                        </select>
+                      </div>
 
-                      {{-- 2. Activity / Sports Coaches --}}
-                      <select x-show="period.period_type === 'activity'" x-model.number="period.teacher_id" @change="markUnsaved()"
-                              :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-purple-200 bg-purple-50/50 text-purple-950 focus:ring-purple-500'"
-                              class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
-                        <option value="">-- Select Activity Coach --</option>
-                        <optgroup label="🏃 PET, Sports & Activity Coaches">
-                          @foreach($activityTeachers as $t)
-                            <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }} ({{ $t->designation ?: 'Coach' }})</option>
-                          @endforeach
-                        </optgroup>
-                        @if($allTeachers->diff($activityTeachers)->isNotEmpty())
-                          <optgroup label="── All Other Teachers ──">
-                            @foreach($allTeachers->diff($activityTeachers) as $t)
+                      {{-- Fallback when staff availability is not yet loaded --}}
+                      <div x-show="!staffAvailability[period.period_number]">
+                        {{-- 1. Academic Teaching Faculty --}}
+                        <select x-show="period.period_type === 'class'" x-model.number="period.teacher_id" @change="markUnsaved()"
+                                :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-slate-300 bg-slate-50 text-slate-900 focus:ring-blue-500'"
+                                class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                          <option value="">-- Select Teacher --</option>
+                          <optgroup label="👩‍🏫 Academic Teaching Faculty">
+                            @foreach($academicTeachers as $t)
                               <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
                             @endforeach
                           </optgroup>
-                        @endif
-                      </select>
+                          @if($allTeachers->diff($academicTeachers)->isNotEmpty())
+                            <optgroup label="── Other Staff ──">
+                              @foreach($allTeachers->diff($academicTeachers) as $t)
+                                <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                              @endforeach
+                            </optgroup>
+                          @endif
+                        </select>
 
-                      {{-- 3. Lab / Computer Faculty --}}
-                      <select x-show="period.period_type === 'practical' || period.period_type === 'lab'" x-model.number="period.teacher_id" @change="markUnsaved()"
-                              :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-cyan-200 bg-cyan-50/50 text-cyan-950 focus:ring-cyan-500 focus:bg-white transition cursor-pointer'"
-                              class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
-                        <option value="">-- Select Lab Faculty --</option>
-                        <optgroup label="💻 Lab Incharges & Computer Faculty">
-                          @foreach($labTeachers as $t)
-                            <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }} ({{ $t->designation ?: 'Lab Incharge' }})</option>
-                          @endforeach
-                        </optgroup>
-                        @if($allTeachers->diff($labTeachers)->isNotEmpty())
-                          <optgroup label="── All Other Teachers ──">
-                            @foreach($allTeachers->diff($labTeachers) as $t)
-                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                        {{-- 2. Activity / Sports Coaches --}}
+                        <select x-show="period.period_type === 'activity'" x-model.number="period.teacher_id" @change="markUnsaved()"
+                                :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-purple-200 bg-purple-50/50 text-purple-950 focus:ring-purple-500'"
+                                class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                          <option value="">-- Select Activity Coach --</option>
+                          <optgroup label="🏃 PET, Sports & Activity Coaches">
+                            @foreach($activityTeachers as $t)
+                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }} ({{ $t->designation ?: 'Coach' }})</option>
                             @endforeach
                           </optgroup>
-                        @endif
-                      </select>
+                          @if($allTeachers->diff($activityTeachers)->isNotEmpty())
+                            <optgroup label="── All Other Teachers ──">
+                              @foreach($allTeachers->diff($activityTeachers) as $t)
+                                <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                              @endforeach
+                            </optgroup>
+                          @endif
+                        </select>
+
+                        {{-- 3. Lab / Computer Faculty --}}
+                        <select x-show="period.period_type === 'practical' || period.period_type === 'lab'" x-model.number="period.teacher_id" @change="markUnsaved()"
+                                :class="hasConsecutiveTeacherConflict(idx) ? 'border-rose-400 bg-rose-50/70 text-rose-900 focus:ring-rose-500' : 'border-cyan-200 bg-cyan-50/50 text-cyan-950 focus:ring-cyan-500 focus:bg-white transition cursor-pointer'"
+                                class="w-full min-w-0 max-w-full h-9 px-2.5 border rounded-xl text-xs font-semibold focus:ring-2 focus:bg-white transition cursor-pointer truncate">
+                          <option value="">-- Select Lab Faculty --</option>
+                          <optgroup label="💻 Lab Incharges & Computer Faculty">
+                            @foreach($labTeachers as $t)
+                              <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }} ({{ $t->designation ?: 'Lab Incharge' }})</option>
+                            @endforeach
+                          </optgroup>
+                          @if($allTeachers->diff($labTeachers)->isNotEmpty())
+                            <optgroup label="── All Other Teachers ──">
+                              @foreach($allTeachers->diff($labTeachers) as $t)
+                                <option value="{{ $t->id }}">{{ $t->first_name }} {{ $t->last_name }}{{ $t->designation ? ' (' . $t->designation . ')' : '' }}</option>
+                              @endforeach
+                            </optgroup>
+                          @endif
+                        </select>
+                      </div>
 
                       {{-- 4. Free Period Teacher Display --}}
                       <div x-show="period.period_type === 'free'"
@@ -1434,6 +1458,58 @@
           <button type="button" @click="proceedDiscardChanges()"
                   class="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition cursor-pointer">
             Discard Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  {{-- ── Timetable Conflict Prevention Alert Modal ── --}}
+  <template x-teleport="body">
+    <div x-show="conflictAlertModal.show"
+         class="fixed inset-0 z-[10050] flex items-center justify-center p-4"
+         style="display:none; background:rgba(15, 23, 42, 0.85); backdrop-filter:blur(5px);"
+         x-transition:enter="transition ease-out duration-150"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-100"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95">
+      <div class="bg-white rounded-2xl shadow-2xl border-2 border-rose-300 max-w-lg w-full p-6 space-y-4"
+           @click.stop>
+        <div class="flex items-center gap-3 border-b border-rose-100 pb-3">
+          <div class="w-11 h-11 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-2xl font-bold shrink-0">
+            🚫
+          </div>
+          <div>
+            <h4 class="text-base font-extrabold text-slate-900" x-text="conflictAlertModal.title || 'Timetable Conflict Detected'"></h4>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">Policy Enforcement — Zero Override</span>
+          </div>
+        </div>
+
+        <div class="p-3.5 bg-rose-50/70 rounded-xl border border-rose-200 text-xs font-semibold text-rose-900 leading-relaxed">
+          <p x-text="conflictAlertModal.message"></p>
+        </div>
+
+        <template x-if="conflictAlertModal.errors && conflictAlertModal.errors.length > 1">
+          <div class="space-y-1.5 max-h-40 overflow-y-auto p-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
+            <template x-for="(err, i) in conflictAlertModal.errors" :key="i">
+              <div class="flex items-start gap-1.5 py-1 border-b border-slate-100 last:border-0">
+                <span class="text-rose-500 font-bold shrink-0">•</span>
+                <span x-text="err"></span>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <p class="text-[11px] text-slate-500">
+          Under EPS academic scheduling rules, one staff member cannot teach multiple classes simultaneously, nor exceed maximum workload limits. Please select another eligible faculty member or change the period slot.
+        </p>
+
+        <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+          <button type="button" @click="conflictAlertModal.show = false"
+                  class="px-5 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition cursor-pointer">
+            Acknowledge &amp; Choose Another Teacher
           </button>
         </div>
       </div>
@@ -1881,6 +1957,14 @@ function classesDashboard() {
     discardConfirmModalOpen: false,
     pendingSwitchAction: null,
     activeDayPeriods: [],
+    staffAvailability: {},
+    isLoadingStaffAvailability: false,
+    conflictAlertModal: {
+      show: false,
+      title: 'Timetable Conflict Detected',
+      message: '',
+      errors: []
+    },
 
     currentPeriod: {
       title: 'Period I In Session',
@@ -2415,6 +2499,26 @@ function classesDashboard() {
 
       this.activeDayPeriods = periods;
       this.hasUnsavedChanges = false;
+      this.fetchStaffAvailability();
+    },
+
+    async fetchStaffAvailability() {
+      if (!this.editClass || !this.editSection) return;
+      this.isLoadingStaffAvailability = true;
+      try {
+        const url = `{{ route('classes.timetable.eligible-staff') }}?class_id=${this.editClass.id}&section_id=${this.editSection.id}&day_of_week=${this.editDay}`;
+        const res = await fetch(url, {
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        if (data.success && data.periods) {
+          this.staffAvailability = data.periods;
+        }
+      } catch (err) {
+        console.error('Error fetching staff availability:', err);
+      } finally {
+        this.isLoadingStaffAvailability = false;
+      }
     },
 
     onPeriodTypeChange(period) {
@@ -2644,9 +2748,13 @@ function classesDashboard() {
 
         if (res.status === 422 && data.conflict) {
           this.isSavingTimetable = false;
-          if (confirm(`${data.message}\n\nDo you want to override and assign this teacher anyway?`)) {
-            await this.saveActiveDayTimetable(true);
-          }
+          this.conflictAlertModal = {
+            show: true,
+            title: 'Timetable Conflict Blocked',
+            message: data.message || 'Timetable Conflict: This staff member is already assigned to another class during this period. Please select another eligible staff member or change the period allocation.',
+            errors: Array.isArray(data.errors) ? data.errors : (data.errors ? Object.values(data.errors).flat() : [data.message])
+          };
+          this.showToast(data.message || 'Timetable Conflict detected. Assignment blocked.', 'error');
           return;
         }
 

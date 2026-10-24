@@ -9,13 +9,20 @@ class Timetable extends Model
     protected $fillable = [
         'class_id', 'section_id', 'subject_id', 'teacher_id', 'employee_id',
         'day', 'day_of_week', 'period_number', 'start_time', 'end_time',
-        'room', 'is_active', 'period_type', 'effective_from', 'academic_year_id',
+        'room', 'is_active', 'status', 'conflict_note', 'period_type', 'effective_from', 'academic_year_id',
     ];
 
     protected $casts = [
         'effective_from' => 'date',
         'is_active' => 'boolean',
     ];
+
+    public function scopeActiveTeaching($query)
+    {
+        return $query->where('is_active', true)
+            ->whereNotNull('teacher_id')
+            ->whereNotIn('period_type', ['free', 'holiday']);
+    }
 
     public function class()
     {

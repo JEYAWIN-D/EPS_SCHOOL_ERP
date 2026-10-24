@@ -47,6 +47,9 @@ class Employee extends Model
         'uan_no', 'professional_tax_no', 'passport_no',
         'annual_increment', 'increment_effective_date',
         'nominee_name', 'nominee_relationship', 'nominee_share',
+        // Smart Timetable & Staff Teaching Eligibility Fields
+        'max_daily_periods', 'preferred_days', 'preferred_periods',
+        'unavailable_days', 'unavailable_periods', 'eligible_classes', 'eligible_subjects',
     ];
 
     protected $casts = [
@@ -80,8 +83,15 @@ class Employee extends Model
         'experience_months'        => 'integer',
         'kg_experience_years'      => 'integer',
         'max_weekly_periods'       => 'integer',
+        'max_daily_periods'        => 'integer',
         'qualified_subjects'       => 'array',
         'approved_teaching_levels' => 'array',
+        'preferred_days'           => 'array',
+        'preferred_periods'        => 'array',
+        'unavailable_days'         => 'array',
+        'unavailable_periods'      => 'array',
+        'eligible_classes'         => 'array',
+        'eligible_subjects'        => 'array',
         'is_active'                => 'boolean',
         'aadhaar_no'               => \App\Casts\EncryptedStringResilient::class,
         'pan_no'                   => \App\Casts\EncryptedStringResilient::class,
@@ -407,5 +417,114 @@ class Employee extends Model
             return null;
         }
         return 'Class Teacher — ' . ($current->class->class_teacher_title ?? ('Class ' . $current->class->name));
+    }
+
+    /**
+     * Check if staff member is available on a specific day of week and period.
+     */
+    public function isAvailableOn(int $dayOfWeek, int $periodNumber): bool
+    {
+        if (!$this->is_active) {
+            return false;
+        }
+
+        $empStatus = strtolower($this->status ?? 'active');
+        if (in_array($empStatus, ['inactive', 'relieved', 'terminated', 'resigned'])) {
+            return false;
+        }
+
+        $unavDays = is_array($this->unavailable_days) ? $this->unavailable_days : [];
+        if (in_array($dayOfWeek, $unavDays) || in_array((string)$dayOfWeek, $unavDays)) {
+            return false;
+        }
+
+        $unavPeriods = is_array($this->unavailable_periods) ? $this->unavailable_periods : [];
+        if (in_array($periodNumber, $unavPeriods) || in_array((string)$periodNumber, $unavPeriods)) {
+            return false;
+        }
+
+        // Slot composite key e.g. "1-3" (Day 1, Period 3)
+        $slotKey = "{$dayOfWeek}-{$periodNumber}";
+        if (in_array($slotKey, $unavPeriods)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if staff member is eligible to teach a specific subject in a specific class.
+     */
+    public function canTeachClassSubject(int $classId, int $subjectId, ?int $sectionId = null): bool
+    {
+        if (!$this->is_active) {
+            return false;
+        }
+
+        $empStatus = strtolower($this->status ?? 'active');
+        if (in_array($empStatus, ['inactive', 'relieved'])) {
+            return false;
+        }
+
+        // 1. Direct explicit allocation record in TeacherSubjectAllocation
+        $hasAllocation = $this->teacherSubjectAllocations()
+            ->where('subject_id', $subjectId)
+            ->where('class_id', $classId)
+            ->where('is_active', true)
+            ->when($sectionId, function ($q) use ($sectionId) {
+                $q->where(function ($sub) use ($sectionId) {
+                    $sub->whereNull('section_id')->orWhere('section_id', $sectionId);
+                });
+            })
+            ->exists();
+
+        if ($hasAllocation) {
+            return true;
+        }
+
+        // 2. Check eligible_classes and eligible_subjects json lists if configured
+        $elClasses = is_array($this->eligible_classes) ? $this->eligible_classes : [];
+        $elSubjects = is_array($this->eligible_subjects) ? $this->eligible_subjects : [];
+
+        $classAllowed = empty($elClasses) || in_array($classId, $elClasses) || in_array((string)$classId, $elClasses);
+        $subjectAllowed = empty($elSubjects) || in_array($subjectId, $elSubjects) || in_array((string)$subjectId, $elSubjects);
+
+        if (!empty($elClasses) || !empty($elSubjects)) {
+            return $classAllowed && $subjectAllowed;
+        }
+
+        // 3. Fallback to qualified_subjects text/array or secondary/higher sec expertise
+        $qualSubjects = is_array($this->qualified_subjects) ? $this->qualified_subjects : [];
+        if (!empty($qualSubjects)) {
+            $subjName = \App\Models\Subject::where('id', $subjectId)->value('name');
+            if ($subjName) {
+                foreach ($qualSubjects as $qs) {
+                    if (strcasecmp(trim($qs), trim($subjName)) === 0 || str_contains(strtolower($subjName), strtolower(trim($qs)))) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // If no explicit restrictions exist, check teaching level
+        $classModel = \App\Models\Classes::find($classId);
+        if ($classModel && $classModel->teaching_level_id) {
+            return $this->isEligibleForLevel($classModel->teaching_level_id);
+        }
+
+        return true;
+    }
+
+    /**
+     * Get active timetable periods count for current academic year.
+     */
+    public function getActiveWeeklyTimetableCount(?int $academicYearId = null): int
+    {
+        $ayId = $academicYearId ?? (\App\Models\AcademicYear::current()?->id ?? \App\Models\AcademicYear::first()?->id);
+        return \App\Models\Timetable::where('teacher_id', $this->id)
+            ->when($ayId, fn($q) => $q->where('academic_year_id', $ayId))
+            ->where('is_active', true)
+            ->whereNotIn('period_type', ['free', 'holiday'])
+            ->count();
     }
 }

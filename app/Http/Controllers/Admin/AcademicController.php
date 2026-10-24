@@ -1270,39 +1270,16 @@ class AcademicController extends Controller
 
     public function timetableConflicts(Request $request)
     {
-        // Teacher double-booked: same employee, same day, same period
-        $teacherConflicts = \App\Models\Timetable::with(['class', 'section', 'subject', 'teacher'])
-            ->whereNotNull('teacher_id')
-            ->get()
-            ->groupBy(fn($t) => $t->teacher_id . '_' . $t->day_of_week . '_' . $t->period_number)
-            ->filter(fn($group) => $group->count() > 1)
-            ->map(fn($group) => [
-                'type'    => 'Teacher Double-Booked',
-                'teacher' => $group->first()->teacher?->full_name ?? 'Unknown',
-                'day'     => $group->first()->day_of_week,
-                'period'  => $group->first()->period_number,
-                'classes' => $group->map(fn($t) => ($t->class?->name ?? '?') . ($t->section ? ' ' . $t->section->name : ''))->implode(', '),
-                'entries' => $group,
-            ]);
+        $academicYears = AcademicYear::orderByDesc('start_date')->get();
+        $selectedYearId = (int) ($request->input('academic_year_id') ?: (AcademicYear::current()?->id ?? $academicYears->first()?->id ?? 1));
 
-        // Subject taught in same class by multiple teachers same period (shouldn't happen normally)
-        $classConflicts = \App\Models\Timetable::with(['class', 'section', 'subject', 'teacher'])
-            ->get()
-            ->groupBy(fn($t) => $t->class_id . '_' . ($t->section_id ?? 0) . '_' . $t->day_of_week . '_' . $t->period_number)
-            ->filter(fn($group) => $group->count() > 1)
-            ->map(fn($group) => [
-                'type'    => 'Class Double-Booked',
-                'teacher' => $group->map(fn($t) => $t->teacher?->full_name)->filter()->implode(', '),
-                'day'     => $group->first()->day_of_week,
-                'period'  => $group->first()->period_number,
-                'classes' => ($group->first()->class?->name ?? '?') . ($group->first()->section ? ' ' . $group->first()->section->name : ''),
-                'entries' => $group,
-            ]);
+        $conflictService = app(\App\Services\TimetableConflictService::class);
+        $scan = $conflictService->scanAllExistingConflicts($selectedYearId);
 
-        $conflicts = $teacherConflicts->merge($classConflicts)->values();
-        $totalConflicts = $conflicts->count();
+        $conflicts = $scan['conflicts'];
+        $totalConflicts = $scan['total_conflicts'];
 
-        return view('academics.timetable-conflicts', compact('conflicts', 'totalConflicts'));
+        return view('academics.timetable-conflicts', compact('conflicts', 'totalConflicts', 'academicYears', 'selectedYearId'));
     }
 
     public function homeworkSubmissions(Request $request, int $id)

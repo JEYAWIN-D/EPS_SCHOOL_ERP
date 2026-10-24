@@ -229,6 +229,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
     Route::middleware('permission:view academics')->prefix('classes')->name('classes.')->group(function () {
         Route::get('/',                     [ClassesController::class, 'index'])->name('index');
         Route::get('/timetable/declared-holidays', [ClassesController::class, 'getHolidaysList'])->name('timetable.declared-holidays');
+        Route::get('/timetable/eligible-staff',     [ClassesController::class, 'eligibleStaff'])->name('timetable.eligible-staff');
         Route::get('/{id}',                 [ClassesController::class, 'show'])->name('show')->where('id', '[0-9]+');
         Route::get('/{id}/timetable-data',  [ClassesController::class, 'timetableData'])->name('timetable-data')->where('id', '[0-9]+');
         Route::get('/{id}/timetable/pdf',   [ClassesController::class, 'downloadPdf'])->name('timetable.pdf')->where('id', '[0-9]+');
@@ -239,6 +240,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
             Route::put('/{id}/rename',              [ClassesController::class, 'rename'])->name('rename')->where('id', '[0-9]+');
             Route::post('/timetable/update-slot',   [ClassesController::class, 'updateSlot'])->name('timetable.update-slot');
             Route::post('/timetable/save-day',      [ClassesController::class, 'saveDay'])->name('timetable.save-day');
+            Route::post('/timetable/resolve-conflict', [ClassesController::class, 'resolveConflict'])->name('timetable.resolve-conflict');
             Route::post('/timetable/toggle-holiday', [ClassesController::class, 'toggleHoliday'])->name('timetable.toggle-holiday');
             Route::post('/timetable/declare-holiday', [ClassesController::class, 'declareHoliday'])->name('timetable.declare-holiday');
             Route::delete('/timetable/delete-holiday/{id}', [ClassesController::class, 'deleteHoliday'])->name('timetable.delete-holiday');
@@ -702,7 +704,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/employees/{id}/id-card', [HrController::class, 'singleEmployeeIdCard'])->name('employees.id-card');
         Route::get('/id-card-studio',                 [HrController::class, 'employeeIdCardStudio'])->name('id-card-studio');
         Route::get('/id-cards/download',              [HrController::class, 'generateStaffIdCards'])->name('id-cards.download');
-        Route::post('/employees/{id}/update-photo', [HrController::class, 'updateEmployeePhoto'])->name('employees.update-photo');
+        Route::post('/employees/{id}/update-photo', [HrController::class, 'updateEmployeePhoto'])->middleware('permission:edit employees')->name('employees.update-photo');
         // Qualifications & Experience
         Route::post('/employees/{id}/qualifications',          [HrController::class, 'storeQualification'])->name('employees.qualifications.store');
         Route::put('/employees/{id}/qualifications/{qualId}',  [HrController::class, 'updateQualification'])->name('employees.qualifications.update');
