@@ -122,7 +122,8 @@
       <x-nav-item route="admissions.approvals" icon="shield-check"             label="Approvals Desk" :active="str_starts_with($currentRoute, 'admissions.approvals')" :open="$sidebarOpen ?? true" />
       @endcan
       @can('view students')
-      <x-nav-item route="students.index"    icon="users"                   label="Students"    :active="str_starts_with($currentRoute, 'students')"    :open="$sidebarOpen ?? true" />
+      <x-nav-item route="students.index"    icon="users"                   label="Students"    :active="request()->routeIs('students.index*') || request()->routeIs('students.show*')"    :open="$sidebarOpen ?? true" />
+      <x-nav-item route="students.id-card-management" icon="identification" label="Student ID Cards" :active="str_starts_with($currentRoute, 'students.id-card')" :open="$sidebarOpen ?? true" />
       @endcan
       @can('view academics')
       <x-nav-item route="classes.index"     icon="academic-class"          label="Classes"     :active="str_starts_with($currentRoute, 'classes')"     :open="$sidebarOpen ?? true" />
@@ -144,7 +145,8 @@
       <x-nav-item route="fees.index"     icon="banknotes"    label="Fee Management"     :active="str_starts_with($currentRoute, 'fees')"     :open="$sidebarOpen ?? true" />
       @endcan
       @can('view employees')
-      <x-nav-item route="hr.index"      icon="identification" label="HR & Payroll" :active="str_starts_with($currentRoute, 'hr')"      :open="$sidebarOpen ?? true" />
+      <x-nav-item route="hr.index"      icon="identification" label="HR & Payroll" :active="str_starts_with($currentRoute, 'hr') && !str_starts_with($currentRoute, 'hr.staff-id-card')"      :open="$sidebarOpen ?? true" />
+      <x-nav-item route="hr.staff-id-card-management" icon="identification" label="Staff ID Cards" :active="str_starts_with($currentRoute, 'hr.staff-id-card')" :open="$sidebarOpen ?? true" />
       @endcan
       @endcanany
 
@@ -178,7 +180,8 @@
       <x-nav-item route="events.index"  icon="calendar"       label="Events"    :active="str_starts_with($currentRoute, 'events')"  :open="$sidebarOpen ?? true" />
       @endcan
       @can('view gate')
-      <x-nav-item route="gate.index"     icon="user-plus"     label="Gate/Visitors" :active="str_starts_with($currentRoute, 'gate')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="gate.index"     icon="user-plus"     label="Gate/Visitors" :active="str_starts_with($currentRoute, 'gate.') && !str_starts_with($currentRoute, 'gate.visitor-id-card')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="gate.visitor-id-card-management" icon="shield-check" label="Visitor ID Cards" :active="str_starts_with($currentRoute, 'gate.visitor-id-card')" :open="$sidebarOpen ?? true" />
       @endcan
       @can('view alumni')
       <x-nav-item route="alumni.index"  icon="star"           label="Alumni"    :active="str_starts_with($currentRoute, 'alumni')"  :open="$sidebarOpen ?? true" />
@@ -205,6 +208,8 @@
       <x-nav-item route="system.audit-log" icon="shield-check" label="Audit/Security" :active="str_starts_with($currentRoute, 'system')" :open="$sidebarOpen ?? true" />
       @endcanany
       @can('manage settings')
+      <x-nav-item route="id-cards.settings" icon="cog-6-tooth" label="ID Card Settings" :active="str_starts_with($currentRoute, 'id-cards.settings')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="id-cards.audit-logs" icon="document-text" label="ID Card Audit Logs" :active="str_starts_with($currentRoute, 'id-cards.audit-logs')" :open="$sidebarOpen ?? true" />
       <x-nav-item route="settings.index"  icon="cog-6-tooth"   label="Settings"   :active="$currentRoute === 'settings.index' || str_starts_with($currentRoute, 'settings.save')" :open="$sidebarOpen ?? true" />
       <x-nav-item route="settings.books-notes.index" icon="book-open" label="Book, Note & Uniform Distribution" :active="str_starts_with($currentRoute, 'settings.books-notes')" :open="$sidebarOpen ?? true" />
       @endcan

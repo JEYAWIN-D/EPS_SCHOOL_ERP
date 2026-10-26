@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\OnlineExamController;
 use App\Http\Controllers\Admin\ClassesController;
 use App\Http\Controllers\Admin\ExpenseController;
 use App\Http\Controllers\Admin\AccountManagementController;
+use App\Http\Controllers\Admin\IdCardController;
 use App\Http\Controllers\Public\PublicFeePaymentController;
 
 // ── Auth ──────────────────────────────────────────────────
@@ -56,6 +57,9 @@ Route::get('/visitor-card/verify/{token}', [\App\Http\Controllers\Public\Visitor
 
 // ── Public Gate Visitor Pass QR Verification (no auth) ────
 Route::get('/gate/verify/{token}', [\App\Http\Controllers\Admin\GateController::class, 'verifyPass'])->name('gate.verify');
+
+// ── Public Institutional ID Card QR Verification (no auth, rate-limited) ────
+Route::get('/verify-id-card/{token}', [IdCardController::class, 'verify'])->middleware('throttle:60,1')->name('id-cards.verify');
 
 // ── Authenticated Administrative ERP routes ───────────────────
 Route::middleware(['auth', 'staff.access'])->group(function () {
@@ -168,8 +172,10 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/promotions',         [StudentController::class, 'processPromotion'])->name('promotions.process');
         Route::post('/promotions/bulk',    [StudentController::class, 'processPromotion'])->name('promotions.bulk');
         Route::get('/rollover-report',     [StudentController::class, 'rolloverReport'])->name('rollover-report');
-        Route::get('/id-cards',            [StudentController::class, 'idCards'])->name('id-cards');
-        Route::get('/id-cards/pdf',        [StudentController::class, 'downloadIdCards'])->name('id-cards.pdf');
+        Route::get('/id-card-management',  [IdCardController::class, 'studentIndex'])->name('id-card-management');
+        Route::get('/id-cards',            [IdCardController::class, 'studentIndex'])->name('id-cards');
+        Route::get('/id-cards/bulk-pdf',   [IdCardController::class, 'bulkDownloadStudentPdf'])->name('id-cards.bulk-pdf');
+        Route::get('/id-cards/pdf',        [IdCardController::class, 'bulkDownloadStudentPdf'])->name('id-cards.pdf');
         Route::get('/id-card-template',    [StudentController::class, 'idCardTemplate'])->name('id-card-template');
         Route::post('/id-card-template',   [StudentController::class, 'saveIdCardTemplate'])->name('id-card-template.save');
         Route::get('/search-json',          [StudentController::class, 'searchJson'])->name('search-json');
@@ -195,7 +201,8 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/{id}/mark-admission-paid', [StudentController::class, 'markAdmissionFeePaid'])->name('mark-admission-paid')->where('id', '[0-9]+');
         Route::get('/{id}/tc',     [StudentController::class, 'showTCForm'])->name('tc.form')->where('id', '[0-9]+');
         Route::post('/{id}/tc',    [StudentController::class, 'generateTC'])->name('tc')->where('id', '[0-9]+');
-        Route::get('/{id}/id-card',[StudentController::class, 'singleIdCard'])->name('id-card.single')->where('id', '[0-9]+');
+        Route::get('/{id}/id-card',[IdCardController::class, 'singleStudent'])->name('id-card.single')->where('id', '[0-9]+');
+        Route::get('/{id}/id-card-studio',[IdCardController::class, 'singleStudent'])->name('id-card.studio')->where('id', '[0-9]+');
         Route::get('/{id}/visitor-card',[StudentController::class, 'visitorCard'])->name('visitor-card')->where('id', '[0-9]+');
         // Documents
         Route::get('/{id}/documents',     [StudentController::class, 'documents'])->name('documents')->where('id', '[0-9]+');
@@ -548,6 +555,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/heads',       [FeeController::class, 'storeFeeHead'])->name('heads.store');
         Route::get('/collect',      [FeeController::class, 'collect'])->name('collect');
         Route::post('/collect',     [FeeController::class, 'savePayment'])->middleware('permission:collect fees')->name('collect.save');
+        Route::post('/student/{id}/manage-transport', [FeeController::class, 'manageStudentTransport'])->name('student.manage-transport');
         // Advance payment
         Route::get('/advance',      [FeeController::class, 'advancePayments'])->name('advance-payments');
         Route::post('/advance',     [FeeController::class, 'storeAdvancePayment'])->name('advance.store');
@@ -701,9 +709,11 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/employees/{id}', [HrController::class, 'showEmployee'])->name('employees.show');
         Route::get('/employees/{id}/edit',[HrController::class, 'editEmployee'])->middleware('permission:edit employees')->name('employees.edit');
         Route::put('/employees/{id}', [HrController::class, 'updateEmployee'])->middleware('permission:edit employees')->name('employees.update');
-        Route::get('/employees/{id}/id-card', [HrController::class, 'singleEmployeeIdCard'])->name('employees.id-card');
-        Route::get('/id-card-studio',                 [HrController::class, 'employeeIdCardStudio'])->name('id-card-studio');
-        Route::get('/id-cards/download',              [HrController::class, 'generateStaffIdCards'])->name('id-cards.download');
+        Route::get('/employees/{id}/id-card',        [IdCardController::class, 'singleStaff'])->name('employees.id-card');
+        Route::get('/employees/{id}/id-card-studio', [IdCardController::class, 'singleStaff'])->name('staff-id-card.studio');
+        Route::get('/staff/{id}/id-card-studio',     [IdCardController::class, 'singleStaff'])->name('staff.id-card.studio');
+        Route::get('/id-card-studio',                 [IdCardController::class, 'staffIndex'])->name('id-card-studio');
+        Route::get('/id-cards/download',              [IdCardController::class, 'bulkDownloadStaffPdf'])->name('id-cards.download');
         Route::post('/employees/{id}/update-photo', [HrController::class, 'updateEmployeePhoto'])->middleware('permission:edit employees')->name('employees.update-photo');
         // Qualifications & Experience
         Route::post('/employees/{id}/qualifications',          [HrController::class, 'storeQualification'])->name('employees.qualifications.store');
@@ -807,8 +817,10 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/employees/{id}/tds-declaration', [HrController::class, 'saveTdsDeclaration'])->name('employees.tds-declaration');
         Route::get('/employees/{id}/form-16',   [HrController::class, 'form16Pdf'])->name('employees.form-16');
 
-        Route::get('/staff-id-cards',           [HrController::class, 'staffIdCards'])->name('staff-id-cards');
-        Route::get('/staff-id-cards/pdf',       [HrController::class, 'downloadStaffIdCards'])->name('staff-id-cards.pdf');
+        Route::get('/staff-id-card-management', [IdCardController::class, 'staffIndex'])->name('staff-id-card-management');
+        Route::get('/staff-id-cards',           [IdCardController::class, 'staffIndex'])->name('staff-id-cards');
+        Route::get('/staff-id-cards/bulk-pdf',  [IdCardController::class, 'bulkDownloadStaffPdf'])->name('staff-id-cards.bulk-pdf');
+        Route::get('/staff-id-cards/pdf',       [IdCardController::class, 'bulkDownloadStaffPdf'])->name('staff-id-cards.pdf');
 
         Route::get('/overtime',                 [HrController::class, 'overtime'])->name('overtime');
         Route::post('/overtime',                [HrController::class, 'storeOvertime'])->name('overtime.store');
@@ -898,15 +910,20 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
 
     // ── Module 9 — Transport ─────────────────────────────
     Route::middleware('permission:view transport')->prefix('transport')->name('transport.')->group(function () {
-        Route::get('/',         [TransportController::class, 'index'])->name('index');
-        // Routes CRUD
+        Route::get('/',                         [TransportController::class, 'index'])->name('index');
+        
+        // Routes CRUD & Management
         Route::get('/routes',                   [TransportController::class, 'routes'])->name('routes');
         Route::get('/routes/create',            [TransportController::class, 'createRoute'])->name('routes.create');
         Route::post('/routes',                  [TransportController::class, 'storeRoute'])->name('routes.store');
+        Route::get('/routes/{id}',              [TransportController::class, 'showRoute'])->name('routes.show');
         Route::get('/routes/{id}/edit',         [TransportController::class, 'editRoute'])->name('routes.edit');
         Route::put('/routes/{id}',              [TransportController::class, 'updateRoute'])->name('routes.update');
         Route::delete('/routes/{id}',           [TransportController::class, 'destroyRoute'])->name('routes.destroy');
+        Route::post('/routes/{id}/retire',      [TransportController::class, 'retireRoute'])->name('routes.retire');
         Route::patch('/routes/{id}/toggle',     [TransportController::class, 'toggleRoute'])->name('routes.toggle');
+        Route::post('/routes/{id}/reorder',     [TransportController::class, 'reorderRouteStops'])->name('routes.reorder');
+        
         // Vehicles CRUD & Profile
         Route::get('/vehicles',                 [TransportController::class, 'vehicles'])->name('vehicles');
         Route::get('/vehicles/create',          [TransportController::class, 'createVehicle'])->name('vehicles.create');
@@ -915,37 +932,63 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/vehicles/{id}/edit',       [TransportController::class, 'editVehicle'])->name('vehicle.edit');
         Route::put('/vehicles/{id}',            [TransportController::class, 'updateVehicle'])->name('vehicle.update');
         Route::delete('/vehicles/{id}',         [TransportController::class, 'destroyVehicle'])->name('vehicle.destroy');
+        Route::patch('/vehicles/{id}/toggle',   [TransportController::class, 'toggleVehicle'])->name('vehicle.toggle');
+        
         // Vehicle Document Management
         Route::post('/vehicles/{id}/documents', [TransportController::class, 'uploadDocument'])->name('vehicle.documents.store');
         Route::get('/documents/{id}/view',      [TransportController::class, 'viewDocument'])->name('documents.view');
         Route::get('/documents/{id}/download',  [TransportController::class, 'downloadDocument'])->name('documents.download');
         Route::delete('/documents/{id}',        [TransportController::class, 'destroyDocument'])->name('documents.destroy');
+        
         // Drivers
         Route::get('/drivers',                           [TransportController::class, 'drivers'])->name('drivers');
         Route::get('/drivers/create',                    [TransportController::class, 'createDriver'])->name('drivers.create');
         Route::post('/drivers',                          [TransportController::class, 'storeDriver'])->name('drivers.store');
         Route::post('/drivers/{id}/police-verification', [TransportController::class, 'updatePoliceVerification'])->name('drivers.police-verification');
+        
         // Incident log
         Route::get('/incidents',              [TransportController::class, 'incidents'])->name('incidents');
         Route::post('/incidents',             [TransportController::class, 'storeIncident'])->name('incidents.store');
         Route::post('/incidents/{id}/status', [TransportController::class, 'updateIncidentStatus'])->name('incidents.update-status');
+        
         // Emergency contacts per route
         Route::get('/emergency-contacts',            [TransportController::class, 'emergencyContacts'])->name('emergency-contacts');
         Route::post('/emergency-contacts',           [TransportController::class, 'storeEmergencyContact'])->name('emergency-contacts.store');
         Route::delete('/emergency-contacts/{id}',    [TransportController::class, 'deleteEmergencyContact'])->name('emergency-contacts.delete');
-        // Stops CRUD
-        Route::get('/stops',         [TransportController::class, 'stops'])->name('stops');
-        Route::post('/stops',        [TransportController::class, 'storeStop'])->name('stops.store');
-        Route::get('/stops/{id}/edit',[TransportController::class,'editStop'])->name('stops.edit');
-        Route::put('/stops/{id}',    [TransportController::class, 'updateStop'])->name('stops.update');
-        Route::delete('/stops/{id}', [TransportController::class, 'deleteStop'])->name('stops.delete');
+        
+        // Stops CRUD (Dedicated Bus Stop Management)
+        Route::get('/stops',                    [TransportController::class, 'stops'])->name('stops');
+        Route::post('/stops',                   [TransportController::class, 'storeStop'])->name('stops.store');
+        Route::get('/stops/{id}/edit',          [TransportController::class, 'editStop'])->name('stops.edit');
+        Route::put('/stops/{id}',               [TransportController::class, 'updateStop'])->name('stops.update');
+        Route::delete('/stops/{id}',            [TransportController::class, 'deleteStop'])->name('stops.delete');
+        Route::patch('/stops/{id}/toggle',      [TransportController::class, 'toggleStop'])->name('stops.toggle');
+        
+        // Tracking & Live Telemetry
         Route::get('/tracking', [TransportController::class, 'tracking'])->name('tracking');
         Route::get('/tracking/telemetry', [TransportController::class, 'liveTelemetry'])->name('tracking.telemetry');
-        // Student allotment
-        Route::get('/allotment',         [TransportController::class, 'allotment'])->name('allotment');
-        Route::post('/allotment',        [TransportController::class, 'storeAllotment'])->name('allotment.store');
+        
+        // Student Allocation (Vehicle-wise, Route-wise, Stop-wise)
+        Route::get('/students',                  [TransportController::class, 'students'])->name('students');
+        Route::post('/students/allot',           [TransportController::class, 'storeStudentAllotment'])->name('students.allot');
+        Route::post('/students/{id}/discontinue',[TransportController::class, 'discontinueStudentAllotment'])->name('students.discontinue');
+        Route::get('/students/export',           [TransportController::class, 'exportStudents'])->name('students.export');
+        
+        // Student allotment alias
+        Route::get('/allotment',         [TransportController::class, 'students'])->name('allotment');
+        Route::post('/allotment',        [TransportController::class, 'storeStudentAllotment'])->name('allotment.store');
         Route::delete('/allotment/{id}', [TransportController::class, 'deleteAllotment'])->name('allotment.delete');
-        Route::get('/allotment/export',  [TransportController::class, 'exportAllotment'])->name('allotment.export');
+        Route::get('/allotment/export',  [TransportController::class, 'exportStudents'])->name('allotment.export');
+
+        // Excel Import & Data Migration
+        Route::get('/import',                   [TransportController::class, 'importView'])->name('import');
+        Route::post('/import/stops',            [TransportController::class, 'importStopsExcel'])->name('import.stops');
+        Route::post('/import/allocations',      [TransportController::class, 'importAllocationsExcel'])->name('import.allocations');
+        Route::post('/backup',                  [TransportController::class, 'createBackup'])->name('backup');
+
+        // Transport Reports
+        Route::get('/reports',                  [TransportController::class, 'reports'])->name('reports');
+        Route::get('/reports/export',           [TransportController::class, 'exportReport'])->name('reports.export');
         // Document expiry
         Route::get('/documents', [TransportController::class, 'vehicleDocuments'])->name('documents');
         // Maintenance
@@ -1214,6 +1257,11 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
             Route::get('/{id}',          [\App\Http\Controllers\Admin\GateController::class, 'show'])->name('show');
             Route::get('/{id}/pass',     [\App\Http\Controllers\Admin\GateController::class, 'pass'])->name('pass');
             Route::patch('/{id}/checkout',[\App\Http\Controllers\Admin\GateController::class, 'checkout'])->name('checkout');
+
+            // Visitor ID Card Management Submenu & Studio
+            Route::get('/visitor-id-card-management', [IdCardController::class, 'visitorIndex'])->name('visitor-id-card-management');
+            Route::get('/visitor/{id}/id-card-studio', [IdCardController::class, 'singleVisitor'])->name('visitor.id-card.studio');
+            Route::get('/visitor/{id}/id-card-pdf',    [IdCardController::class, 'downloadVisitorPdf'])->name('visitor.id-card.pdf');
         });
 
         // Host Approval & Rejection endpoints (accessible by authorised gatekeeper or admin)
@@ -1328,6 +1376,16 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
     Route::delete('/settings/delete-stamp',           [App\Http\Controllers\Admin\SettingsController::class, 'deleteStamp'])->name('settings.delete-stamp');
     Route::get('/settings/notification-templates',    [App\Http\Controllers\Admin\SettingsController::class, 'notificationTemplates'])->name('settings.notification-templates');
     Route::post('/settings/notification-templates',   [App\Http\Controllers\Admin\SettingsController::class, 'saveNotificationTemplate'])->name('settings.notification-templates.save');
+
+    // ── Institutional ID Card Management Studio & Lifecycle ──────
+    Route::prefix('id-cards')->name('id-cards.')->group(function () {
+        Route::get('/settings',        [IdCardController::class, 'templates'])->name('settings');
+        Route::post('/settings/save',  [IdCardController::class, 'saveTemplate'])->name('settings.save');
+        Route::post('/{id}/reprint',   [IdCardController::class, 'reprint'])->name('reprint');
+        Route::post('/{id}/replace',   [IdCardController::class, 'replace'])->name('replace');
+        Route::post('/{id}/revoke',    [IdCardController::class, 'revoke'])->name('revoke');
+        Route::get('/audit-logs',      [IdCardController::class, 'auditLogs'])->name('audit-logs');
+    });
 
     // ── Books & Notes Management (Settings → Books & Notes) ──────
     Route::get('/settings/books-notes', [App\Http\Controllers\Admin\BooksNotesController::class, 'index'])->name('settings.books-notes.index');

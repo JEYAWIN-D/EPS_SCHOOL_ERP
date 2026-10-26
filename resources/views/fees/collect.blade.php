@@ -119,6 +119,242 @@
     </div>
   </div>
 
+  {{-- Transport Transit Profile & Quick Manage Card (Requirement 8) --}}
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5" x-data="{
+    manageTransportOpen: false,
+    routesData: {{ json_encode(($activeTransportRoutes ?? collect())->map(fn($r) => [
+      'id' => $r->id,
+      'name' => $r->route_name,
+      'vehicle_id' => $r->vehicle_id,
+      'vehicle_number' => $r->vehicle?->vehicle_number,
+      'fee' => $r->fee,
+      'stops' => $r->stops->map(fn($s) => [
+        'id' => $s->id,
+        'name' => $s->name,
+        'pickup_time' => $s->pickup_time ? \Carbon\Carbon::parse($s->pickup_time)->format('h:i A') : '07:30 AM',
+        'drop_time' => $s->drop_time ? \Carbon\Carbon::parse($s->drop_time)->format('h:i A') : '04:30 PM',
+        'fare' => $s->fare,
+      ]),
+    ])) }},
+    selectedRouteId: '{{ $studentTransportAllotment?->route_id ?? "" }}',
+    selectedStopId: '{{ $studentTransportAllotment?->stop_id ?? "" }}',
+    selectedDropStopId: '{{ $studentTransportAllotment?->drop_stop_id ?? ($studentTransportAllotment?->stop_id ?? "") }}',
+    pickupOverride: '{{ $studentTransportAllotment?->pickup_time_override ?? ($studentTransportAllotment?->effective_pickup_time ?? "") }}',
+    dropOverride: '{{ $studentTransportAllotment?->drop_time_override ?? ($studentTransportAllotment?->effective_drop_time ?? "") }}',
+    transportFee: {{ $studentTransportAllotment?->fee ?? 0 }},
+    transportAction: 'assign_or_update',
+    get currentRoute() {
+      return this.routesData.find(r => r.id == this.selectedRouteId) || null;
+    },
+    get availableStops() {
+      return this.currentRoute ? this.currentRoute.stops : [];
+    },
+    onRouteChange() {
+      this.selectedStopId = '';
+      this.selectedDropStopId = '';
+      this.pickupOverride = '';
+      this.dropOverride = '';
+      if (this.currentRoute) {
+        this.transportFee = this.currentRoute.fee || 0;
+      }
+    },
+    onStopChange() {
+      let stop = this.availableStops.find(s => s.id == this.selectedStopId);
+      if (stop) {
+        this.pickupOverride = stop.pickup_time || '07:30 AM';
+        this.dropOverride = stop.drop_time || '04:30 PM';
+        if (stop.fare) this.transportFee = stop.fare;
+        if (!this.selectedDropStopId) this.selectedDropStopId = stop.id;
+      }
+    }
+  }">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-start gap-3.5">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-lg shrink-0">
+          🚐
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h3 class="text-sm font-bold text-slate-900">Transport &amp; Transit Profile</h3>
+            @if($studentTransportAllotment && $studentTransportAllotment->is_active)
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                Active Transit
+              </span>
+              <span class="font-mono text-xs font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                {{ $studentTransportAllotment->vehicle?->vehicle_number ?? 'Van Assigned' }}
+              </span>
+            @else
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                Own Conveyance / Day Scholar
+              </span>
+            @endif
+          </div>
+
+          @if($studentTransportAllotment && $studentTransportAllotment->is_active)
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-slate-600">
+              <span>Route: <strong class="text-slate-800">{{ $studentTransportAllotment->route?->route_name ?? '—' }}</strong></span>
+              <span>Pickup: <strong class="text-emerald-700">{{ $studentTransportAllotment->effective_pickup_stop_name }}</strong> ({{ $studentTransportAllotment->effective_pickup_time ?: '07:30 AM' }})</span>
+              <span>Drop: <strong class="text-blue-700">{{ $studentTransportAllotment->effective_drop_stop_name }}</strong> ({{ $studentTransportAllotment->effective_drop_time ?: '04:30 PM' }})</span>
+              <span>Fee: <strong class="text-slate-900 font-mono">₹{{ number_format($studentTransportAllotment->fee ?? 0) }}/yr</strong></span>
+            </div>
+          @else
+            <p class="text-xs text-slate-500 mt-1">
+              Student does not currently use school transport. You can allocate a bus/van or configure boarding stops directly from this fee desk.
+            </p>
+          @endif
+        </div>
+      </div>
+
+      <div class="shrink-0 self-start sm:self-center">
+        <button type="button" @click="manageTransportOpen = true"
+                class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+          <span>{{ ($studentTransportAllotment && $studentTransportAllotment->is_active) ? 'Manage Transport' : 'Enroll in Transport' }}</span>
+        </button>
+      </div>
+    </div>
+
+    {{-- Interactive Manage Transport Modal --}}
+    <div x-show="manageTransportOpen" x-cloak class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+      <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div x-show="manageTransportOpen" x-transition.opacity class="fixed inset-0 bg-slate-900/60 transition-opacity" @click="manageTransportOpen = false"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+        <div x-show="manageTransportOpen" x-transition class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-xl sm:w-full">
+          <form method="POST" action="{{ route('fees.student.manage-transport', $student->id) }}">
+            @csrf
+            <div class="bg-white p-6 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <h3 class="text-base font-bold text-slate-900">Manage School Transport Facility</h3>
+                  <p class="text-xs text-slate-500">Student: <strong>{{ $student->full_name }}</strong> (Admn: {{ $student->admission_no ?? $student->admission_number }})</p>
+                </div>
+                <button type="button" @click="manageTransportOpen = false" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
+              </div>
+
+              {{-- Action Picker Tabs --}}
+              <div class="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                <button type="button" @click="transportAction = 'assign_or_update'"
+                        :class="transportAction === 'assign_or_update' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                        class="flex-1 py-1.5 px-3 rounded-lg text-xs transition text-center">
+                  Assign / Update Transit
+                </button>
+                @if($studentTransportAllotment && $studentTransportAllotment->is_active)
+                  <button type="button" @click="transportAction = 'discontinue'"
+                          :class="transportAction === 'discontinue' ? 'bg-rose-600 text-white shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                          class="flex-1 py-1.5 px-3 rounded-lg text-xs transition text-center">
+                    Discontinue Transport
+                  </button>
+                @endif
+              </div>
+              <input type="hidden" name="transport_action" :value="transportAction">
+
+              {{-- Section A: Assign or Update Form --}}
+              <div x-show="transportAction === 'assign_or_update'" class="space-y-3.5">
+                <div>
+                  <label class="label">School Route <span class="text-red-500">*</span></label>
+                  <select name="route_id" class="select" x-model="selectedRouteId" @change="onRouteChange()" :required="transportAction === 'assign_or_update'">
+                    <option value="">Select bus/van route...</option>
+                    <template x-for="r in routesData" :key="r.id">
+                      <option :value="r.id" x-text="r.name + ' (' + (r.vehicle_number ? r.vehicle_number : 'No Vehicle') + ')'"></option>
+                    </template>
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" x-show="selectedRouteId">
+                  <div>
+                    <label class="label">Pickup Stop <span class="text-red-500">*</span></label>
+                    <select name="stop_id" class="select" x-model="selectedStopId" @change="onStopChange()" :required="transportAction === 'assign_or_update'">
+                      <option value="">Choose pickup stop...</option>
+                      <template x-for="s in availableStops" :key="s.id">
+                        <option :value="s.id" x-text="s.name"></option>
+                      </template>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="label">Drop Stop</label>
+                    <select name="drop_stop_id" class="select" x-model="selectedDropStopId">
+                      <option value="">Same as pickup stop</option>
+                      <template x-for="s in availableStops" :key="s.id">
+                        <option :value="s.id" x-text="s.name"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" x-show="selectedStopId">
+                  <div>
+                    <label class="label">Student Pickup Time</label>
+                    <input type="text" name="pickup_time_override" class="input font-mono" x-model="pickupOverride" placeholder="e.g. 07:30 AM">
+                    <p class="text-[10px] text-slate-400 mt-0.5">Custom student boarding timing</p>
+                  </div>
+
+                  <div>
+                    <label class="label">Student Drop Time</label>
+                    <input type="text" name="drop_time_override" class="input font-mono" x-model="dropOverride" placeholder="e.g. 04:30 PM">
+                    <p class="text-[10px] text-slate-400 mt-0.5">Custom student return timing</p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" x-show="selectedRouteId">
+                  <div>
+                    <label class="label">Configured Annual Fee (₹)</label>
+                    <input type="number" name="fee" class="input font-mono" x-model="transportFee" step="1" min="0">
+                  </div>
+
+                  <div>
+                    <label class="label">Effective Start Date</label>
+                    <input type="date" name="start_date" class="input font-mono" value="{{ today()->toDateString() }}">
+                  </div>
+                </div>
+
+                <div>
+                  <label class="label">Desk Remarks / Reason</label>
+                  <input type="text" name="remarks" class="input" placeholder="e.g. Stop adjusted per parent request during fee payment">
+                </div>
+
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                  <strong>Fee Notice:</strong> Saving transport updates adjusts the student's transit profile and fee schedule without creating a paid transaction. Completed fee receipts and historical payment records remain unchanged.
+                </div>
+              </div>
+
+              {{-- Section B: Discontinue Form --}}
+              <div x-show="transportAction === 'discontinue'" class="space-y-3.5">
+                <div class="p-4 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 space-y-2">
+                  <p class="font-bold">⚠️ Confirm Transport Discontinuation</p>
+                  <p>
+                    Discontinuing school transport will safely deactivate the student's route schedule and free up vehicle capacity.
+                    Previous payment receipts and historical audit transactions are strictly preserved.
+                  </p>
+                </div>
+
+                <div>
+                  <label class="label">Reason for Discontinuing <span class="text-red-500">*</span></label>
+                  <input type="text" name="discontinue_reason" class="input" placeholder="e.g. Relocated / Shifted to private vehicle" value="Parent request at fee desk">
+                </div>
+
+                <div>
+                  <label class="label">Effective End Date</label>
+                  <input type="date" name="discontinue_date" class="input font-mono" value="{{ today()->toDateString() }}">
+                </div>
+              </div>
+
+            </div>
+
+            <div class="bg-slate-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-slate-100">
+              <button type="button" @click="manageTransportOpen = false" class="btn btn-secondary btn-sm">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-sm"
+                      :class="transportAction === 'discontinue' ? 'bg-rose-600 hover:bg-rose-700 text-white' : ''"
+                      x-text="transportAction === 'discontinue' ? 'Confirm Discontinue' : 'Save Transport Profile'">
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
   @if($dues->count())
   @php
     $duesMap = [];

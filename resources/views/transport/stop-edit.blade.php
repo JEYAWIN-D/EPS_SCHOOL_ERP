@@ -55,6 +55,20 @@
         <label class="label">Landmark</label>
         <input type="text" name="landmark" class="input" value="{{ old('landmark', $stop->landmark) }}">
       </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="label">Pickup Instructions</label>
+          <input type="text" name="pickup_instructions" class="input" value="{{ old('pickup_instructions', $stop->pickup_instructions) }}" placeholder="e.g. Stand near entrance">
+        </div>
+        <div>
+          <label class="label">Drop Instructions</label>
+          <input type="text" name="drop_instructions" class="input" value="{{ old('drop_instructions', $stop->drop_instructions) }}" placeholder="e.g. Hand over to parent">
+        </div>
+      </div>
+      <div>
+        <label class="label">Remarks</label>
+        <input type="text" name="remarks" class="input" value="{{ old('remarks', $stop->remarks) }}" placeholder="Internal transport remarks">
+      </div>
       <div class="flex gap-3 pt-2">
         <button type="submit" class="btn btn-primary">Update Stop</button>
         <a href="{{ route('transport.stops') }}" class="btn btn-secondary">Cancel</a>

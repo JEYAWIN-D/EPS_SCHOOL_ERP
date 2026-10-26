@@ -12,8 +12,11 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <a href="{{ route('gate.pass', $visitor->id) }}" class="btn-primary text-xs sm:text-sm font-semibold flex items-center gap-1.5 shadow-sm">
-        🖨 Print Gate Pass
+      <a href="{{ route('gate.visitors.id-card', $visitor->id) }}" class="btn bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-semibold flex items-center gap-1.5 shadow-sm">
+        🪪 Visitor ID Card
+      </a>
+      <a href="{{ route('gate.pass', $visitor->id) }}" class="btn-secondary text-xs sm:text-sm font-semibold flex items-center gap-1.5 shadow-sm">
+        🖨 Thermal Slip
       </a>
       <a href="{{ route('gate.index') }}" class="btn-secondary text-xs sm:text-sm font-semibold">
         ← Back to Gate Log

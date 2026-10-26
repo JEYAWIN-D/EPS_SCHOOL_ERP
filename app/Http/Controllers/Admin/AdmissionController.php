@@ -391,8 +391,11 @@ class AdmissionController extends Controller
             ->get()
             ->groupBy('class_id');
 
-        // Fetch active transport routes with stops for Transport facility
-        $transportRoutes = \App\Models\TransportRoute::with(['stops' => fn($q) => $q->orderBy('stop_order')])
+        // Fetch active transport routes with vehicle and active stops for Transport facility
+        $transportRoutes = \App\Models\TransportRoute::with([
+            'vehicle',
+            'stops' => fn($q) => $q->where('is_active', true)->orderBy('stop_order')
+        ])
             ->where('is_active', true)
             ->get();
 
@@ -1379,6 +1382,32 @@ class AdmissionController extends Controller
                 'status'           => $enrollmentStatus,
                 'enrollment_date'  => $paymentDate,
             ]);
+
+            // Create Transport Allotment if transport facility is selected
+            if ($request->filled('transport_route_id')) {
+                $routeId = (int) $request->transport_route_id;
+                $stopId = $request->filled('transport_stop_id') 
+                    ? (int) $request->transport_stop_id 
+                    : (\App\Models\TransportStop::where('route_id', $routeId)->where('is_active', true)->orderBy('stop_order')->value('id'));
+
+                if ($stopId) {
+                    try {
+                        $transportService = app(\App\Services\TransportManagementService::class);
+                        $transportService->assignStudentTransport($student->id, [
+                            'route_id'              => $routeId,
+                            'stop_id'               => $stopId,
+                            'drop_stop_id'          => $request->filled('transport_drop_stop_id') ? (int) $request->transport_drop_stop_id : $stopId,
+                            'pickup_time'           => $request->input('transport_pickup_time'),
+                            'drop_time'             => $request->input('transport_drop_time'),
+                            'fee'                   => $transportFee,
+                            'start_date'            => $paymentDate,
+                            'remarks'               => 'Assigned during New Admission',
+                        ], Auth::id());
+                    } catch (\Throwable $te) {
+                        \Illuminate\Support\Facades\Log::warning("Transport allotment during admission warning: " . $te->getMessage());
+                    }
+                }
+            }
 
             // Direct document file uploads processing
             $docInputs = [

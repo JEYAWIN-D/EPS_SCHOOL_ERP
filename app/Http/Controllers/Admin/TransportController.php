@@ -8,9 +8,12 @@ use App\Models\BusAttendance;
 use App\Models\Classes;
 use App\Models\SchoolSetting;
 use App\Models\Section;
+use App\Models\Student;
 use App\Models\StudentEnrollment;
 use App\Models\TransportAllotment;
+use App\Models\TransportAssignmentHistory;
 use App\Models\TransportAttendant;
+use App\Models\TransportImportLog;
 use App\Models\TransportRosterPassenger;
 use App\Models\TransportRoute;
 use App\Models\TransportStop;
@@ -18,11 +21,13 @@ use App\Models\Vehicle;
 use App\Models\VehicleDocument;
 use App\Models\VehicleFuelLog;
 use App\Models\VehicleMaintenance;
+use App\Services\TransportManagementService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -30,13 +35,25 @@ class TransportController extends Controller
 {
     public function index()
     {
-        $cachedData = Cache::remember('transport_index_stats_v3', 120, function () {
-            $rosterStudents = TransportRosterPassenger::where('is_active', true)->count();
-            $allotmentStudents = TransportAllotment::where('is_active', true)->count();
+        $cachedData = Cache::remember('transport_index_stats_v5', 60, function () {
+            $studentsUsingTransport = TransportAllotment::where('is_active', true)->count();
+            $totalActiveStudents = Student::where('status', 'active')->count();
+            $totalCapacity = (int) Vehicle::where('is_active', true)->sum(DB::raw('COALESCE(seating_capacity, capacity, 0)'));
+            $availableCapacity = max(0, $totalCapacity - $studentsUsingTransport);
+            $studentsAwaitingTransport = max(0, $totalActiveStudents - $studentsUsingTransport);
+            $discontinuedAssignments = TransportAllotment::where('is_active', false)->count();
+
             $stats = [
-                'routes'   => TransportRoute::where('is_active', true)->count(),
-                'vehicles' => Vehicle::where('is_active', true)->count(),
-                'students' => max($rosterStudents, $allotmentStudents),
+                'routes'                      => TransportRoute::where('is_active', true)->count(),
+                'vehicles'                    => Vehicle::where('is_active', true)->count(),
+                'students'                    => $studentsUsingTransport,
+                'total_stops'                 => TransportStop::where('is_active', true)->count(),
+                'total_capacity'              => $totalCapacity,
+                'available_capacity'          => $availableCapacity,
+                'students_awaiting_transport' => $studentsAwaitingTransport,
+                'discontinued_assignments'    => $discontinuedAssignments,
+                'unconfigured_timings'        => TransportStop::where('is_active', true)->where(fn($q) => $q->whereNull('pickup_time')->orWhereNull('drop_time'))->count(),
+                'routes_awaiting_vehicle'     => TransportRoute::where('is_active', true)->whereNull('vehicle_id')->count(),
             ];
 
             try {
@@ -412,13 +429,21 @@ class TransportController extends Controller
         return redirect()->route('transport.vehicles')->with('success', "Vehicle {$vehicle->vehicle_number} deleted successfully.");
     }
 
-    public function destroyRoute(int $id)
+    public function toggleVehicle(int $id)
+    {
+        $vehicle = Vehicle::findOrFail($id);
+        $vehicle->update(['is_active' => !$vehicle->is_active]);
+        $status = $vehicle->is_active ? 'activated' : 'deactivated';
+        return back()->with('success', "Vehicle {$vehicle->vehicle_number} has been {$status}.");
+    }
+
+    public function destroyRoute(Request $request, int $id, TransportManagementService $service)
     {
         $route = TransportRoute::findOrFail($id);
 
         $assignedCount = TransportAllotment::where('route_id', $id)->where('is_active', true)->count();
         if ($assignedCount > 0) {
-            return back()->withErrors(['error' => "Cannot delete route {$route->route_name} because {$assignedCount} active students are assigned to it. Reassign students first."]);
+            return back()->withErrors(['error' => "Cannot delete route \"{$route->route_name}\" because {$assignedCount} active students are assigned to it. Reassign students first or use the 'Retire / Deactivate Route' action to safely preserve historical records."]);
         }
 
         // Unlink vehicles
@@ -427,6 +452,33 @@ class TransportController extends Controller
         $route->delete();
 
         return redirect()->route('transport.routes')->with('success', "Route {$route->route_name} deleted successfully.");
+    }
+
+    public function retireRoute(Request $request, int $id, TransportManagementService $service)
+    {
+        $targetRouteId = $request->filled('target_route_id') ? (int)$request->target_route_id : null;
+        $reason = $request->input('reason', 'Route decommissioned');
+        $result = $service->retireRoute($id, $targetRouteId, $reason);
+
+        if ($result['success']) {
+            return redirect()->route('transport.routes')->with('success', $result['message']);
+        }
+        return back()->withErrors(['error' => $result['message']]);
+    }
+
+    public function reorderRouteStops(Request $request, int $id)
+    {
+        $request->validate([
+            'stops' => 'required|array',
+            'stops.*.id' => 'required|exists:transport_stops,id',
+            'stops.*.order' => 'required|integer',
+        ]);
+
+        foreach ($request->stops as $item) {
+            TransportStop::where('id', $item['id'])->where('route_id', $id)->update(['stop_order' => $item['order']]);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Stop sequence updated successfully.']);
     }
 
     public function uploadDocument(Request $request, int $id)
@@ -1123,6 +1175,39 @@ class TransportController extends Controller
         return redirect()->route('transport.routes')->with('success', 'Route added.');
     }
 
+    public function showRoute(int $id)
+    {
+        $route = TransportRoute::with([
+            'vehicle',
+            'stops' => fn($q) => $q->orderBy('stop_order'),
+        ])->withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)])
+          ->findOrFail($id);
+
+        $stops = $route->stops()
+            ->withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)])
+            ->orderBy('stop_order')
+            ->get();
+
+        $vehicles = Vehicle::where('is_active', true)->orderBy('vehicle_number')->get();
+
+        $vehicleCapacity = $route->vehicle ? ($route->vehicle->seating_capacity ?? $route->vehicle->capacity ?? 0) : 0;
+        $totalStops = $stops->count();
+        $totalStudents = $route->active_students_count ?? 0;
+        $totalRouteKm = (float) $stops->sum('distance_km');
+        $unconfiguredTimings = $stops->filter(fn($s) => empty($s->pickup_time) || empty($s->drop_time))->count();
+
+        $stats = [
+            'total_stops'          => $totalStops,
+            'total_students'       => $totalStudents,
+            'total_distance_km'    => $totalRouteKm > 0 ? $totalRouteKm : (float) $route->distance_km,
+            'unconfigured_timings' => $unconfiguredTimings,
+            'vehicle_capacity'     => $vehicleCapacity,
+            'available_seats'      => max(0, $vehicleCapacity - $totalStudents),
+        ];
+
+        return view('transport.route-show', compact('route', 'stops', 'vehicles', 'stats'));
+    }
+
     public function createDriver()
     {
         $vehicles = Vehicle::where('is_active', true)->orderBy('vehicle_number')->get();
@@ -1144,28 +1229,78 @@ class TransportController extends Controller
 
     public function stops(Request $request)
     {
-        $routes   = TransportRoute::where('is_active', true)->with('vehicle')->get();
+        $search    = $request->get('search');
+        $routeId   = $request->get('route_id');
+        $vehicleId = $request->get('vehicle_id');
+        $status    = $request->get('status', 'active'); // 'active', 'inactive', 'all'
+        $timingFilter = $request->get('timing'); // 'missing', 'configured'
+
+        $routes   = TransportRoute::where('is_active', true)->with('vehicle')->orderBy('route_name')->get();
         $vehicles = Vehicle::where('is_active', true)->orderBy('vehicle_number')->get();
-        $stops    = TransportStop::with(['route.vehicle', 'vehicle'])
-            ->when($request->route_id, fn($q, $v) => $q->where('route_id', $v))
-            ->orderBy('route_id')
-            ->orderBy('stop_order')
-            ->paginate(25)->withQueryString();
-        return view('transport.stops', compact('routes', 'stops', 'vehicles'));
+
+        $query = TransportStop::with(['route.vehicle', 'vehicle'])
+            ->withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)]);
+
+        if ($status === 'active') {
+            $query->where('is_active', true);
+        } elseif ($status === 'inactive') {
+            $query->where('is_active', false);
+        }
+
+        if ($timingFilter === 'missing') {
+            $query->where(fn($q) => $q->whereNull('pickup_time')->orWhereNull('drop_time'));
+        } elseif ($timingFilter === 'configured') {
+            $query->whereNotNull('pickup_time')->whereNotNull('drop_time');
+        }
+
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('landmark', 'like', "%{$search}%")
+                  ->orWhere('van_number', 'like', "%{$search}%");
+            });
+        }
+
+        if ($routeId) {
+            $query->where('route_id', $routeId);
+        }
+
+        if ($vehicleId) {
+            $query->where(function($q) use ($vehicleId) {
+                $q->where('vehicle_id', $vehicleId)
+                  ->orWhereHas('route', fn($rq) => $rq->where('vehicle_id', $vehicleId));
+            });
+        }
+
+        $stops = $query->orderBy('route_id')->orderBy('stop_order')->paginate(25)->withQueryString();
+
+        $stats = [
+            'total_stops'          => TransportStop::count(),
+            'active_stops'         => TransportStop::where('is_active', true)->count(),
+            'inactive_stops'       => TransportStop::where('is_active', false)->count(),
+            'total_assigned'       => TransportAllotment::where('is_active', true)->count(),
+            'unconfigured_timings' => TransportStop::where('is_active', true)->where(fn($q) => $q->whereNull('pickup_time')->orWhereNull('drop_time'))->count(),
+        ];
+
+        return view('transport.stops', compact('routes', 'stops', 'vehicles', 'stats', 'search', 'routeId', 'vehicleId', 'status', 'timingFilter'));
     }
 
     public function storeStop(Request $request)
     {
         $request->validate([
-            'route_id'    => 'required|exists:transport_routes,id',
-            'name'        => 'required|string|max:100',
-            'stop_order'  => 'required|integer|min:1',
-            'vehicle_id'  => 'nullable|exists:vehicles,id',
-            'van_number'  => 'nullable|string|max:50',
-            'pickup_time' => 'nullable',
-            'drop_time'   => 'nullable',
-            'fare'        => 'nullable|numeric|min:0',
-            'distance_km' => 'nullable|numeric|min:0',
+            'route_id'            => 'required|exists:transport_routes,id',
+            'name'                => 'required|string|max:100',
+            'stop_order'          => 'required|integer|min:1',
+            'vehicle_id'          => 'nullable|exists:vehicles,id',
+            'van_number'          => 'nullable|string|max:50',
+            'pickup_time'         => 'nullable',
+            'drop_time'           => 'nullable',
+            'fare'                => 'nullable|numeric|min:0',
+            'distance_km'         => 'nullable|numeric|min:0',
+            'landmark'            => 'nullable|string|max:255',
+            'pickup_instructions' => 'nullable|string|max:500',
+            'drop_instructions'   => 'nullable|string|max:500',
+            'remarks'             => 'nullable|string|max:500',
         ]);
 
         $vanNumber = $request->van_number;
@@ -1174,16 +1309,16 @@ class TransportController extends Controller
         }
 
         TransportStop::create(array_merge(
-            $request->only(['route_id', 'name', 'stop_order', 'vehicle_id', 'pickup_time', 'drop_time', 'fare', 'landmark', 'distance_km']),
-            ['van_number' => $vanNumber]
+            $request->only(['route_id', 'name', 'stop_order', 'vehicle_id', 'pickup_time', 'drop_time', 'fare', 'landmark', 'distance_km', 'pickup_instructions', 'drop_instructions', 'remarks']),
+            ['van_number' => $vanNumber, 'is_active' => true]
         ));
-        return back()->with('success', 'Stop added successfully.');
+        return back()->with('success', "Bus stop \"{$request->name}\" added successfully.");
     }
 
     public function editStop(int $id)
     {
-        $stop     = TransportStop::findOrFail($id);
-        $routes   = TransportRoute::where('is_active', true)->with('vehicle')->get();
+        $stop     = TransportStop::with('route.vehicle')->findOrFail($id);
+        $routes   = TransportRoute::where('is_active', true)->with('vehicle')->orderBy('route_name')->get();
         $vehicles = Vehicle::where('is_active', true)->orderBy('vehicle_number')->get();
         return view('transport.stop-edit', compact('stop', 'routes', 'vehicles'));
     }
@@ -1191,15 +1326,20 @@ class TransportController extends Controller
     public function updateStop(Request $request, int $id)
     {
         $request->validate([
-            'route_id'    => 'required|exists:transport_routes,id',
-            'name'        => 'required|string|max:100',
-            'stop_order'  => 'required|integer|min:1',
-            'vehicle_id'  => 'nullable|exists:vehicles,id',
-            'van_number'  => 'nullable|string|max:50',
-            'pickup_time' => 'nullable',
-            'drop_time'   => 'nullable',
-            'fare'        => 'nullable|numeric|min:0',
-            'distance_km' => 'nullable|numeric|min:0',
+            'route_id'            => 'required|exists:transport_routes,id',
+            'name'                => 'required|string|max:100',
+            'stop_order'          => 'required|integer|min:1',
+            'vehicle_id'          => 'nullable|exists:vehicles,id',
+            'van_number'          => 'nullable|string|max:50',
+            'pickup_time'         => 'nullable',
+            'drop_time'           => 'nullable',
+            'fare'                => 'nullable|numeric|min:0',
+            'distance_km'         => 'nullable|numeric|min:0',
+            'landmark'            => 'nullable|string|max:255',
+            'pickup_instructions' => 'nullable|string|max:500',
+            'drop_instructions'   => 'nullable|string|max:500',
+            'remarks'             => 'nullable|string|max:500',
+            'is_active'           => 'nullable|boolean',
         ]);
 
         $vanNumber = $request->van_number;
@@ -1207,17 +1347,33 @@ class TransportController extends Controller
             $vanNumber = Vehicle::find($request->vehicle_id)?->vehicle_number;
         }
 
-        TransportStop::findOrFail($id)->update(array_merge(
-            $request->only(['route_id', 'name', 'stop_order', 'vehicle_id', 'pickup_time', 'drop_time', 'fare', 'landmark', 'distance_km']),
-            ['van_number' => $vanNumber]
-        ));
-        return redirect()->route('transport.stops')->with('success', 'Stop updated successfully.');
+        $stop = TransportStop::findOrFail($id);
+        $data = $request->only(['route_id', 'name', 'stop_order', 'vehicle_id', 'pickup_time', 'drop_time', 'fare', 'landmark', 'distance_km', 'pickup_instructions', 'drop_instructions', 'remarks']);
+        $data['van_number'] = $vanNumber;
+        if ($request->has('is_active')) {
+            $data['is_active'] = $request->boolean('is_active');
+        }
+
+        $stop->update($data);
+        return redirect()->route('transport.stops')->with('success', "Bus stop \"{$stop->name}\" updated successfully.");
     }
 
-    public function deleteStop(int $id)
+    public function toggleStop(int $id)
     {
-        TransportStop::findOrFail($id)->delete();
-        return back()->with('success', 'Stop removed.');
+        $stop = TransportStop::findOrFail($id);
+        $stop->update(['is_active' => !$stop->is_active]);
+        $status = $stop->is_active ? 'activated' : 'deactivated';
+        return back()->with('success', "Bus stop \"{$stop->name}\" has been {$status}.");
+    }
+
+    public function deleteStop(Request $request, int $id, TransportManagementService $service)
+    {
+        $reassignStopId = $request->filled('reassign_to_stop_id') ? (int)$request->reassign_to_stop_id : null;
+        $result = $service->safeDeleteStop($id, $reassignStopId);
+        if ($result['success']) {
+            return back()->with('success', $result['message']);
+        }
+        return back()->withErrors(['error' => $result['message']]);
     }
 
     public function attendants(Request $request)
@@ -1697,6 +1853,381 @@ class TransportController extends Controller
             new ArrayExport($records),
             'bus-attendance-' . ($vehicle?->vehicle_number ?? 'all') . '-' . $from . '-to-' . $to . '.xlsx'
         );
+    }
+
+    public function students(Request $request)
+    {
+        $vehicleId = $request->get('vehicle_id');
+        $routeId   = $request->get('route_id');
+        $stopId    = $request->get('stop_id');
+        $classId   = $request->get('class_id');
+        $status    = $request->get('status', 'active');
+        $search    = trim((string)$request->get('search', ''));
+
+        $query = TransportAllotment::with([
+            'student',
+            'enrollment.class',
+            'enrollment.section',
+            'vehicle',
+            'route',
+            'stop',
+            'dropStop',
+        ]);
+
+        if ($status === 'active') {
+            $query->where('is_active', true);
+        } elseif ($status === 'discontinued') {
+            $query->where('is_active', false);
+        }
+
+        if ($vehicleId) {
+            $query->where('vehicle_id', $vehicleId);
+        }
+        if ($routeId) {
+            $query->where('route_id', $routeId);
+        }
+        if ($stopId) {
+            $query->where(function($q) use ($stopId) {
+                $q->where('stop_id', $stopId)->orWhere('drop_stop_id', $stopId);
+            });
+        }
+        if ($classId) {
+            $query->whereHas('enrollment', fn($q) => $q->where('class_id', $classId));
+        }
+        if ($search) {
+            $query->whereHas('student', function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%")
+                  ->orWhere('admission_number', 'like', "%{$search}%")
+                  ->orWhere('roll_number', 'like', "%{$search}%");
+            });
+        }
+
+        $allotments = $query->orderBy('id', 'desc')->paginate(25)->withQueryString();
+
+        $selectedVehicle = $vehicleId ? Vehicle::with(['route.stops'])->find($vehicleId) : null;
+        $vehicleCapacity = $selectedVehicle ? ($selectedVehicle->seating_capacity ?: $selectedVehicle->capacity ?: 0) : 0;
+        $vehicleAllottedCount = $selectedVehicle ? TransportAllotment::where('vehicle_id', $selectedVehicle->id)->where('is_active', true)->count() : 0;
+        $isOverCapacity = $selectedVehicle && $vehicleCapacity > 0 && ($vehicleAllottedCount > $vehicleCapacity);
+
+        $totalActiveStudents = TransportAllotment::where('is_active', true)->count();
+        $totalVehicles = Vehicle::where('is_active', true)->count();
+        $totalCapacity = (int) Vehicle::where('is_active', true)->sum(DB::raw('COALESCE(seating_capacity, capacity, 0)'));
+        $overcapacityVehicles = Vehicle::where('is_active', true)->get()->filter(function($v) {
+            $cap = $v->seating_capacity ?: $v->capacity ?: 0;
+            $cnt = TransportAllotment::where('vehicle_id', $v->id)->where('is_active', true)->count();
+            return $cap > 0 && $cnt > $cap;
+        })->count();
+
+        $vehicles = Vehicle::where('is_active', true)->orderBy('vehicle_number')->get();
+        $routes   = TransportRoute::where('is_active', true)->with('vehicle')->orderBy('route_name')->get();
+        $stops    = TransportStop::where('is_active', true)->orderBy('name')->get();
+        $classes  = Classes::active()->get();
+        $sections = Section::all();
+
+        return view('transport.students', compact(
+            'allotments', 'vehicles', 'routes', 'stops', 'classes', 'sections',
+            'selectedVehicle', 'vehicleCapacity', 'vehicleAllottedCount', 'isOverCapacity',
+            'totalActiveStudents', 'totalVehicles', 'totalCapacity', 'overcapacityVehicles',
+            'vehicleId', 'routeId', 'stopId', 'classId', 'status', 'search'
+        ));
+    }
+
+    public function storeStudentAllotment(Request $request, TransportManagementService $service)
+    {
+        $request->validate([
+            'student_id'            => 'nullable|exists:students,id',
+            'enrollment_id'         => 'nullable|exists:student_enrollments,id',
+            'route_id'              => 'required|exists:transport_routes,id',
+            'stop_id'               => 'required|exists:transport_stops,id',
+            'drop_stop_id'          => 'nullable|exists:transport_stops,id',
+            'vehicle_id'            => 'nullable|exists:vehicles,id',
+            'pickup_time_override'  => 'nullable|string|max:20',
+            'drop_time_override'    => 'nullable|string|max:20',
+            'fee'                   => 'nullable|numeric|min:0',
+            'start_date'            => 'nullable|date',
+            'remarks'               => 'nullable|string|max:255',
+        ]);
+
+        $studentId = $request->student_id;
+        if (!$studentId && $request->enrollment_id) {
+            $studentId = StudentEnrollment::find($request->enrollment_id)?->student_id;
+        }
+
+        if (!$studentId) {
+            return back()->withErrors(['error' => 'Please select a valid student.'])->withInput();
+        }
+
+        $route = TransportRoute::find($request->route_id);
+        $vehicleId = $request->vehicle_id ?: $route?->vehicle_id;
+        if ($vehicleId) {
+            $vehicle = Vehicle::find($vehicleId);
+            $cap = $vehicle ? ($vehicle->seating_capacity ?: $vehicle->capacity ?: 0) : 0;
+            if ($cap > 0) {
+                $currentCount = TransportAllotment::where('vehicle_id', $vehicleId)
+                    ->where('is_active', true)
+                    ->where('student_id', '!=', $studentId)
+                    ->count();
+                if ($currentCount >= $cap) {
+                    return back()->withErrors(['vehicle_id' => "Warning: Vehicle {$vehicle->vehicle_number} has reached maximum seating capacity ({$cap} seats). Allocation blocked."])->withInput();
+                }
+            }
+        }
+
+        $service->assignStudentTransport($studentId, [
+            'route_id'              => $request->route_id,
+            'stop_id'               => $request->stop_id,
+            'drop_stop_id'          => $request->drop_stop_id ?: $request->stop_id,
+            'vehicle_id'            => $vehicleId,
+            'pickup_time'           => $request->pickup_time_override,
+            'drop_time'             => $request->drop_time_override,
+            'fee'                   => $request->fee,
+            'start_date'            => $request->start_date ?: today()->toDateString(),
+            'remarks'               => $request->remarks,
+        ]);
+
+        return back()->with('success', 'Student transport allocated successfully.');
+    }
+
+    public function discontinueStudentAllotment(Request $request, int $id, TransportManagementService $service)
+    {
+        $request->validate([
+            'reason'   => 'nullable|string|max:255',
+            'end_date' => 'nullable|date',
+        ]);
+
+        $service->discontinueStudentTransport($id, $request->reason ?? 'Discontinued by administrator', $request->end_date, Auth::id());
+
+        return back()->with('success', 'Transport assignment safely discontinued. History record created.');
+    }
+
+    public function exportStudents(Request $request)
+    {
+        $vehicleId = $request->get('vehicle_id');
+        $routeId   = $request->get('route_id');
+        $stopId    = $request->get('stop_id');
+        $classId   = $request->get('class_id');
+        $status    = $request->get('status', 'active');
+        $format    = $request->get('format', 'excel');
+
+        $query = TransportAllotment::with([
+            'student',
+            'enrollment.class',
+            'enrollment.section',
+            'vehicle',
+            'route',
+            'stop',
+            'dropStop',
+        ]);
+
+        if ($status === 'active') {
+            $query->where('is_active', true);
+        } elseif ($status === 'discontinued') {
+            $query->where('is_active', false);
+        }
+
+        if ($vehicleId) $query->where('vehicle_id', $vehicleId);
+        if ($routeId) $query->where('route_id', $routeId);
+        if ($stopId) {
+            $query->where(function($q) use ($stopId) {
+                $q->where('stop_id', $stopId)->orWhere('drop_stop_id', $stopId);
+            });
+        }
+        if ($classId) $query->whereHas('enrollment', fn($q) => $q->where('class_id', $classId));
+
+        $allotments = $query->orderBy('id', 'asc')->get();
+
+        $rows = [];
+        foreach ($allotments as $a) {
+            $rows[] = [
+                'Student ID'       => $a->student_id,
+                'Admission No'     => $a->student?->admission_number ?? '—',
+                'Student Name'     => $a->student?->full_name ?? '—',
+                'Class & Section'  => ($a->enrollment?->class?->name ?? '—') . ' ' . ($a->enrollment?->section?->name ?? ''),
+                'Vehicle'          => $a->vehicle?->vehicle_number ?? '—',
+                'Route'            => $a->route?->route_name ?? '—',
+                'Pickup Stop'      => $a->effective_pickup_stop_name ?? '—',
+                'Pickup Time'      => $a->effective_pickup_time ?? '—',
+                'Drop Stop'        => $a->effective_drop_stop_name ?? '—',
+                'Drop Time'        => $a->effective_drop_time ?? '—',
+                'Transport Fee'    => $a->fee ?? 0,
+                'Status'           => $a->is_active ? 'Active' : 'Discontinued',
+            ];
+        }
+
+        $filename = 'transport_students_' . date('Y-m-d_His');
+
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('transport.pdf-students', [
+                'rows'      => $rows,
+                'title'     => 'Student Transport Manifest',
+                'generated' => now()->format('d M Y, h:i A'),
+            ])->setPaper('a4', 'landscape');
+            return $pdf->download($filename . '.pdf');
+        }
+
+        return Excel::download(new ArrayExport($rows), $filename . '.xlsx');
+    }
+
+    public function importView()
+    {
+        $logs = TransportImportLog::latest()->limit(20)->get();
+        $backups = [];
+        $backupDir = storage_path('app/backups/transport');
+        if (File::exists($backupDir)) {
+            $files = File::files($backupDir);
+            foreach ($files as $file) {
+                $backups[] = [
+                    'name' => $file->getFilename(),
+                    'size' => round($file->getSize() / 1024, 1) . ' KB',
+                    'date' => date('Y-m-d H:i:s', $file->getMTime()),
+                ];
+            }
+            usort($backups, fn($a, $b) => strcmp($b['date'], $a['date']));
+        }
+
+        return view('transport.import', compact('logs', 'backups'));
+    }
+
+    public function importStopsExcel(Request $request, TransportManagementService $service)
+    {
+        $request->validate([
+            'excel_file' => 'required|file|mimes:xlsx,xls,csv|max:20480',
+        ]);
+
+        $file = $request->file('excel_file');
+        $path = $file->getRealPath();
+
+        $result = $service->importBusStopsFromExcel($path, Auth::id(), $file->getClientOriginalName());
+
+        return back()->with('import_summary', $result);
+    }
+
+    public function importAllocationsExcel(Request $request, TransportManagementService $service)
+    {
+        $request->validate([
+            'excel_file' => 'required|file|mimes:xlsx,xls,csv|max:20480',
+        ]);
+
+        $file = $request->file('excel_file');
+        $path = $file->getRealPath();
+
+        $result = $service->importStudentAllocationsFromExcel($path, Auth::id(), $file->getClientOriginalName());
+
+        return back()->with('import_summary', $result);
+    }
+
+    public function createBackup(TransportManagementService $service)
+    {
+        $filePath = $service->backupTransportData();
+        $filename = basename($filePath);
+        return back()->with('success', "Full transport snapshot created: {$filename}");
+    }
+
+    public function reports(Request $request)
+    {
+        $reportType = $request->get('type', 'vehicle_manifest');
+        $vehicleId  = $request->get('vehicle_id');
+        $routeId    = $request->get('route_id');
+        $stopId     = $request->get('stop_id');
+
+        $vehicles = Vehicle::where('is_active', true)->orderBy('vehicle_number')->get();
+        $routes   = TransportRoute::where('is_active', true)->with('vehicle')->orderBy('route_name')->get();
+        $stops    = TransportStop::where('is_active', true)->orderBy('name')->get();
+
+        $data = [];
+        if ($reportType === 'vehicle_manifest') {
+            $data = Vehicle::withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)])
+                ->with(['route.stops' => fn($q) => $q->orderBy('stop_order')])
+                ->when($vehicleId, fn($q) => $q->where('id', $vehicleId))
+                ->get()
+                ->map(function ($v) {
+                    $cap = $v->seating_capacity ?: $v->capacity ?: 0;
+                    $v->occupancy_pct = $cap > 0 ? round(($v->active_students_count / $cap) * 100, 1) : 0;
+                    $v->status_badge = $cap > 0 && $v->active_students_count > $cap ? 'Over Capacity' : ($v->occupancy_pct >= 90 ? 'Near Capacity' : 'Normal');
+                    return $v;
+                });
+        } elseif ($reportType === 'route_schedule') {
+            $data = TransportRoute::with(['vehicle', 'stops' => fn($q) => $q->orderBy('stop_order')])
+                ->withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)])
+                ->when($routeId, fn($q) => $q->where('id', $routeId))
+                ->get();
+        } elseif ($reportType === 'stop_manifest') {
+            $data = TransportStop::with(['route', 'vehicle'])
+                ->withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)])
+                ->when($stopId, fn($q) => $q->where('id', $stopId))
+                ->when($routeId, fn($q) => $q->where('route_id', $routeId))
+                ->orderBy('route_id')->orderBy('stop_order')
+                ->paginate(30)->withQueryString();
+        } elseif ($reportType === 'unallocated_students') {
+            $data = Student::where('status', 'active')
+                ->whereDoesntHave('transportAllotments', fn($q) => $q->where('is_active', true))
+                ->with('currentEnrollment.class', 'currentEnrollment.section')
+                ->paginate(30)->withQueryString();
+        } elseif ($reportType === 'audit_history') {
+            $data = TransportAssignmentHistory::with(['student', 'oldVehicle', 'newVehicle', 'oldRoute', 'newRoute', 'oldStop', 'newStop', 'changedByUser'])
+                ->latest('effective_date')->latest('id')
+                ->paginate(30)->withQueryString();
+        }
+
+        return view('transport.reports', compact('reportType', 'vehicles', 'routes', 'stops', 'data', 'vehicleId', 'routeId', 'stopId'));
+    }
+
+    public function exportReport(Request $request)
+    {
+        $reportType = $request->get('type', 'vehicle_manifest');
+        $format     = $request->get('format', 'excel');
+
+        $rows = [];
+        if ($reportType === 'vehicle_manifest') {
+            $vehicles = Vehicle::withCount(['allotments as active_students_count' => fn($q) => $q->where('is_active', true)])
+                ->with('route')->get();
+            foreach ($vehicles as $v) {
+                $cap = $v->seating_capacity ?: $v->capacity ?: 0;
+                $rows[] = [
+                    'Vehicle Reg' => $v->vehicle_number,
+                    'Type'        => ucfirst($v->vehicle_type ?? 'Van'),
+                    'Route'       => $v->route?->route_name ?? '—',
+                    'Capacity'    => $cap,
+                    'Assigned'    => $v->active_students_count,
+                    'Remaining'   => max(0, $cap - $v->active_students_count),
+                    'Driver'      => $v->driver_name ?? '—',
+                    'Driver Phone'=> $v->driver_mobile ?? '—',
+                ];
+            }
+        } elseif ($reportType === 'unallocated_students') {
+            $students = Student::where('status', 'active')
+                ->whereDoesntHave('transportAllotments', fn($q) => $q->where('is_active', true))
+                ->with('currentEnrollment.class', 'currentEnrollment.section')
+                ->get();
+            foreach ($students as $s) {
+                $rows[] = [
+                    'Student ID'   => $s->id,
+                    'Admission No' => $s->admission_number,
+                    'Name'         => $s->full_name,
+                    'Class'        => $s->currentEnrollment?->class?->name ?? '—',
+                    'Section'      => $s->currentEnrollment?->section?->name ?? '—',
+                    'Parent Phone' => $s->emergency_contact ?? $s->father_phone ?? '—',
+                ];
+            }
+        } else {
+            $allotments = TransportAllotment::with(['student', 'vehicle', 'route', 'stop'])->where('is_active', true)->get();
+            foreach ($allotments as $a) {
+                $rows[] = [
+                    'Student'   => $a->student?->full_name,
+                    'Adm No'    => $a->student?->admission_number,
+                    'Vehicle'   => $a->vehicle?->vehicle_number,
+                    'Route'     => $a->route?->route_name,
+                    'Stop'      => $a->effective_pickup_stop_name,
+                    'Pickup'    => $a->effective_pickup_time,
+                    'Drop'      => $a->effective_drop_time,
+                    'Fee'       => $a->fee,
+                ];
+            }
+        }
+
+        $filename = 'transport_report_' . $reportType . '_' . date('Y-m-d');
+        return Excel::download(new ArrayExport($rows), $filename . '.xlsx');
     }
 }
 

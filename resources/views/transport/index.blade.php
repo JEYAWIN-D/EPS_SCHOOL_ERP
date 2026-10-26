@@ -1,40 +1,49 @@
 @extends('layouts.app')
-@section('title', 'Transport Management')
+@section('title', 'Transport Operations & Fleet Management')
 @section('content')
 <div class="space-y-6">
 
   {{-- Header --}}
   <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div>
-      <h1 class="page-title">Transport Management</h1>
-      <p class="page-subtitle">Fleet status &amp; route operations</p>
+      <h1 class="page-title">Transport Operations &amp; Fleet Management</h1>
+      <p class="page-subtitle">School bus routes, live student manifests, and vehicle allocations</p>
     </div>
-    <div class="flex gap-2 flex-wrap">
-      <a href="{{ route('transport.allotment') }}"   class="btn btn-secondary btn-sm">Student Allotment</a>
-      <a href="{{ route('transport.bus-attendance') }}" class="btn btn-secondary btn-sm">Bus Attendance</a>
-      <a href="{{ route('transport.vehicles.create') }}" class="btn btn-primary">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+    <div class="flex items-center gap-2 flex-wrap">
+      <a href="{{ route('transport.import') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Excel Import &amp; Migration
+      </a>
+      <a href="{{ route('transport.students') }}" class="btn btn-secondary btn-sm inline-flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Student Allocation
+      </a>
+      <a href="{{ route('transport.vehicles.create') }}" class="btn btn-primary btn-sm inline-flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         Add Vehicle
       </a>
     </div>
   </div>
 
+  {{-- Unified Sub-Navigation Tabs --}}
+  @include('transport.partials.nav')
+
   {{-- Document / Maintenance Alerts --}}
   @if($docAlerts->count() > 0)
-  <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+  <div class="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-2xs">
     <div class="flex items-start gap-3">
       <svg class="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
       <div class="flex-1">
-        <p class="text-sm font-semibold text-red-800">Document Expiry Warning — {{ $docAlerts->count() }} vehicle(s) need attention</p>
-        <div class="flex flex-wrap gap-2 mt-1.5">
+        <p class="text-sm font-bold text-red-900">Document Expiry Alert — {{ $docAlerts->count() }} vehicle(s) require renewal</p>
+        <div class="flex flex-wrap gap-2 mt-2">
           @foreach($docAlerts as $v)
-            <span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+            <span class="text-xs bg-white text-red-700 px-2.5 py-1 rounded-lg border border-red-200 font-bold shadow-2xs">
               {{ $v->vehicle_number }}
               @if($v->insurance_expiry && \Carbon\Carbon::parse($v->insurance_expiry)->lte(today()->addDays(30))) · Ins {{ \Carbon\Carbon::parse($v->insurance_expiry)->format('d M') }} @endif
               @if($v->fitness_expiry && \Carbon\Carbon::parse($v->fitness_expiry)->lte(today()->addDays(30))) · Fit {{ \Carbon\Carbon::parse($v->fitness_expiry)->format('d M') }} @endif
             </span>
           @endforeach
-          <a href="{{ route('transport.documents') }}" class="text-xs text-red-700 underline font-semibold">View All →</a>
+          <a href="{{ route('transport.documents') }}" class="text-xs text-red-700 hover:text-red-900 underline font-semibold self-center">View Expiry Console &rarr;</a>
         </div>
       </div>
     </div>
@@ -42,57 +51,141 @@
   @endif
 
   @if($maintenanceAlerts->count() > 0)
-  <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+  <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-2xs">
     <div class="flex items-start gap-3">
       <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       <div class="flex-1">
-        <p class="text-sm font-semibold text-amber-800">Maintenance Due — {{ $maintenanceAlerts->count() }} vehicle(s) in next 7 days</p>
-        <a href="{{ route('transport.maintenance') }}" class="text-xs text-amber-700 underline font-semibold mt-1 inline-block">View Schedule →</a>
+        <p class="text-sm font-bold text-amber-900">Maintenance Due — {{ $maintenanceAlerts->count() }} vehicle(s) scheduled in next 7 days</p>
+        <a href="{{ route('transport.maintenance') }}" class="text-xs text-amber-700 hover:text-amber-900 underline font-semibold mt-1 inline-block">Review Maintenance Schedule &rarr;</a>
       </div>
     </div>
   </div>
   @endif
 
-  {{-- KPI Cards --}}
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-    <a href="{{ route('transport.routes') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5">
-      <div class="stat-icon bg-gradient-to-br from-blue-500 to-indigo-600 mb-3">
-        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+  {{-- Live KPI Dashboard Cards (Requirement 9: Calculated directly from DB) --}}
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+    {{-- 1. Active Vehicles --}}
+    <a href="{{ route('transport.vehicles') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5 p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-slate-700 to-slate-900 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1"/></svg>
       </div>
-      <p class="stat-number">{{ $stats['routes'] }}</p>
-      <p class="text-sm text-slate-500">Active Routes</p>
+      <div>
+        <p class="stat-number text-xl">{{ $stats['vehicles'] }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Active Vehicles</p>
+      </div>
     </a>
-    <a href="{{ route('transport.vehicles') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5">
-      <div class="stat-icon bg-gradient-to-br from-slate-600 to-slate-800 mb-3">
-        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1"/></svg>
+
+    {{-- 2. Active Routes --}}
+    <a href="{{ route('transport.routes') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5 p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-blue-500 to-indigo-600 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
       </div>
-      <p class="stat-number">{{ $stats['vehicles'] }}</p>
-      <p class="text-sm text-slate-500">Vehicles</p>
+      <div>
+        <p class="stat-number text-xl">{{ $stats['routes'] }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Active Routes</p>
+      </div>
     </a>
-    <a href="{{ route('transport.allotment') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5">
-      <div class="stat-icon bg-gradient-to-br from-green-500 to-emerald-600 mb-3">
-        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+
+    {{-- 3. Total Bus Stops --}}
+    <a href="{{ route('transport.stops') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5 p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-amber-500 to-orange-600 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       </div>
-      <p class="stat-number">{{ $stats['students'] }}</p>
-      <p class="text-sm text-slate-500">Students Allotted</p>
+      <div>
+        <p class="stat-number text-xl">{{ $stats['total_stops'] ?? 0 }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Total Bus Stops</p>
+      </div>
     </a>
-    <a href="{{ route('transport.drivers') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5">
-      <div class="stat-icon bg-gradient-to-br from-teal-500 to-cyan-600 mb-3">
-        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+
+    {{-- 4. Students Using Transport --}}
+    <a href="{{ route('transport.students') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5 p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-emerald-500 to-green-600 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
       </div>
-      <p class="stat-number">{{ $stats['drivers'] }}</p>
-      <p class="text-sm text-slate-500">Drivers</p>
+      <div>
+        <p class="stat-number text-xl text-emerald-700">{{ $stats['students'] }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Using Transport</p>
+      </div>
     </a>
-    <a href="{{ route('transport.bus-attendance') }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5">
-      <div class="stat-icon bg-gradient-to-br from-violet-500 to-purple-600 mb-3">
-        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+
+    {{-- 5. Available Vehicle Capacity --}}
+    <div class="card p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-cyan-500 to-teal-600 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
       </div>
-      <p class="stat-number">{{ $stats['bus_present'] }}</p>
-      <p class="text-sm text-slate-500">On Bus Today</p>
+      <div>
+        <p class="stat-number text-xl">{{ $stats['available_capacity'] ?? 0 }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Available Seats</p>
+      </div>
+    </div>
+
+    {{-- 6. Students Awaiting Transport --}}
+    <a href="{{ route('transport.reports', ['type' => 'unallocated_students']) }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5 p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-indigo-500 to-purple-600 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <div>
+        <p class="stat-number text-xl text-indigo-700">{{ $stats['students_awaiting_transport'] ?? 0 }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Non-Transport</p>
+      </div>
+    </a>
+
+    {{-- 7. Discontinued Assignments --}}
+    <a href="{{ route('transport.students', ['status' => 'discontinued']) }}" class="card hover:shadow-card-md transition hover:-translate-y-0.5 p-4 flex flex-col justify-between">
+      <div class="stat-icon bg-gradient-to-br from-rose-500 to-pink-600 mb-2 w-9 h-9">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+      </div>
+      <div>
+        <p class="stat-number text-xl text-rose-700">{{ $stats['discontinued_assignments'] ?? 0 }}</p>
+        <p class="text-xs text-slate-500 font-semibold mt-0.5">Discontinued</p>
+      </div>
     </a>
   </div>
 
-  {{-- GPRS Live Fleet Tracking Quick Radar --}}
+  {{-- Transport Operational Status & Timing Readiness Bar --}}
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    {{-- Stops Without Timings --}}
+    <a href="{{ route('transport.stops', ['timing' => 'missing']) }}" class="card p-4 hover:shadow-card-md transition flex items-center justify-between border-l-4 {{ ($stats['unconfigured_timings'] ?? 0) > 0 ? 'border-l-amber-500 bg-amber-50/20' : 'border-l-emerald-500' }}">
+      <div>
+        <p class="text-xs font-semibold text-slate-500">Stops Without Timings</p>
+        <p class="stat-number text-xl mt-0.5 {{ ($stats['unconfigured_timings'] ?? 0) > 0 ? 'text-amber-800' : 'text-emerald-700' }}">
+          {{ $stats['unconfigured_timings'] ?? 0 }}
+        </p>
+        <p class="text-[11px] text-slate-400 mt-0.5">Pickup &amp; drop timings unconfigured</p>
+      </div>
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg {{ ($stats['unconfigured_timings'] ?? 0) > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' }}">
+        ⏱️
+      </div>
+    </a>
+
+    {{-- Routes Awaiting Vehicle --}}
+    <a href="{{ route('transport.routes') }}" class="card p-4 hover:shadow-card-md transition flex items-center justify-between border-l-4 {{ ($stats['routes_awaiting_vehicle'] ?? 0) > 0 ? 'border-l-rose-500 bg-rose-50/20' : 'border-l-emerald-500' }}">
+      <div>
+        <p class="text-xs font-semibold text-slate-500">Routes Awaiting Vehicle</p>
+        <p class="stat-number text-xl mt-0.5 {{ ($stats['routes_awaiting_vehicle'] ?? 0) > 0 ? 'text-rose-800' : 'text-emerald-700' }}">
+          {{ $stats['routes_awaiting_vehicle'] ?? 0 }}
+        </p>
+        <p class="text-[11px] text-slate-400 mt-0.5">Active routes without fleet vehicle</p>
+      </div>
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg {{ ($stats['routes_awaiting_vehicle'] ?? 0) > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">
+        🚐
+      </div>
+    </a>
+
+    {{-- 5 Official Corridors --}}
+    <a href="{{ route('transport.routes') }}" class="card p-4 hover:shadow-card-md transition flex items-center justify-between border-l-4 border-l-indigo-500">
+      <div>
+        <p class="text-xs font-semibold text-slate-500">Van Corridors Configured</p>
+        <p class="stat-number text-xl mt-0.5 text-indigo-700">5 Vans &middot; 57 Stops</p>
+        <p class="text-[11px] text-slate-400 mt-0.5">Van I, II, III, IV, V active</p>
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-lg">
+        🛣️
+      </div>
+    </a>
+  </div>
+
+  {{-- GPRS Live Fleet Radar --}}
   <div class="rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 p-5 text-white shadow-xl relative overflow-hidden">
     <div class="absolute -right-10 -bottom-10 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4 mb-4">
@@ -147,29 +240,67 @@
     @endif
   </div>
 
-  {{-- Quick Links --}}
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-    @foreach([
-      ['Routes',           'transport.routes',           'from-blue-500 to-indigo-600',    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>'],
-      ['Vehicles',         'transport.vehicles',         'from-slate-600 to-slate-800',    '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1"/>'],
-      ['Drivers',          'transport.drivers',          'from-teal-500 to-cyan-600',      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>'],
-      ['Bus Attendance',   'transport.bus-attendance',   'from-violet-500 to-purple-600',  '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>'],
-      ['Stops',            'transport.stops',            'from-amber-500 to-orange-500',   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>'],
-      ['Student Allotment','transport.allotment',        'from-green-500 to-emerald-600',  '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>'],
-      ['Maintenance',      'transport.maintenance',      'from-rose-500 to-red-600',       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>'],
-      ['Fuel Log',         'transport.fuel',             'from-yellow-500 to-amber-600',   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18"/>'],
-      ['Documents',        'transport.documents',        'from-pink-500 to-rose-500',      '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>'],
-      ['Route Roster',     'transport.roster',           'from-cyan-500 to-sky-600',       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>'],
-      ['Tracking',         'transport.tracking',         'from-lime-500 to-green-600',     '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>'],
-      ['Incidents',        'transport.incidents',        'from-orange-500 to-amber-600',   '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>'],
-    ] as [$label,$route,$color,$icon])
-    <a href="{{ route($route) }}" class="card-flat flex items-center gap-3 py-3.5 px-4 hover:shadow-card-md transition">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br {{ $color }} flex items-center justify-center flex-shrink-0">
-        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $icon !!}</svg>
+  {{-- Quick Management Grid --}}
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <a href="{{ route('transport.students') }}" class="card-flat flex items-center gap-3 py-3 px-3 hover:shadow-card-md transition">
+      <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
       </div>
-      <span class="font-semibold text-sm text-slate-700">{{ $label }}</span>
+      <div>
+        <p class="font-bold text-xs text-slate-800">Student Manifest</p>
+        <p class="text-[10px] text-slate-400">Vehicle allocations</p>
+      </div>
     </a>
-    @endforeach
+
+    <a href="{{ route('transport.stops') }}" class="card-flat flex items-center gap-3 py-3 px-3 hover:shadow-card-md transition">
+      <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+      </div>
+      <div>
+        <p class="font-bold text-xs text-slate-800">Bus Stops</p>
+        <p class="text-[10px] text-slate-400">Timings &amp; sequences</p>
+      </div>
+    </a>
+
+    <a href="{{ route('transport.routes') }}" class="card-flat flex items-center gap-3 py-3 px-3 hover:shadow-card-md transition">
+      <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+      </div>
+      <div>
+        <p class="font-bold text-xs text-slate-800">Route Corridors</p>
+        <p class="text-[10px] text-slate-400">Safe retirement &amp; edits</p>
+      </div>
+    </a>
+
+    <a href="{{ route('transport.vehicles') }}" class="card-flat flex items-center gap-3 py-3 px-3 hover:shadow-card-md transition">
+      <div class="w-8 h-8 rounded-lg bg-slate-200 text-slate-700 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+      </div>
+      <div>
+        <p class="font-bold text-xs text-slate-800">Vehicle Fleet</p>
+        <p class="text-[10px] text-slate-400">Buses, vans &amp; capacity</p>
+      </div>
+    </a>
+
+    <a href="{{ route('transport.import') }}" class="card-flat flex items-center gap-3 py-3 px-3 hover:shadow-card-md transition">
+      <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+      </div>
+      <div>
+        <p class="font-bold text-xs text-slate-800">Excel Migration</p>
+        <p class="text-[10px] text-slate-400">Official stop imports</p>
+      </div>
+    </a>
+
+    <a href="{{ route('transport.reports') }}" class="card-flat flex items-center gap-3 py-3 px-3 hover:shadow-card-md transition">
+      <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </div>
+      <div>
+        <p class="font-bold text-xs text-slate-800">Reports Hub</p>
+        <p class="text-[10px] text-slate-400">Occupancy &amp; audits</p>
+      </div>
+    </a>
   </div>
 
 </div>

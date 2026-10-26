@@ -380,11 +380,88 @@ class FeeController extends Controller
             }
         }
 
+        $studentTransportAllotment = null;
+        if ($student) {
+            $studentTransportAllotment = \App\Models\TransportAllotment::with(['vehicle', 'route', 'stop', 'dropStop'])
+                ->where('student_id', $student->id)
+                ->where('is_active', true)
+                ->first();
+        }
+
+        $activeTransportRoutes = \App\Models\TransportRoute::with([
+            'vehicle',
+            'stops' => fn($q) => $q->where('is_active', true)->orderBy('stop_order')
+        ])
+            ->where('is_active', true)
+            ->get();
+
         return view('fees.collect', compact(
             'student', 'dues', 'classes', 'feeHeads', 'currentYear', 'studentSuggestions',
             'termsSchedule', 'totalFeesPayable', 'totalPaidSoFar', 'totalAdjustedSoFar',
-            'excessCreditSoFar', 'outstandingBalance', 'admissionFeeAmount', 'totalPendingTerms'
+            'excessCreditSoFar', 'outstandingBalance', 'admissionFeeAmount', 'totalPendingTerms',
+            'studentTransportAllotment', 'activeTransportRoutes'
         ));
+    }
+
+    public function manageStudentTransport(Request $request, int $id, \App\Services\TransportManagementService $service)
+    {
+        $student = Student::findOrFail($id);
+        $action = $request->input('transport_action', 'assign_or_update');
+
+        if ($action === 'discontinue') {
+            $reason = $request->input('discontinue_reason', 'Discontinued during fee payment update');
+            $endDate = $request->input('discontinue_date', today()->toDateString());
+
+            $existingAllotment = \App\Models\TransportAllotment::where('student_id', $student->id)->where('is_active', true)->first();
+            if ($existingAllotment) {
+                $service->discontinueStudentTransport($existingAllotment->id, $reason, $endDate, Auth::id());
+                return back()->with('success', "Transport facility discontinued for {$student->full_name}. Historical fee transactions and payment receipts remain untouched.");
+            }
+            return back()->with('info', "Student does not currently have an active transport assignment.");
+        }
+
+        $validated = $request->validate([
+            'route_id'              => 'required|exists:transport_routes,id',
+            'stop_id'               => 'required|exists:transport_stops,id',
+            'drop_stop_id'          => 'nullable|exists:transport_stops,id',
+            'vehicle_id'            => 'nullable|exists:vehicles,id',
+            'pickup_time_override'  => 'nullable|string|max:20',
+            'drop_time_override'    => 'nullable|string|max:20',
+            'fee'                   => 'nullable|numeric|min:0',
+            'start_date'            => 'nullable|date',
+            'remarks'               => 'nullable|string|max:255',
+        ]);
+
+        $route = \App\Models\TransportRoute::find($validated['route_id']);
+        $vehicleId = $validated['vehicle_id'] ?? $route?->vehicle_id;
+
+        if ($vehicleId) {
+            $vehicle = \App\Models\Vehicle::find($vehicleId);
+            $cap = $vehicle ? ($vehicle->seating_capacity ?: $vehicle->capacity ?: 0) : 0;
+            if ($cap > 0) {
+                $currentCount = \App\Models\TransportAllotment::where('vehicle_id', $vehicleId)
+                    ->where('is_active', true)
+                    ->where('student_id', '!=', $student->id)
+                    ->count();
+                if ($currentCount >= $cap) {
+                    return back()->withErrors(['vehicle_id' => "Warning: Vehicle {$vehicle->vehicle_number} has reached maximum seating capacity ({$cap} seats). Allocation blocked."])->withInput();
+                }
+            }
+        }
+
+        $allotment = $service->assignStudentTransport($student->id, [
+            'route_id'              => $validated['route_id'],
+            'stop_id'               => $validated['stop_id'],
+            'drop_stop_id'          => $validated['drop_stop_id'] ?? $validated['stop_id'],
+            'vehicle_id'            => $vehicleId,
+            'pickup_time'           => $validated['pickup_time_override'] ?? null,
+            'drop_time'             => $validated['drop_time_override'] ?? null,
+            'fee'                   => $validated['fee'] ?? null,
+            'start_date'            => $validated['start_date'] ?? today()->toDateString(),
+            'remarks'               => trim(($validated['remarks'] ?? '') . ' (Updated at Fee Desk)'),
+        ], Auth::id());
+
+        return back()->with('success', "Transport profile for {$student->full_name} updated successfully (Route: {$route->route_name}).");
     }
 
     public function savePayment(Request $request)

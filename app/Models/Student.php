@@ -114,6 +114,21 @@ class Student extends Model
         return $this->belongsTo(TransportStop::class, 'transport_stop_id');
     }
 
+    public function transportAllotments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TransportAllotment::class, 'student_id');
+    }
+
+    public function transportAllotment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TransportAllotment::class, 'student_id')->where('is_active', true)->latestOfMany();
+    }
+
+    public function transportHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TransportAssignmentHistory::class, 'student_id');
+    }
+
     public function getFullNameAttribute(): string
     {
         return trim($this->first_name . ' ' . ($this->middle_name ? $this->middle_name . ' ' : '') . $this->last_name);

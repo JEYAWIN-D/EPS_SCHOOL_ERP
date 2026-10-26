@@ -237,6 +237,9 @@
   transportRequired: {{ old("transport_route_id") ? 'true' : 'false' }},
   selectedRouteId: '{{ old("transport_route_id", "") }}',
   selectedStopId: '{{ old("transport_stop_id", "") }}',
+  selectedDropStopId: '{{ old("transport_drop_stop_id", "") }}',
+  transportPickupTime: '{{ old("transport_pickup_time", "") }}',
+  transportDropTime: '{{ old("transport_drop_time", "") }}',
 
   // Concession Categories State (Staff kid, Topper, Sports, Single shot, Referral, Sibling)
   concessionType: '{{ old("concession_type", "none") }}',
@@ -750,12 +753,20 @@
     if (!this.transportRequired || !this.selectedRouteId) return null;
     return this.transportRoutesData.find(r => r.id == this.selectedRouteId) || null;
   },
+  get currentRouteVehicle() {
+    return this.currentRoute?.vehicle || null;
+  },
   get currentRouteStops() {
     return this.currentRoute?.stops || [];
   },
   get currentStop() {
     if (!this.currentRoute || !this.selectedStopId) return null;
     return (this.currentRoute.stops || []).find(s => s.id == this.selectedStopId) || null;
+  },
+  get currentDropStop() {
+    if (!this.currentRoute) return null;
+    let dropId = this.selectedDropStopId || this.selectedStopId;
+    return (this.currentRoute.stops || []).find(s => s.id == dropId) || null;
   },
   get transportFee() {
     if (!this.transportRequired) return 0;
@@ -2456,31 +2467,73 @@
                 {{-- Hidden Transport Form Inputs for Database --}}
                 <input type="hidden" name="transport_route_id" :value="transportRequired ? selectedRouteId : ''">
                 <input type="hidden" name="transport_stop_id" :value="transportRequired ? selectedStopId : ''">
+                <input type="hidden" name="transport_drop_stop_id" :value="transportRequired ? (selectedDropStopId || selectedStopId) : ''">
+                <input type="hidden" name="transport_pickup_time" :value="transportRequired ? transportPickupTime : ''">
+                <input type="hidden" name="transport_drop_time" :value="transportRequired ? transportDropTime : ''">
                 <input type="hidden" name="transport_distance_km" :value="transportRequired ? transportDistanceKm : 0">
                 <input type="hidden" name="transport_fee" :value="transportRequired ? transportFee : 0">
 
                 <div x-show="transportRequired" x-transition class="space-y-4 pt-3 border-t border-[#FECACA]">
+                  {{-- Assigned Vehicle Info Banner --}}
+                  <template x-if="currentRouteVehicle">
+                    <div class="p-3 bg-white rounded-xl border border-amber-200 flex items-center justify-between text-xs shadow-2xs">
+                      <div class="flex items-center gap-2.5">
+                        <span class="text-base">🚐</span>
+                        <div>
+                          <span class="font-bold text-slate-800" x-text="currentRouteVehicle.vehicle_number + ' (' + (currentRouteVehicle.vehicle_type || 'Van') + ')'"></span>
+                          <span class="text-[11px] text-slate-500 block">Driver: <strong x-text="currentRouteVehicle.driver_name || 'Assigned Driver'"></strong> &bull; Capacity: <span x-text="(currentRouteVehicle.seating_capacity || currentRouteVehicle.capacity || 25) + ' seats'"></span></span>
+                        </div>
+                      </div>
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">Seat Available</span>
+                    </div>
+                  </template>
+
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label class="block text-xs font-bold text-slate-700 mb-1.5">Select Transport Route</label>
-                      <select x-model="selectedRouteId" @change="selectedStopId = ''"
+                      <select x-model="selectedRouteId" @change="selectedStopId = ''; selectedDropStopId = ''; transportPickupTime = ''; transportDropTime = ''"
                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-[#8C2826]">
                         <option value="">-- Choose School Route --</option>
                         <template x-for="route in transportRoutesData" :key="route.id">
-                          <option :value="route.id" x-text="route.route_name + ' (' + route.distance_km + ' km total)'"></option>
+                          <option :value="route.id" x-text="route.route_name + ' (' + (route.vehicle ? route.vehicle.vehicle_number : 'Transit') + ')'"></option>
                         </template>
                       </select>
                     </div>
 
                     <div x-show="selectedRouteId">
-                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Select Boarding / Stopping Point</label>
-                      <select x-model="selectedStopId"
+                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Pickup Boarding Stop</label>
+                      <select x-model="selectedStopId" @change="let st = currentRouteStops.find(s => s.id == selectedStopId); if (st) { transportPickupTime = st.pickup_time || '07:30'; transportDropTime = st.drop_time || '16:30'; if (!selectedDropStopId) selectedDropStopId = st.id; }"
                               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-[#8C2826]">
-                        <option value="">-- Choose Stop / Landmark --</option>
+                        <option value="">-- Choose Pickup Stop --</option>
                         <template x-for="stop in currentRouteStops" :key="stop.id">
-                          <option :value="stop.id" x-text="stop.name + ' • ' + stop.distance_km + ' km • ' + (stop.landmark ? '(' + stop.landmark + ') • ' : '') + formatMoney(stop.fare)"></option>
+                          <option :value="stop.id" x-text="stop.name + ' • ' + (stop.distance_km ? stop.distance_km + ' km • ' : '') + formatMoney(stop.fare)"></option>
                         </template>
                       </select>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" x-show="selectedStopId">
+                    <div>
+                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Drop Return Stop</label>
+                      <select x-model="selectedDropStopId"
+                              class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-[#8C2826]">
+                        <option value="">Same as Pickup Stop</option>
+                        <template x-for="stop in currentRouteStops" :key="stop.id">
+                          <option :value="stop.id" x-text="stop.name"></option>
+                        </template>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Student Pickup Time</label>
+                      <input type="text" x-model="transportPickupTime" placeholder="e.g. 07:25 AM"
+                             class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono font-semibold text-slate-800 focus:border-[#8C2826]">
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-bold text-slate-700 mb-1.5">Student Drop Time</label>
+                      <input type="text" x-model="transportDropTime" placeholder="e.g. 04:35 PM"
+                             class="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-mono font-semibold text-slate-800 focus:border-[#8C2826]">
                     </div>
                   </div>
 
@@ -2491,7 +2544,7 @@
                       <span class="text-[11px] text-slate-500" x-text="'Distance: ' + currentStop?.distance_km + ' km' + (currentStop?.landmark ? ' • Landmark: ' + currentStop.landmark : '')"></span>
                     </div>
                     <div class="text-right">
-                      <span class="text-[10px] uppercase font-bold text-slate-400 block">Transport Fee</span>
+                      <span class="text-[10px] uppercase font-bold text-slate-400 block">Annual Transport Fee</span>
                       <span class="font-extrabold text-[#8C2826] text-sm tabular-nums" x-text="formatMoney(transportFee)"></span>
                     </div>
                   </div>
