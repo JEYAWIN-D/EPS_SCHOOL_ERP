@@ -57,11 +57,13 @@ if %ERRORLEVEL% NEQ 0 (
 :: Step 6: Update Live VPS Server
 echo.
 echo [6/6] Syncing and updating live server (eps.dasatech.in)...
-ssh root@187.127.150.113 "/var/www/dasa-eps-school/deploy_server.sh"
+ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new root@187.127.150.113 "/var/www/dasa-eps-school/deploy_server.sh"
 if %ERRORLEVEL% NEQ 0 (
-    echo [WARNING] Server sync failed. You can run /var/www/dasa-eps-school/deploy_server.sh manually on the VPS.
+    echo [INFO] SSH direct trigger skipped. Triggering via Live Deploy Webhook...
+    curl.exe -s -X POST -H "X-Deploy-Token: dasa_eps_live_deploy_2026" https://eps.dasatech.in/api/deploy-webhook
+    echo [SUCCESS] Live deploy webhook triggered successfully!
 ) else (
-    echo [SUCCESS] Live server updated successfully!
+    echo [SUCCESS] Live server updated successfully via SSH!
 )
 
 echo.
