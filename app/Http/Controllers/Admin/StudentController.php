@@ -73,10 +73,34 @@ class StudentController extends Controller
     {
         $academicYears = AcademicYear::orderByDesc('start_date')->get();
         $currentYear   = AcademicYear::current();
-        $selectedYearId = $request->filled('academic_year_id')
-            ? (int)$request->academic_year_id
-            : ($currentYear?->id ?? $academicYears->first()?->id);
-        $selectedYear = $academicYears->firstWhere('id', $selectedYearId) ?? $currentYear;
+
+        // Compute student counts per academic session
+        $yearCounts = DB::table('student_enrollments')
+            ->join('students', 'student_enrollments.student_id', '=', 'students.id')
+            ->whereNull('students.deleted_at')
+            ->select('student_enrollments.academic_year_id', DB::raw('count(*) as count'))
+            ->groupBy('student_enrollments.academic_year_id')
+            ->pluck('count', 'academic_year_id');
+
+        foreach ($academicYears as $ay) {
+            $ay->student_count = $yearCounts[$ay->id] ?? 0;
+        }
+
+        $allStudentsCount = DB::table('students')->whereNull('deleted_at')->count();
+
+        // Handle academic_year_id selection ('all' or specific ID)
+        $rawYear = $request->input('academic_year_id');
+        if ($rawYear === 'all') {
+            $selectedYearId = null;
+            $selectedYear   = null;
+        } elseif ($request->filled('academic_year_id')) {
+            $selectedYearId = (int)$rawYear;
+            $selectedYear   = $academicYears->firstWhere('id', $selectedYearId);
+        } else {
+            $selectedYearId = $currentYear?->id ?? $academicYears->first()?->id;
+            $selectedYear   = $academicYears->firstWhere('id', $selectedYearId) ?? $currentYear;
+        }
+
         $sort = $request->input('sort', 'latest');
 
         // Dynamic Statistics Query for selected academic year & scoping
@@ -150,7 +174,7 @@ class StudentController extends Controller
             'incomplete_profile' => $incompleteProfilesCount,
         ];
 
-        // Class-Wise Student Overview (Hierarchy: Academic Year -> Class -> Section)
+        // Class-Wise Student Overview (Hierarchy: Academic Year -> Class -> Section, Pre-KG to 12th)
         $allActiveClasses = Classes::active()->with(['sections.classTeacher'])->orderBy('sort_order')->get();
         $classOverview = $allActiveClasses->map(function ($cls) use ($selectedYearId) {
             $classEnrs = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
@@ -204,19 +228,81 @@ class StudentController extends Controller
             ];
         });
 
+        // Fast mapping of class ID -> array of sections for dynamic frontend JS selector
+        $classSectionMap = [];
+        foreach ($classOverview as $cls) {
+            $classSectionMap[$cls->id] = $cls->sections->map(fn($s) => [
+                'id'    => $s->id,
+                'name'  => $s->name,
+                'total' => $s->total,
+            ])->values()->all();
+        }
+
         // 15-Column Student Roster Query
-        $query = Student::with([
-            'currentEnrollment.class',
-            'currentEnrollment.section',
-            'currentEnrollment.houseGroup',
-            'currentEnrollment.academicYear'
-        ])
-        ->when($selectedYearId, function ($q) use ($selectedYearId) {
-            $q->whereHas('enrollments', fn($eq) => $eq->where('academic_year_id', $selectedYearId));
-        })
-        ->when($request->filled('search'), function ($q) use ($request) {
+        $query = Student::query()
+            ->with([
+                'enrollments' => function ($eq) use ($selectedYearId) {
+                    $eq->where('status', 'active')
+                       ->when($selectedYearId, fn($yq) => $yq->where('academic_year_id', $selectedYearId))
+                       ->latest()
+                       ->with(['class', 'section', 'houseGroup', 'academicYear']);
+                },
+                'currentEnrollment.class',
+                'currentEnrollment.section',
+                'currentEnrollment.houseGroup',
+                'currentEnrollment.academicYear'
+            ]);
+
+        // Filter through enrollments matching selected session and class/section/house criteria
+        $query->whereHas('enrollments', function ($eq) use ($request, $selectedYearId) {
+            $eq->where('status', 'active');
+            if ($selectedYearId) {
+                $eq->where('academic_year_id', $selectedYearId);
+            }
+            if ($request->filled('class_id')) {
+                $eq->where('class_id', $request->class_id);
+            }
+            if ($request->filled('section_id')) {
+                $eq->where('section_id', $request->section_id);
+            } elseif ($request->filled('section')) {
+                $rawSec = trim($request->section);
+                $cleanSec = trim(preg_replace('/^section\s*/i', '', $rawSec));
+                $eq->whereHas('section', function ($sq) use ($cleanSec) {
+                    $sq->whereRaw("UPPER(TRIM(REPLACE(name, 'Section', ''))) = ?", [strtoupper($cleanSec)])
+                       ->orWhereRaw("UPPER(name) = ?", [strtoupper($cleanSec)])
+                       ->orWhereRaw("UPPER(name) LIKE ?", ['%' . strtoupper($cleanSec) . '%']);
+                });
+            }
+            if ($request->filled('house_id')) {
+                if ($request->house_id === 'unallotted') {
+                    $eq->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', ''));
+                } else {
+                    $house = House::find($request->house_id);
+                    $eq->where(function ($hq) use ($request, $house) {
+                        $hq->where('house_id', $request->house_id);
+                        if ($house) {
+                            $hq->orWhereRaw('UPPER(house) = ?', [strtoupper($house->code)]);
+                        }
+                    });
+                }
+            }
+            if ($request->filled('missing_data')) {
+                match ($request->missing_data) {
+                    'without_roll' => $eq->where(fn($sq) => $sq->whereNull('roll_number')->orWhere('roll_number', '')),
+                    'without_section' => $eq->whereNull('section_id'),
+                    'without_house' => $eq->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', '')),
+                    default => null,
+                };
+            }
+            if ($request->is_scoped && empty($request->scope_student_ids) && !empty($request->scope_class_ids)) {
+                $eq->whereIn('class_id', $request->scope_class_ids);
+            }
+        });
+
+        // Direct Student table filters
+        $query->when($request->filled('search'), function ($q) use ($request, $selectedYearId) {
             $v = strtolower(trim($request->search));
-            $q->where(function ($sq) use ($v) {
+            $q->where(function ($sq) use ($v, $selectedYearId) {
                 $sq->whereRaw("LOWER(first_name) LIKE ?", ["%$v%"])
                   ->orWhereRaw("LOWER(last_name) LIKE ?", ["%$v%"])
                   ->orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) LIKE ?", ["%$v%"])
@@ -227,36 +313,14 @@ class StudentController extends Controller
                   ->orWhereRaw("LOWER(father_name) LIKE ?", ["%$v%"])
                   ->orWhereRaw("LOWER(father_mobile) LIKE ?", ["%$v%"])
                   ->orWhereRaw("LOWER(mother_name) LIKE ?", ["%$v%"])
-                  ->orWhereHas('currentEnrollment', function ($eq) use ($v) {
-                      $eq->whereRaw("LOWER(roll_number) LIKE ?", ["%$v%"]);
+                  ->orWhereHas('enrollments', function ($eq) use ($v, $selectedYearId) {
+                      $eq->where('status', 'active')
+                         ->when($selectedYearId, fn($yq) => $yq->where('academic_year_id', $selectedYearId))
+                         ->whereRaw("LOWER(roll_number) LIKE ?", ["%$v%"]);
                   });
             });
         })
-        ->when($request->filled('class_id'), fn($q) => $q->whereHas('currentEnrollment', fn($eq) => $eq->where('class_id', $request->class_id)))
-        ->when($request->filled('section_id'), fn($q) => $q->whereHas('currentEnrollment', fn($eq) => $eq->where('section_id', $request->section_id)))
-        ->when($request->filled('section') && !$request->filled('section_id'), function ($q) use ($request) {
-            $rawSec = trim($request->section);
-            $cleanSec = trim(preg_replace('/^section\s*/i', '', $rawSec));
-            $q->whereHas('currentEnrollment.section', function ($sq) use ($cleanSec) {
-                $sq->whereRaw("UPPER(name) = ?", [strtoupper($cleanSec)])
-                  ->orWhereRaw("UPPER(name) = ?", ['SECTION ' . strtoupper($cleanSec)])
-                  ->orWhereRaw("UPPER(name) LIKE ?", ['%' . strtoupper($cleanSec) . '%']);
-            });
-        })
         ->when($request->filled('gender'), fn($q) => $q->where('gender', $request->gender))
-        ->when($request->filled('house_id'), function ($q) use ($request) {
-            if ($request->house_id === 'unallotted') {
-                $q->whereHas('currentEnrollment', function ($eq) {
-                    $eq->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', ''));
-                });
-            } else {
-                $house = House::find($request->house_id);
-                $q->whereHas('currentEnrollment', function ($eq) use ($request, $house) {
-                    $eq->where('house_id', $request->house_id)
-                      ->when($house, fn($sq) => $sq->orWhereRaw('UPPER(house) = ?', [strtoupper($house->code)]));
-                });
-            }
-        })
         ->when($request->filled('student_type'), fn($q) => $q->where('student_type', $request->student_type))
         ->when($request->filled('status') && $request->status !== 'all', fn($q) => $q->where('status', $request->status))
         ->when(!$request->has('status'), fn($q) => $q->where('status', 'active'))
@@ -264,20 +328,10 @@ class StudentController extends Controller
         ->when($request->filled('admission_date_to'), fn($q) => $q->whereDate('admission_date', '<=', $request->admission_date_to))
         ->when($request->filled('missing_data'), function ($q) use ($request) {
             match ($request->missing_data) {
-                'without_roll' => $q->whereHas('currentEnrollment', fn($eq) => $eq->whereNull('roll_number')->orWhere('roll_number', '')),
-                'without_section' => $q->whereHas('currentEnrollment', fn($eq) => $eq->whereNull('section_id')),
-                'without_house' => $q->whereHas('currentEnrollment', fn($eq) => $eq->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', ''))),
                 'without_photo' => $q->where(fn($sq) => $sq->whereNull('photo')->orWhere('photo', '')),
                 'incomplete_profile' => $q->where(fn($sq) => $sq->whereNull('dob')->orWhereNull('father_mobile')->orWhereNull('residential_address')->orWhereNull('photo')),
                 default => null,
             };
-        })
-        ->when($request->is_scoped && empty($request->scope_student_ids), function ($q) use ($request) {
-            if (!empty($request->scope_class_ids)) {
-                $q->whereHas('currentEnrollment', fn($sq) => $sq->whereIn('class_id', $request->scope_class_ids));
-            } else {
-                $q->whereRaw('1 = 0');
-            }
         });
 
         // Sorting
@@ -320,8 +374,8 @@ class StudentController extends Controller
 
         return view('students.index', compact(
             'students', 'classes', 'sectionNames', 'currentYear',
-            'academicYears', 'selectedYear', 'selectedYearId',
-            'houses', 'metrics', 'classOverview'
+            'academicYears', 'selectedYear', 'selectedYearId', 'allStudentsCount',
+            'houses', 'metrics', 'classOverview', 'classSectionMap'
         ));
     }
 
