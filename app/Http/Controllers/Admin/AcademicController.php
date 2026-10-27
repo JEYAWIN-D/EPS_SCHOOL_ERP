@@ -826,7 +826,7 @@ class AcademicController extends Controller
         $academicYears = AcademicYear::orderByDesc('start_date')->get();
         $teachers      = Employee::where('employee_type', 'teaching')->orderBy('first_name')->get();
         $subjects      = Subject::orderBy('name')->get();
-        $classes       = Classes::orderBy('name')->get();
+        $classes       = Classes::active()->get();
 
         $history = TeacherSubjectAllocation::with(['employee', 'subject', 'class', 'section', 'academicYear'])
             ->when($request->academic_year_id, fn($q, $v) => $q->where('academic_year_id', $v))
@@ -1652,7 +1652,7 @@ class AcademicController extends Controller
 
     public function homeworkCalendar(Request $request)
     {
-        $classes  = Classes::active()->orderBy('name')->get();
+        $classes  = Classes::active()->get();
         $subjects = Subject::where('is_active', true)->orderBy('name')->get();
 
         $month   = (int)($request->month ?? now()->month);

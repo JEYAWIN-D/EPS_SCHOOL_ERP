@@ -46,7 +46,7 @@ class IdCardController extends Controller
         $this->idCardService->ensureDefaultTemplates();
 
         $currentYear = AcademicYear::current();
-        $classes = Classes::orderBy('name')->get();
+        $classes = Classes::active()->get();
         $classFilter = $request->get('class_id');
         $sectionFilter = $request->get('section_id');
         $statusFilter = $request->get('card_status', 'all');

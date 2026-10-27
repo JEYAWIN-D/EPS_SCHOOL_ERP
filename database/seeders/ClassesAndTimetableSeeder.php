@@ -40,8 +40,9 @@ class ClassesAndTimetableSeeder extends Seeder
             ['name' => 'VIII',   'numeric_value' => 8, 'sort_order' => 11],
             ['name' => 'IX',     'numeric_value' => 9, 'sort_order' => 12],
             ['name' => 'X',      'numeric_value' => 10, 'sort_order' => 13],
-            ['name' => 'XI',     'numeric_value' => 11, 'sort_order' => 14],
-            ['name' => 'XII',    'numeric_value' => 12, 'sort_order' => 15],
+            ['name' => 'XI',              'numeric_value' => 11, 'sort_order' => 14],
+            ['name' => 'XI (Integrated)', 'numeric_value' => 11, 'sort_order' => 15],
+            ['name' => 'XII',             'numeric_value' => 12, 'sort_order' => 16],
         ];
 
         foreach ($classList as $cData) {

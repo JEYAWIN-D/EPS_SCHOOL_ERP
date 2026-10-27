@@ -39,3 +39,4 @@ systemctl reload php8.5-fpm
 systemctl reload nginx
 
 echo "--- Deploy finished successfully ---"
+

@@ -394,7 +394,7 @@ class LibraryController extends Controller
     public function digitalResources(Request $request)
     {
         $subjects  = Subject::orderBy('name')->get();
-        $classes   = Classes::orderBy('name')->get();
+        $classes   = Classes::active()->get();
         $resources = DigitalResource::with(['subject', 'class'])
             ->when($request->type, fn($q, $v) => $q->where('type', $v))
             ->when($request->subject_id, fn($q, $v) => $q->where('subject_id', $v))

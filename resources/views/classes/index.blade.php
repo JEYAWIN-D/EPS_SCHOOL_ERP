@@ -184,11 +184,11 @@
         <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Active</span>
       </div>
       <div class="mt-4">
-        <div class="text-3xl font-extrabold text-slate-900 tracking-tight" style="font-family:'Plus Jakarta Sans',sans-serif;">12</div>
-        <div class="text-xs text-slate-500 font-medium mt-0.5">Total Standards (1st–12th)</div>
+        <div class="text-3xl font-extrabold text-slate-900 tracking-tight" style="font-family:'Plus Jakarta Sans',sans-serif;">{{ $totalStandards }}</div>
+        <div class="text-xs text-slate-500 font-medium mt-0.5">Total Standards (Pre-KG – 12th)</div>
       </div>
       <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-        <span class="text-slate-500 font-medium">1st – 12th Standard</span>
+        <span class="text-slate-500 font-medium">Pre-KG – 12th Standard</span>
         <span class="text-blue-600 font-bold">Active ✓</span>
       </div>
     </div>
@@ -300,7 +300,15 @@
                 ? 'bg-blue-600 text-white font-bold shadow-xs'
                 : 'bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200'"
               class="px-4 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex-shrink-0">
-        All Standards (1st–12th)
+        All Standards (Pre-KG – 12th)
+      </button>
+
+      <button @click="filterCategory = 'pre-primary'"
+              :class="filterCategory === 'pre-primary'
+                ? 'bg-blue-600 text-white font-bold shadow-xs'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200'"
+              class="px-4 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex-shrink-0">
+        Pre-Primary (KG)
       </button>
 
       <button @click="filterCategory = 'primary'"
@@ -335,14 +343,6 @@
               class="px-4 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex items-center gap-1.5 flex-shrink-0">
         <span>Higher Secondary (11th & 12th)</span>
         <span class="w-2 h-2 rounded-full bg-purple-400"></span>
-      </button>
-
-      <button @click="filterCategory = 'pre-primary'"
-              :class="filterCategory === 'pre-primary'
-                ? 'bg-blue-600 text-white font-bold shadow-xs'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold border border-slate-200'"
-              class="px-4 py-2 rounded-xl text-xs whitespace-nowrap transition cursor-pointer flex-shrink-0">
-        Pre-Primary (KG)
       </button>
     </div>
 
@@ -2793,11 +2793,7 @@ function classesDashboard() {
 
     get filteredClasses() {
       return this.classesData.filter(c => {
-        if (this.filterCategory === 'all') {
-          if (c.numeric_value < 1 || c.numeric_value > 12) {
-            return false;
-          }
-        } else if (this.filterCategory !== 'all') {
+        if (this.filterCategory !== 'all') {
           if (c.category !== this.filterCategory) {
             return false;
           }

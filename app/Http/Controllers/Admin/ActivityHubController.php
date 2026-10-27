@@ -90,7 +90,7 @@ class ActivityHubController extends Controller
 
     public function createNotice()
     {
-        $classes     = Classes::orderBy('name')->get();
+        $classes     = Classes::active()->get();
         $departments = Department::orderBy('name')->get();
         $employees   = Employee::with('department')->orderBy('first_name')->get();
 

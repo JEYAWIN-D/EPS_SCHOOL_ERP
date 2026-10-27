@@ -264,7 +264,7 @@ class ClassesController extends Controller
                 ];
             })->all();
 
-            $totalStandards = $classes->where('numeric_value', '>=', 1)->where('numeric_value', '<=', 12)->count();
+            $totalStandards = $classes->count();
             $totalSections  = Section::where('is_active', true)->count();
             $totalStudents  = StudentEnrollment::where('status', 'active')->count();
             if ($totalStudents === 0) {

@@ -65,7 +65,7 @@ class CircularOrderController extends Controller
 
     public function create()
     {
-        $classes     = Classes::orderBy('name')->get();
+        $classes     = Classes::active()->get();
         $departments = Department::orderBy('name')->get();
         $employees   = Employee::with('department')->orderBy('first_name')->get();
 
@@ -153,7 +153,7 @@ class CircularOrderController extends Controller
     public function edit(int $id)
     {
         $circular = Notice::findOrFail($id);
-        $classes     = Classes::orderBy('name')->get();
+        $classes     = Classes::active()->get();
         $departments = Department::orderBy('name')->get();
         $employees   = Employee::with('department')->orderBy('first_name')->get();
 
