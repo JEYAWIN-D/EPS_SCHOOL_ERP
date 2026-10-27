@@ -181,7 +181,20 @@ class StudentController extends Controller
                 ->where('student_enrollments.class_id', $cls->id)
                 ->whereNull('students.deleted_at')
                 ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId))
-                ->select('student_enrollments.*', 'students.gender', 'students.dob', 'students.photo', 'students.father_mobile')
+                ->select(
+                    'student_enrollments.*',
+                    'students.admission_no',
+                    'students.first_name',
+                    'students.last_name',
+                    'students.gender',
+                    'students.dob',
+                    'students.photo',
+                    'students.father_name',
+                    'students.father_mobile',
+                    'students.status as student_status'
+                )
+                ->orderByRaw("CASE WHEN student_enrollments.roll_number ~ '^[0-9]+$' THEN student_enrollments.roll_number::integer ELSE 99999 END ASC")
+                ->orderBy('students.first_name')
                 ->get();
 
             $total = $classEnrs->count();
@@ -200,6 +213,24 @@ class StudentController extends Controller
                 $capacity = (int)($sec->capacity ?: 40);
                 $available = max(0, $capacity - $secTotal);
 
+                $studentsList = $secEnrs->map(function ($e) {
+                    return (object)[
+                        'id'            => $e->student_id,
+                        'name'          => trim($e->first_name . ' ' . ($e->last_name ?? '')),
+                        'admission_no'  => $e->admission_no,
+                        'roll_number'   => $e->roll_number ?: '—',
+                        'gender'        => ucfirst($e->gender ?? '—'),
+                        'dob'           => $e->dob ? \Carbon\Carbon::parse($e->dob)->format('d/m/Y') : '—',
+                        'father_name'   => $e->father_name ?: '—',
+                        'father_mobile' => $e->father_mobile ?: '—',
+                        'photo'         => $e->photo ? asset('storage/'.$e->photo) : null,
+                        'initials'      => strtoupper(substr($e->first_name, 0, 1) . substr($e->last_name ?? '', 0, 1)),
+                        'status'        => ucfirst($e->student_status ?? 'Active'),
+                        'url_view'      => route('students.show', $e->student_id),
+                        'url_edit'      => route('students.edit', $e->student_id),
+                    ];
+                })->values();
+
                 return (object)[
                     'id'           => $sec->id,
                     'name'         => $sec->name,
@@ -211,20 +242,35 @@ class StudentController extends Controller
                     'available'    => $available,
                     'without_roll' => $secWithoutRoll,
                     'incomplete'   => $secIncomplete,
+                    'students'     => $studentsList,
                 ];
             });
 
+            // Students awaiting section allotment
+            $unassignedStudents = $classEnrs->whereNull('section_id')->map(function ($e) {
+                return (object)[
+                    'id'            => $e->student_id,
+                    'name'          => trim($e->first_name . ' ' . ($e->last_name ?? '')),
+                    'admission_no'  => $e->admission_no,
+                    'roll_number'   => $e->roll_number ?: '—',
+                    'gender'        => ucfirst($e->gender ?? '—'),
+                    'father_mobile' => $e->father_mobile ?: '—',
+                    'url_view'      => route('students.show', $e->student_id),
+                ];
+            })->values();
+
             return (object)[
-                'id'             => $cls->id,
-                'name'           => $cls->name,
-                'display_name'   => $cls->display_name,
-                'total_sections' => $cls->sections->count(),
-                'total_students' => $total,
-                'male'           => $male,
-                'female'         => $female,
-                'unassigned'     => $unassigned,
-                'without_roll'   => $withoutRoll,
-                'sections'       => $sectionsData,
+                'id'                  => $cls->id,
+                'name'                => $cls->name,
+                'display_name'        => $cls->display_name,
+                'total_sections'      => $cls->sections->count(),
+                'total_students'      => $total,
+                'male'                => $male,
+                'female'              => $female,
+                'unassigned'          => $unassigned,
+                'without_roll'        => $withoutRoll,
+                'sections'            => $sectionsData,
+                'unassigned_students' => $unassignedStudents,
             ];
         });
 

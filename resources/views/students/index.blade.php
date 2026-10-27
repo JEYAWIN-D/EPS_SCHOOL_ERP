@@ -1,23 +1,21 @@
 @extends('layouts.app')
 
-@section('title', 'Students — Management & Hierarchy')
+@section('title', 'Students — Class & Section Wise Management')
 
 @section('content')
 <div class="space-y-6" x-data="{
-  activeView: '{{ (request('view') === 'hierarchy' || (request()->has('view_hierarchy') && !request()->hasAny(['section', 'section_id', 'search', 'page']))) ? 'hierarchy' : 'roster' }}',
+  activeView: '{{ request('view', (request('class_id') && !request()->hasAny(['search', 'gender', 'missing_data', 'page'])) ? 'hierarchy' : 'roster') }}',
   quickView: false,
   student: {},
-  expandedClass: {{ request('class_id') ? (int)request('class_id') : 'null' }},
-  selectedClassId: '{{ request('class_id', '') }}',
-  classSectionMap: @json($classSectionMap),
-  toggleExpand(id) { this.expandedClass = this.expandedClass === id ? null : id; },
-  openQuickView(s) { this.student = s; this.quickView = true; },
-  availableSections() {
-    if (!this.selectedClassId || !this.classSectionMap[this.selectedClassId]) {
-      return [];
+  expandedClass: {{ request('class_id') ? (int)request('class_id') : "'all'" }},
+  toggleExpand(id) { 
+    if (this.expandedClass === 'all') {
+      this.expandedClass = id;
+    } else {
+      this.expandedClass = this.expandedClass === id ? null : id;
     }
-    return this.classSectionMap[this.selectedClassId];
-  }
+  },
+  openQuickView(s) { this.student = s; this.quickView = true; }
 }">
 
   {{-- Page Header with Breadcrumbs & Module Navigation --}}
@@ -282,27 +280,27 @@
   {{-- Clean View Navigation Switcher (Tabbed Architecture) --}}
   <div class="bg-white border border-slate-200/80 rounded-2xl p-2 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
     <div class="flex items-center gap-1.5 p-1 bg-slate-100/90 rounded-xl">
-      {{-- Tab 1: Student Records & Roster --}}
-      <button type="button"
-              @click="activeView = 'roster'"
-              :class="activeView === 'roster' ? 'bg-white text-rose-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900 font-medium'"
-              class="px-4 py-2 rounded-lg text-xs sm:text-sm transition-all flex items-center gap-2">
-        <svg class="w-4 h-4 text-rose-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        <span>Student Records &amp; Directory</span>
-        <span class="px-2 py-0.5 rounded-full text-xs font-black bg-rose-100 text-rose-900">
-          {{ number_format($students->total()) }}
-        </span>
-      </button>
-
-      {{-- Tab 2: Class & Section Hierarchy Overview --}}
+      {{-- Tab 1: Class & Section Wise Students --}}
       <button type="button"
               @click="activeView = 'hierarchy'"
               :class="activeView === 'hierarchy' ? 'bg-white text-rose-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900 font-medium'"
               class="px-4 py-2 rounded-lg text-xs sm:text-sm transition-all flex items-center gap-2">
-        <svg class="w-4 h-4 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-        <span>Class &amp; Section Hierarchy Overview</span>
+        <svg class="w-4 h-4 text-rose-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span>Class &amp; Section Wise Students</span>
+        <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-900">
+          {{ $metrics['classes_count'] }} Classes &bull; {{ number_format($metrics['total']) }} Students
+        </span>
+      </button>
+
+      {{-- Tab 2: Full Directory & Filter Roster --}}
+      <button type="button"
+              @click="activeView = 'roster'"
+              :class="activeView === 'roster' ? 'bg-white text-rose-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900 font-medium'"
+              class="px-4 py-2 rounded-lg text-xs sm:text-sm transition-all flex items-center gap-2">
+        <svg class="w-4 h-4 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        <span>Student Directory &amp; Search</span>
         <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-200 text-slate-700">
-          {{ $metrics['classes_count'] }} Classes &bull; {{ $metrics['sections_count'] }} Sections
+          {{ number_format($students->total()) }}
         </span>
       </button>
     </div>
@@ -313,18 +311,284 @@
     </div>
   </div>
 
-  {{-- VIEW 1: STUDENT RECORDS & DIRECTORY (Default Active View) --}}
-  <div x-show="activeView === 'roster'" class="space-y-4">
+  {{-- VIEW 1: CLASS & SECTION WISE STUDENTS (Hierarchy with In-line Student Lists) --}}
+  <div x-show="activeView === 'hierarchy'" class="space-y-4">
+    <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200/80 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <svg class="w-5 h-5 text-rose-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            <span>Class &amp; Section Student Directory</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Hierarchical view organized by Standard &rarr; Section with student rosters, class teachers, and seat capacity.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button type="button" @click="expandedClass = 'all'" class="text-xs font-semibold text-rose-900 hover:text-rose-800 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-slate-50">
+            Expand All Classes
+          </button>
+          <button type="button" @click="expandedClass = null" class="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-slate-50">
+            Collapse All
+          </button>
+        </div>
+      </div>
+
+      {{-- Class-by-Class Accordion with Nested Section & Student Tables --}}
+      <div class="divide-y divide-slate-100">
+        @forelse($classOverview as $cls)
+          <div class="transition-colors">
+            {{-- Class Row Header --}}
+            <div class="px-5 py-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-slate-50/80 transition-colors"
+                 @click="toggleExpand({{ $cls->id }})">
+              <div class="flex items-center gap-3.5">
+                <span class="w-8 h-8 rounded-lg bg-rose-900/10 text-rose-900 flex items-center justify-center font-black text-xs shrink-0 ring-1 ring-rose-900/20">
+                  {{ $loop->iteration }}
+                </span>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>Class {{ $cls->name }}</span>
+                    <span class="text-xs font-semibold text-slate-400">({{ $cls->display_name }})</span>
+                  </h3>
+                  <p class="text-xs text-slate-500 mt-0.5">
+                    {{ $cls->total_sections }} {{ Str::plural('Section', $cls->total_sections) }}
+                    @if($cls->unassigned > 0)
+                      &bull; <span class="text-amber-700 font-bold">{{ $cls->unassigned }} awaiting section</span>
+                    @endif
+                  </p>
+                </div>
+              </div>
+
+              {{-- Class Quick Metrics --}}
+              <div class="flex items-center gap-3 sm:gap-6">
+                <div class="text-right">
+                  <span class="text-xs text-slate-400 font-medium">Strength</span>
+                  <p class="text-sm font-black text-slate-900">{{ number_format($cls->total_students) }} Students</p>
+                </div>
+
+                <div class="hidden sm:flex items-center gap-2 text-xs">
+                  <span class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold">
+                    {{ $cls->male }} Boys
+                  </span>
+                  <span class="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 font-bold">
+                    {{ $cls->female }} Girls
+                  </span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId, 'class_id' => $cls->id, 'view' => 'roster'])) }}"
+                     @click.stop
+                     class="btn btn-ghost btn-xs text-rose-900 hover:text-rose-800 font-bold border border-slate-200">
+                    Filter Roster
+                  </a>
+                  <button type="button" class="p-1 text-slate-400 hover:text-slate-700 rounded">
+                    <svg class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': expandedClass === {{ $cls->id }} || expandedClass === 'all' }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {{-- Nested Sections & Complete Student Rosters --}}
+            <div x-show="expandedClass === {{ $cls->id }} || expandedClass === 'all'" x-collapse>
+              <div class="p-5 bg-slate-50/80 border-t border-slate-100 space-y-4">
+
+                {{-- Sections Grid --}}
+                @if($cls->sections->isEmpty())
+                  <p class="text-xs text-slate-400 py-2">No sections created for Class {{ $cls->name }}.</p>
+                @else
+                  <div class="space-y-4">
+                    @foreach($cls->sections as $sec)
+                      <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:border-slate-300 transition-colors"
+                           x-data="{ openSecStudents: true }">
+                        {{-- Section Header --}}
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                          <div class="flex items-center gap-3">
+                            <span class="px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 font-black text-sm">
+                              Section {{ $sec->name }}
+                            </span>
+                            <div>
+                              <div class="flex items-center gap-2 text-xs">
+                                <span class="font-bold text-slate-700">Class Teacher:</span>
+                                <span class="text-slate-900 font-medium">{{ $sec->teacher_name }}</span>
+                              </div>
+                              <div class="text-[11px] text-slate-400 mt-0.5">
+                                {{ $sec->male }} Boys &bull; {{ $sec->female }} Girls
+                              </div>
+                            </div>
+                          </div>
+
+                          <div class="flex items-center gap-3">
+                            {{-- Capacity Badge & Progress --}}
+                            <div class="w-32 hidden md:block">
+                              @php
+                                $fillPct = $sec->capacity > 0 ? min(100, round(($sec->total / $sec->capacity) * 100)) : 0;
+                              @endphp
+                              <div class="flex justify-between text-[11px] mb-1">
+                                <span class="text-slate-500">Seats</span>
+                                <span class="font-bold {{ $sec->total > 0 ? 'text-slate-800' : 'text-slate-400' }}">{{ $sec->total }} / {{ $sec->capacity }}</span>
+                              </div>
+                              <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                <div class="h-1.5 rounded-full {{ $fillPct >= 90 ? 'bg-rose-600' : ($fillPct >= 70 ? 'bg-amber-500' : 'bg-emerald-500') }}" style="width: {{ $fillPct }}%"></div>
+                              </div>
+                            </div>
+
+                            <button type="button"
+                                    @click="openSecStudents = !openSecStudents"
+                                    class="btn btn-secondary btn-xs font-bold flex items-center gap-1">
+                              <span x-text="openSecStudents ? 'Hide Students' : 'View Students ({{ $sec->total }})'"></span>
+                              <svg class="w-3 h-3 transition-transform" :class="{ 'rotate-180': openSecStudents }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+
+                            <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId, 'class_id' => $cls->id, 'section_id' => $sec->id, 'section' => $sec->name, 'view' => 'roster'])) }}"
+                               class="btn btn-ghost btn-xs text-rose-900 hover:text-rose-800 font-bold border border-slate-200">
+                              Open in Roster &rarr;
+                            </a>
+                          </div>
+                        </div>
+
+                        {{-- Section Student List Table --}}
+                        <div x-show="openSecStudents" class="mt-3">
+                          @if($sec->students->isEmpty())
+                            <div class="py-4 text-center text-xs text-slate-400 bg-slate-50/60 rounded-lg border border-dashed border-slate-200">
+                              <p>No students enrolled in Class {{ $cls->name }} - Section {{ $sec->name }} for session {{ $selectedYear?->name ?? 'selected' }}.</p>
+                              @if($selectedYearId != 2)
+                                <a href="{{ route('students.index', ['academic_year_id' => 2, 'class_id' => $cls->id, 'section_id' => $sec->id, 'view' => 'hierarchy']) }}"
+                                   class="text-indigo-600 hover:underline font-semibold mt-1 inline-block">
+                                  View 2025-2026 past session records &rarr;
+                                </a>
+                              @endif
+                            </div>
+                          @else
+                            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                              <table class="w-full text-left text-xs bg-white">
+                                <thead>
+                                  <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                    <th class="py-2.5 px-3 w-12 text-center">Roll</th>
+                                    <th class="py-2.5 px-3">Admission No.</th>
+                                    <th class="py-2.5 px-3">Student Name</th>
+                                    <th class="py-2.5 px-3">Gender</th>
+                                    <th class="py-2.5 px-3">DOB</th>
+                                    <th class="py-2.5 px-3">Parent Name</th>
+                                    <th class="py-2.5 px-3">Parent Contact</th>
+                                    <th class="py-2.5 px-3">Status</th>
+                                    <th class="py-2.5 px-3 text-right">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                  @foreach($sec->students as $st)
+                                    <tr class="hover:bg-slate-50/80 transition-colors">
+                                      <td class="py-2 px-3 text-center font-mono font-bold text-slate-800">
+                                        <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
+                                          {{ $st->roll_number }}
+                                        </span>
+                                      </td>
+                                      <td class="py-2 px-3 font-mono font-bold text-rose-900 whitespace-nowrap">
+                                        <a href="{{ $st->url_view }}" class="hover:underline">{{ $st->admission_no }}</a>
+                                      </td>
+                                      <td class="py-2 px-3 font-bold text-slate-900 whitespace-nowrap">
+                                        <div class="flex items-center gap-2">
+                                          <div class="w-6 h-6 rounded-full bg-slate-100 text-rose-900 flex items-center justify-center font-black text-[10px] overflow-hidden shrink-0">
+                                            @if($st->photo)
+                                              <img src="{{ $st->photo }}" class="w-full h-full object-cover">
+                                            @else
+                                              <span>{{ $st->initials }}</span>
+                                            @endif
+                                          </div>
+                                          <a href="{{ $st->url_view }}" class="hover:text-rose-900 hover:underline">{{ $st->name }}</a>
+                                        </div>
+                                      </td>
+                                      <td class="py-2 px-3 text-slate-600 whitespace-nowrap">
+                                        @if(strtolower($st->gender) === 'male')
+                                          <span class="font-bold text-blue-700">Boy</span>
+                                        @elseif(strtolower($st->gender) === 'female')
+                                          <span class="font-bold text-pink-700">Girl</span>
+                                        @else
+                                          <span>{{ $st->gender }}</span>
+                                        @endif
+                                      </td>
+                                      <td class="py-2 px-3 text-slate-500 whitespace-nowrap">{{ $st->dob }}</td>
+                                      <td class="py-2 px-3 text-slate-700 whitespace-nowrap">{{ $st->father_name }}</td>
+                                      <td class="py-2 px-3 font-mono whitespace-nowrap">
+                                        @if($st->father_mobile && $st->father_mobile !== '—')
+                                          <a href="tel:{{ $st->father_mobile }}" class="text-indigo-600 hover:underline font-bold">{{ $st->father_mobile }}</a>
+                                        @else
+                                          <span class="text-slate-300">—</span>
+                                        @endif
+                                      </td>
+                                      <td class="py-2 px-3 whitespace-nowrap">
+                                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          {{ $st->status }}
+                                        </span>
+                                      </td>
+                                      <td class="py-2 px-3 text-right whitespace-nowrap">
+                                        <a href="{{ $st->url_view }}" class="btn btn-ghost btn-xs text-rose-900 font-bold hover:underline">
+                                          Full Profile &rarr;
+                                        </a>
+                                      </td>
+                                    </tr>
+                                  @endforeach
+                                </tbody>
+                              </table>
+                            </div>
+                          @endif
+                        </div>
+                      </div>
+                    @endforeach
+                  </div>
+                @endif
+
+                {{-- Unassigned Students for this Class --}}
+                @if($cls->unassigned > 0 && !empty($cls->unassigned_students) && $cls->unassigned_students->isNotEmpty())
+                  <div class="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <span>Students in Class {{ $cls->name }} Awaiting Section Allotment ({{ $cls->unassigned }})</span>
+                      </span>
+                      <a href="{{ route('students.section-allotment.index', ['class_id' => $cls->id, 'academic_year_id' => $selectedYearId]) }}"
+                         class="text-xs font-bold text-amber-900 hover:underline">
+                        Assign Sections Now &rarr;
+                      </a>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                      @foreach($cls->unassigned_students as $ust)
+                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-amber-200 text-xs">
+                          <div>
+                            <a href="{{ $ust->url_view }}" class="font-bold text-slate-900 hover:text-rose-900">{{ $ust->name }}</a>
+                            <div class="font-mono text-[10px] text-slate-500">{{ $ust->admission_no }}</div>
+                          </div>
+                          <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">No Section</span>
+                        </div>
+                      @endforeach
+                    </div>
+                  </div>
+                @endif
+
+              </div>
+            </div>
+          </div>
+        @empty
+          <div class="p-8 text-center text-slate-500">
+            No classes configured.
+          </div>
+        @endforelse
+      </div>
+    </div>
+  </div>
+
+  {{-- VIEW 2: FLAT STUDENT ROSTER & SEARCH (Full 15-Column Table) --}}
+  <div x-show="activeView === 'roster'" style="display: none;" class="space-y-4">
 
     {{-- Interactive Standard / Grade Selector (Pre-KG to 12th) --}}
     <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3">
       <div class="flex items-center justify-between">
         <span class="text-xs font-black tracking-wider text-rose-950 uppercase flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-rose-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-          Select Standard / Grade
+          Quick Filter by Standard / Grade
         </span>
         @if(request('class_id'))
-          <a href="{{ route('students.index', request()->except(['class_id', 'section', 'section_id', 'page'])) }}" class="text-xs font-bold text-rose-800 hover:text-rose-900 underline">
+          <a href="{{ route('students.index', array_merge(request()->except(['class_id', 'section', 'section_id', 'page']), ['view' => 'roster'])) }}" class="text-xs font-bold text-rose-800 hover:text-rose-900 underline">
             Show All Standards
           </a>
         @endif
@@ -332,13 +596,13 @@
 
       {{-- Grade Pills Pre-KG to 12th in exact school sequence --}}
       <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-        <a href="{{ route('students.index', request()->except(['class_id', 'section', 'section_id', 'page'])) }}"
+        <a href="{{ route('students.index', array_merge(request()->except(['class_id', 'section', 'section_id', 'page']), ['view' => 'roster'])) }}"
            class="px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors {{ !request('class_id') ? 'bg-rose-900 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200' }}">
           All Standards ({{ $metrics['total'] }})
         </a>
 
         @foreach($classOverview as $cls)
-          <a href="{{ route('students.index', array_merge(request()->except(['class_id', 'section', 'section_id', 'page']), ['class_id' => $cls->id])) }}"
+          <a href="{{ route('students.index', array_merge(request()->except(['class_id', 'section', 'section_id', 'page']), ['class_id' => $cls->id, 'view' => 'roster'])) }}"
              class="px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors flex items-center gap-1.5 {{ request('class_id') == $cls->id ? 'bg-rose-900 text-white shadow-2xs ring-2 ring-rose-900/30' : ($cls->total_students > 0 ? 'bg-slate-100 text-slate-800 hover:bg-slate-200' : 'bg-slate-50 text-slate-400 hover:bg-slate-100') }}">
             <span>{{ $cls->name }}</span>
             @if($cls->total_students > 0)
@@ -359,7 +623,7 @@
           <div class="pt-2 border-t border-slate-100 flex items-center gap-2 overflow-x-auto text-xs">
             <span class="font-bold text-slate-500 shrink-0">Sections in Class {{ $activeClsData->name }}:</span>
 
-            <a href="{{ route('students.index', request()->except(['section', 'section_id', 'page'])) }}"
+            <a href="{{ route('students.index', array_merge(request()->except(['section', 'section_id', 'page']), ['view' => 'roster'])) }}"
                class="px-2.5 py-1 rounded-md font-bold shrink-0 transition-colors {{ (!request('section') && !request('section_id')) ? 'bg-indigo-700 text-white shadow-2xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200' }}">
               All Sections ({{ $activeClsData->total_students }})
             </a>
@@ -369,7 +633,7 @@
                 $isSecActive = (request('section_id') == $sec->id) ||
                                (request('section') && strtoupper(trim(preg_replace('/^section\s*/i', '', request('section')))) === strtoupper(trim($sec->name)));
               @endphp
-              <a href="{{ route('students.index', array_merge(request()->except(['section', 'section_id', 'page']), ['section_id' => $sec->id, 'section' => $sec->name])) }}"
+              <a href="{{ route('students.index', array_merge(request()->except(['section', 'section_id', 'page']), ['section_id' => $sec->id, 'section' => $sec->name, 'view' => 'roster'])) }}"
                  class="px-2.5 py-1 rounded-md font-bold shrink-0 transition-colors flex items-center gap-1.5 {{ $isSecActive ? 'bg-indigo-700 text-white shadow-2xs ring-2 ring-indigo-700/30' : ($sec->total > 0 ? 'bg-slate-100 text-slate-800 hover:bg-slate-200' : 'bg-slate-50 text-slate-400 hover:bg-slate-100') }}">
                 <span>Section {{ $sec->name }}</span>
                 <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black {{ $isSecActive ? 'bg-indigo-800 text-indigo-100' : ($sec->total > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-500') }}">
@@ -385,6 +649,7 @@
     {{-- Comprehensive Search & Filters Form --}}
     <div class="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs">
       <form method="GET" action="{{ route('students.index') }}" class="space-y-4">
+        <input type="hidden" name="view" value="roster">
         @if($selectedYearId)
           <input type="hidden" name="academic_year_id" value="{{ $selectedYearId }}">
         @elseif(request('academic_year_id') === 'all')
@@ -414,7 +679,7 @@
           {{-- Class Filter --}}
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Class / Standard</label>
-            <select name="class_id" x-model="selectedClassId" class="select w-full text-sm">
+            <select name="class_id" class="select w-full text-sm">
               <option value="">All Classes</option>
               @foreach($classes as $cls)
                 @php
@@ -427,27 +692,16 @@
             </select>
           </div>
 
-          {{-- Section Filter (Dynamic Options with real student counts) --}}
+          {{-- Section Filter (Standard HTML without problematic template tags) --}}
           <div>
             <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Section</label>
             <select name="section" class="select w-full text-sm">
               <option value="">All Sections</option>
-              <template x-if="availableSections().length > 0">
-                <template x-for="s in availableSections()" :key="s.id">
-                  <option :value="s.name"
-                          :selected="'{{ strtoupper(trim(preg_replace('/^section\s*/i', '', request('section', '')))) }}' === s.name.toUpperCase() || '{{ request('section_id') }}' == s.id"
-                          x-text="'Section ' + s.name + ' (' + s.total + ' Students)'">
-                  </option>
-                </template>
-              </template>
-              <template x-if="availableSections().length === 0">
-                <template x-for="name in ['A', 'B', 'C', 'D']" :key="name">
-                  <option :value="name"
-                          :selected="'{{ strtoupper(trim(preg_replace('/^section\s*/i', '', request('section', '')))) }}' === name"
-                          x-text="'Section ' + name">
-                  </option>
-                </template>
-              </template>
+              @foreach(['A', 'B', 'C', 'D'] as $secLetter)
+                <option value="{{ $secLetter }}" @selected(strtoupper(trim(preg_replace('/^section\s*/i', '', request('section', '')))) === $secLetter)>
+                  Section {{ $secLetter }}
+                </option>
+              @endforeach
             </select>
           </div>
 
@@ -522,7 +776,7 @@
               Apply Filters
             </button>
             @if(request()->hasAny(['search', 'class_id', 'section', 'section_id', 'house_id', 'gender', 'missing_data', 'sort']) || (request('status') && request('status') !== 'active'))
-              <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId])) }}" class="btn btn-ghost btn-sm text-slate-500 border border-slate-200 hover:bg-slate-50">
+              <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId, 'view' => 'roster'])) }}" class="btn btn-ghost btn-sm text-slate-500 border border-slate-200 hover:bg-slate-50">
                 Clear
               </a>
             @endif
@@ -576,7 +830,7 @@
               <a href="{{ route('students.index', request()->except('missing_data')) }}" class="hover:text-rose-700">&times;</a>
             </span>
           @endif
-          <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId])) }}" class="ml-2 text-indigo-700 hover:text-indigo-950 underline font-semibold">
+          <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId, 'view' => 'roster'])) }}" class="ml-2 text-indigo-700 hover:text-indigo-950 underline font-semibold">
             Clear All
           </a>
         </div>
@@ -595,7 +849,15 @@
     <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
       <div class="px-5 py-3.5 border-b border-slate-200/80 flex items-center justify-between flex-wrap gap-2">
         <div class="flex items-center gap-2">
-          <h3 class="font-bold text-slate-800 text-sm">Student Records</h3>
+          <h3 class="font-bold text-slate-800 text-sm">
+            @if(request('class_id') && request('section'))
+              Class {{ $filterCls?->name }} — Section {{ strtoupper(request('section')) }} Students
+            @elseif(request('class_id'))
+              Class {{ $filterCls?->name }} Students
+            @else
+              Student Records
+            @endif
+          </h3>
           <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-black">
             {{ $students->total() }}
           </span>
@@ -864,7 +1126,7 @@
                                 <span>In this session, students are enrolled in:</span>
                                 <div class="flex items-center gap-2 mt-1 flex-wrap">
                                   @foreach($activeSections as $as)
-                                    <a href="{{ route('students.index', array_merge(request()->except(['page']), ['class_id' => $zeroCls->id, 'section_id' => $as->id, 'section' => $as->name])) }}"
+                                    <a href="{{ route('students.index', array_merge(request()->except(['page']), ['class_id' => $zeroCls->id, 'section_id' => $as->id, 'section' => $as->name, 'view' => 'roster'])) }}"
                                        class="inline-flex items-center gap-1 font-bold text-xs bg-rose-900 text-white px-2.5 py-1 rounded-md hover:bg-rose-800 shadow-2xs">
                                       <span>View Section {{ $as->name }}</span>
                                       <span class="bg-rose-800 text-rose-100 text-[10px] px-1.5 py-0.2 rounded-full font-black">{{ $as->total }} students</span>
@@ -875,11 +1137,11 @@
                             @endif
 
                             <div class="pt-2 border-t border-amber-200/60 flex items-center gap-3">
-                              <a href="{{ route('students.index', ['academic_year_id' => 2, 'class_id' => request('class_id')]) }}"
+                              <a href="{{ route('students.index', ['academic_year_id' => 2, 'class_id' => request('class_id'), 'view' => 'roster']) }}"
                                  class="font-bold text-indigo-700 hover:text-indigo-900 underline">
                                 Switch to 2025-2026 session records &rarr;
                               </a>
-                              <a href="{{ route('students.index', request()->except(['section', 'section_id', 'page'])) }}"
+                              <a href="{{ route('students.index', array_merge(request()->except(['section', 'section_id', 'page']), ['view' => 'roster'])) }}"
                                  class="font-semibold text-slate-600 hover:text-slate-900 underline">
                                 Show all sections for Class {{ $zeroCls?->name }}
                               </a>
@@ -904,178 +1166,6 @@
       @endif
     </div>
 
-  </div>
-
-  {{-- VIEW 2: CLASS & SECTION HIERARCHY OVERVIEW (Clean Structured Spec Table) --}}
-  <div x-show="activeView === 'hierarchy'" style="display: none;" class="space-y-4">
-    <div class="bg-white border border-slate-200/80 rounded-2xl shadow-xs overflow-hidden">
-      <div class="px-5 py-4 border-b border-slate-200/80 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
-            <svg class="w-5 h-5 text-rose-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            <span>Class &amp; Section Hierarchy Overview</span>
-          </h2>
-          <p class="text-xs text-slate-500 mt-0.5">
-            Structured overview organized by Standard &rarr; Section with student strength, teacher assignment, and seat capacity.
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button type="button" @click="expandedClass = 'all'" class="text-xs font-semibold text-rose-900 hover:text-rose-800 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-slate-50">
-            Expand All Classes
-          </button>
-          <button type="button" @click="expandedClass = null" class="text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs hover:bg-slate-50">
-            Collapse All
-          </button>
-        </div>
-      </div>
-
-      {{-- Structured Table matching School ERP Specification --}}
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="bg-slate-100/70 border-b border-slate-200 text-[11px] font-black uppercase tracking-wider text-slate-600">
-              <th class="py-3 px-4 w-12 text-center">#</th>
-              <th class="py-3 px-4">Standard / Class</th>
-              <th class="py-3 px-4 text-center">Sections</th>
-              <th class="py-3 px-4 text-center">Enrolled Students</th>
-              <th class="py-3 px-4 text-center">Boys</th>
-              <th class="py-3 px-4 text-center">Girls</th>
-              <th class="py-3 px-4 text-center">Awaiting Section</th>
-              <th class="py-3 px-4 text-center">Without Roll No.</th>
-              <th class="py-3 px-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            @forelse($classOverview as $cls)
-              <tr class="hover:bg-slate-50/70 transition-colors cursor-pointer select-none"
-                  @click="toggleExpand({{ $cls->id }})">
-                <td class="py-3 px-4 text-center font-bold text-slate-400">
-                  {{ $loop->iteration }}
-                </td>
-                <td class="py-3 px-4">
-                  <div class="flex items-center gap-2.5">
-                    <span class="w-7 h-7 rounded-lg bg-rose-900/10 text-rose-900 flex items-center justify-center font-black text-xs shrink-0 ring-1 ring-rose-900/20">
-                      {{ $cls->name }}
-                    </span>
-                    <div>
-                      <strong class="text-slate-900 text-sm">Class {{ $cls->name }}</strong>
-                      <span class="text-slate-400 text-xs ml-1">({{ $cls->display_name }})</span>
-                    </div>
-                  </div>
-                </td>
-                <td class="py-3 px-4 text-center font-semibold text-slate-700">
-                  <span class="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
-                    {{ $cls->total_sections }} {{ Str::plural('Section', $cls->total_sections) }}
-                  </span>
-                </td>
-                <td class="py-3 px-4 text-center font-black text-sm text-slate-900">
-                  {{ number_format($cls->total_students) }}
-                </td>
-                <td class="py-3 px-4 text-center font-bold text-blue-700">
-                  {{ number_format($cls->male) }}
-                </td>
-                <td class="py-3 px-4 text-center font-bold text-pink-700">
-                  {{ number_format($cls->female) }}
-                </td>
-                <td class="py-3 px-4 text-center">
-                  @if($cls->unassigned > 0)
-                    <span class="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 font-bold border border-amber-200">
-                      {{ $cls->unassigned }}
-                    </span>
-                  @else
-                    <span class="text-slate-300">0</span>
-                  @endif
-                </td>
-                <td class="py-3 px-4 text-center">
-                  @if($cls->without_roll > 0)
-                    <span class="px-2 py-0.5 rounded-md bg-orange-50 text-orange-800 font-bold border border-orange-200">
-                      {{ $cls->without_roll }}
-                    </span>
-                  @else
-                    <span class="text-slate-300">0</span>
-                  @endif
-                </td>
-                <td class="py-3 px-4 text-right" @click.stop>
-                  <div class="flex items-center justify-end gap-2">
-                    <button type="button"
-                            @click="activeView = 'roster'; selectedClassId = '{{ $cls->id }}'; window.location = '{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId, 'class_id' => $cls->id])) }}'"
-                            class="btn btn-ghost btn-xs text-rose-800 hover:text-rose-900 font-bold border border-slate-200">
-                      Filter Roster
-                    </button>
-                    <button type="button" @click="toggleExpand({{ $cls->id }})" class="p-1 text-slate-400 hover:text-slate-700 rounded">
-                      <svg class="w-4 h-4 transition-transform duration-200" :class="{ 'rotate-180': expandedClass === {{ $cls->id }} || expandedClass === 'all' }" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              {{-- Nested Section Cards (Expanded beneath class row) --}}
-              <tr x-show="expandedClass === {{ $cls->id }} || expandedClass === 'all'" x-collapse>
-                <td colspan="9" class="p-0 bg-slate-50/90 border-b border-slate-200">
-                  <div class="p-4 sm:p-5">
-                    <div class="flex items-center justify-between mb-3">
-                      <span class="text-xs font-black uppercase tracking-wider text-slate-600">
-                        Sections in Class {{ $cls->name }} ({{ $cls->total_sections }} Total)
-                      </span>
-                      <a href="{{ route('students.section-allotment.index', array_filter(['academic_year_id' => $selectedYearId, 'class_id' => $cls->id])) }}"
-                         class="text-xs font-bold text-indigo-700 hover:text-indigo-900 underline">
-                        Manage Section Allotments &rarr;
-                      </a>
-                    </div>
-
-                    @if($cls->sections->isEmpty())
-                      <p class="text-xs text-slate-400 py-2">No sections created for this class.</p>
-                    @else
-                      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        @foreach($cls->sections as $sec)
-                          <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-2xs hover:border-slate-300 transition-colors">
-                            <div class="flex items-center justify-between gap-2">
-                              <span class="text-sm font-black text-slate-900">Section {{ $sec->name }}</span>
-                              <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ $sec->total > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500' }}">
-                                {{ $sec->total }} / {{ $sec->capacity }} seats
-                              </span>
-                            </div>
-
-                            <div class="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
-                              <svg class="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                              <span class="truncate">Teacher: <strong class="text-slate-700">{{ $sec->teacher_name }}</strong></span>
-                            </div>
-
-                            {{-- Seat Progress Bar --}}
-                            @php
-                              $fillPct = $sec->capacity > 0 ? min(100, round(($sec->total / $sec->capacity) * 100)) : 0;
-                            @endphp
-                            <div class="w-full bg-slate-100 rounded-full h-1.5 mt-2.5 overflow-hidden">
-                              <div class="h-1.5 rounded-full {{ $fillPct >= 90 ? 'bg-rose-600' : ($fillPct >= 70 ? 'bg-amber-500' : 'bg-emerald-500') }}" style="width: {{ $fillPct }}%"></div>
-                            </div>
-
-                            <div class="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                              <span class="text-slate-500 font-medium">{{ $sec->male }} M &bull; {{ $sec->female }} F</span>
-                              <a href="{{ route('students.index', array_filter(['academic_year_id' => $selectedYearId, 'class_id' => $cls->id, 'section_id' => $sec->id, 'section' => $sec->name])) }}"
-                                 class="font-bold text-rose-900 hover:text-rose-800 flex items-center gap-0.5">
-                                <span>View Students</span>
-                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                              </a>
-                            </div>
-                          </div>
-                        @endforeach
-                      </div>
-                    @endif
-                  </div>
-                </td>
-              </tr>
-            @empty
-              <tr>
-                <td colspan="9" class="p-8 text-center text-slate-500">
-                  No classes configured.
-                </td>
-              </tr>
-            @endforelse
-          </tbody>
-        </table>
-      </div>
-    </div>
   </div>
 
   {{-- Quick View Drawer (Alpine.js) --}}
