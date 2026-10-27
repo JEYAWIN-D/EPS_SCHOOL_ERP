@@ -18,6 +18,18 @@
     </div>
 
     <div class="flex items-center gap-2 flex-wrap">
+      <a href="{{ route('students.print-profile', $student->id) }}" target="_blank" class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-xs text-rose-900 bg-rose-50/80 border-rose-200 hover:bg-rose-100 font-bold" title="Print Comprehensive Student Profile Dossier">
+        <svg class="w-4 h-4 text-rose-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        Print Profile
+      </a>
+      <a href="{{ route('students.section-allotment.index', ['class_id' => $student->currentEnrollment?->class_id]) }}" class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-xs text-indigo-700 bg-indigo-50/80 border-indigo-200 hover:bg-indigo-100 font-semibold" title="Transfer or allocate section">
+        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        Section Allotment
+      </a>
+      <a href="{{ route('students.house-allotment.index') }}" class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-xs text-purple-700 bg-purple-50/80 border-purple-200 hover:bg-purple-100 font-semibold" title="House allotment module">
+        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        House Allotment
+      </a>
       <a href="{{ route('public.student.documents.print-card', $student->document_token) }}" target="_blank" class="btn btn-secondary btn-sm flex items-center gap-1.5 shadow-xs text-indigo-700 bg-indigo-50/80 border-indigo-200 hover:bg-indigo-100" title="Print Document Submission QR Slip">
         <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
         QR Slip
@@ -274,10 +286,20 @@
           </span>
           @endif
 
-          @if($student->currentEnrollment?->house)
-          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-            House: {{ $student->currentEnrollment->house }}
+          @php
+            $currentH = $student->currentEnrollment?->houseGroup;
+            $hName = $currentH?->name ?: ($student->currentEnrollment?->house ?: null);
+            $hColor = $currentH?->color ?: '#8C2826';
+          @endphp
+          @if($hName)
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border"
+                style="color: {{ $hColor }}; background-color: {{ $hColor }}15; border-color: {{ $hColor }}35;">
+            <span class="w-2 h-2 rounded-full" style="background-color: {{ $hColor }};"></span>
+            House: {{ $hName }}
+          </span>
+          @else
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            House: Unallotted
           </span>
           @endif
         </div>
@@ -1136,6 +1158,39 @@
             </div>
           @empty
             <p class="text-xs text-slate-400 text-center py-3">No enrollment history.</p>
+          @endforelse
+        </div>
+      </div>
+
+      {{-- Student Allotment & Movement History Card --}}
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 p-6 space-y-3">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-rose-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            <h3 class="font-bold text-slate-900 text-sm">Allotment &amp; Movement History</h3>
+          </div>
+          <span class="text-[11px] font-bold text-slate-400">{{ $student->allotmentHistories->count() }} records</span>
+        </div>
+
+        <div class="space-y-2">
+          @forelse($student->allotmentHistories->take(10) as $hist)
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-rose-900 uppercase text-[10px] tracking-wider">{{ $hist->allotment_type }}</span>
+                <span class="text-slate-400 font-mono text-[10px]">{{ $hist->created_at->format('d M Y, h:i A') }}</span>
+              </div>
+              <div class="flex items-center gap-2 font-semibold text-slate-800">
+                <span class="text-slate-400 line-through">{{ $hist->from_value ?: 'None' }}</span>
+                <span>&rarr;</span>
+                <span class="text-emerald-700 font-bold">{{ $hist->to_value }}</span>
+              </div>
+              @if($hist->reason)
+                <p class="text-[11px] text-slate-500 italic mt-0.5">Reason: {{ $hist->reason }}</p>
+              @endif
+              <div class="text-[10px] text-slate-400 pt-0.5">By: {{ $hist->changedBy?->name ?? 'System' }}</div>
+            </div>
+          @empty
+            <p class="text-xs text-slate-400 text-center py-3">No section, house, or roll number transfers recorded yet.</p>
           @endforelse
         </div>
       </div>

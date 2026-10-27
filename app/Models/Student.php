@@ -149,6 +149,27 @@ class Student extends Model
         return $this->attributes['roll_number'] ?? null;
     }
 
+    public function getProfileCompletionPercentageAttribute(): int
+    {
+        $score = 0;
+        if (!empty($this->first_name) && !empty($this->admission_no)) $score += 10;
+        if (!empty($this->dob)) $score += 10;
+        if (!empty($this->gender)) $score += 10;
+        if (!empty($this->photo)) $score += 10;
+        if (!empty($this->blood_group)) $score += 5;
+        if (!empty($this->residential_address)) $score += 10;
+        if (!empty($this->father_name)) $score += 10;
+        if (!empty($this->father_mobile)) $score += 10;
+        if (!empty($this->mother_name)) $score += 5;
+        if ($this->relationLoaded('currentEnrollment')) {
+            if ($this->currentEnrollment && !empty($this->currentEnrollment->section_id)) $score += 10;
+            if ($this->currentEnrollment && !empty($this->currentEnrollment->roll_number)) $score += 10;
+        } else {
+            if (!empty($this->roll_number)) $score += 10;
+        }
+        return min(100, $score);
+    }
+
     public function siblings(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Student::class, 'sibling_group_id', 'sibling_group_id')
@@ -195,6 +216,11 @@ class Student extends Model
     public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\App\Models\StudentDocument::class);
+    }
+
+    public function allotmentHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\StudentAllotmentHistory::class, 'student_id')->latest();
     }
 
     public function bookNoteItems(): \Illuminate\Database\Eloquent\Relations\HasMany

@@ -18,6 +18,8 @@ use App\Models\StudentEnrollment;
 use App\Models\StudentMedicalRecord;
 use App\Models\StudentPromotion;
 use App\Models\StudentVaccination;
+use App\Models\House;
+use App\Models\StudentAllotmentHistory;
 use App\Models\FeePayment;
 use App\Models\User;
 use App\Models\Employee;
@@ -69,47 +71,214 @@ class StudentController extends Controller
 
     public function index(Request $request)
     {
-        $currentYear = AcademicYear::current();
-        $sort        = $request->input('sort', 'latest');
+        $academicYears = AcademicYear::orderByDesc('start_date')->get();
+        $currentYear   = AcademicYear::current();
+        $selectedYearId = $request->filled('academic_year_id')
+            ? (int)$request->academic_year_id
+            : ($currentYear?->id ?? $academicYears->first()?->id);
+        $selectedYear = $academicYears->firstWhere('id', $selectedYearId) ?? $currentYear;
+        $sort = $request->input('sort', 'latest');
 
-        $query = Student::with(['currentEnrollment.class', 'currentEnrollment.section'])
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $v = strtolower(trim($request->search));
-                $q->where(function ($sq) use ($v) {
-                    $sq->whereRaw("LOWER(first_name) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(last_name) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name)) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(admission_no) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(roll_number) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(mobile) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(father_name) LIKE ?", ["%$v%"])
-                      ->orWhereRaw("LOWER(father_mobile) LIKE ?", ["%$v%"])
-                      ->orWhereHas('currentEnrollment', function ($eq) use ($v) {
-                          $eq->whereRaw("LOWER(roll_number) LIKE ?", ["%$v%"]);
-                      });
-                });
-            })
-            ->when($request->filled('class_id'), fn($q) => $q->whereHas('currentEnrollment', fn($q) => $q->where('class_id', $request->class_id)))
-            ->when($request->filled('section'), fn($q) => $q->whereHas('currentEnrollment.section', function ($sq) use ($request) {
-                $rawSec = trim($request->section);
-                $cleanSec = trim(preg_replace('/^section\s*/i', '', $rawSec));
+        // Dynamic Statistics Query for selected academic year & scoping
+        $enrBase = DB::table('student_enrollments')
+            ->join('students', 'student_enrollments.student_id', '=', 'students.id')
+            ->whereNull('students.deleted_at')
+            ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId));
+
+        if ($request->is_scoped && empty($request->scope_student_ids)) {
+            if (!empty($request->scope_class_ids)) {
+                $enrBase->whereIn('student_enrollments.class_id', $request->scope_class_ids);
+            } else {
+                $enrBase->whereRaw('1 = 0');
+            }
+        }
+
+        $totalStudents = (clone $enrBase)->count();
+        $activeStudents = (clone $enrBase)->where('students.status', 'active')->count();
+        $newlyAdmittedStudents = (clone $enrBase)->where(function($q) {
+            $q->where('students.admission_date', '>=', now()->subDays(60))
+              ->orWhere('students.created_at', '>=', now()->subDays(60));
+        })->count();
+
+        $maleCount   = (clone $enrBase)->where('students.gender', 'male')->count();
+        $femaleCount = (clone $enrBase)->where('students.gender', 'female')->count();
+        $otherGenderCount = max(0, $totalStudents - ($maleCount + $femaleCount));
+
+        $classesCount  = (clone $enrBase)->distinct('student_enrollments.class_id')->count('student_enrollments.class_id');
+        $sectionsCount = (clone $enrBase)->whereNotNull('student_enrollments.section_id')->distinct('student_enrollments.section_id')->count('student_enrollments.section_id');
+
+        $withoutRollCount = (clone $enrBase)->where(function($q) {
+            $q->whereNull('student_enrollments.roll_number')->orWhere('student_enrollments.roll_number', '');
+        })->count();
+
+        $withoutSectionCount = (clone $enrBase)->whereNull('student_enrollments.section_id')->count();
+
+        $withoutHouseCount = (clone $enrBase)->where(function($q) {
+            $q->whereNull('student_enrollments.house_id')
+              ->where(function($sq) {
+                  $sq->whereNull('student_enrollments.house')->orWhere('student_enrollments.house', '');
+              });
+        })->count();
+
+        $transferredCount = (clone $enrBase)->where('students.status', 'transferred')->count();
+        $tcIssuedCount    = (clone $enrBase)->where(function($q) {
+            $q->whereIn('students.status', ['left', 'tc_issued'])
+              ->orWhereNotNull('students.leaving_date');
+        })->count();
+
+        $incompleteProfilesCount = (clone $enrBase)->where(function($q) {
+            $q->whereNull('students.dob')
+              ->orWhereNull('students.father_mobile')
+              ->orWhereNull('students.residential_address')
+              ->orWhereNull('students.photo');
+        })->count();
+
+        $metrics = [
+            'total'              => $totalStudents,
+            'active'             => $activeStudents,
+            'newly_admitted'     => $newlyAdmittedStudents,
+            'male'               => $maleCount,
+            'female'             => $femaleCount,
+            'other_gender'       => $otherGenderCount,
+            'classes_count'      => $classesCount,
+            'sections_count'     => $sectionsCount,
+            'without_roll'       => $withoutRollCount,
+            'without_section'    => $withoutSectionCount,
+            'without_house'      => $withoutHouseCount,
+            'transferred'        => $transferredCount,
+            'tc_issued'          => $tcIssuedCount,
+            'incomplete_profile' => $incompleteProfilesCount,
+        ];
+
+        // Class-Wise Student Overview (Hierarchy: Academic Year -> Class -> Section)
+        $allActiveClasses = Classes::active()->with(['sections.classTeacher'])->orderBy('sort_order')->get();
+        $classOverview = $allActiveClasses->map(function ($cls) use ($selectedYearId) {
+            $classEnrs = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->where('student_enrollments.class_id', $cls->id)
+                ->whereNull('students.deleted_at')
+                ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId))
+                ->select('student_enrollments.*', 'students.gender', 'students.dob', 'students.photo', 'students.father_mobile')
+                ->get();
+
+            $total = $classEnrs->count();
+            $male = $classEnrs->where('gender', 'male')->count();
+            $female = $classEnrs->where('gender', 'female')->count();
+            $unassigned = $classEnrs->whereNull('section_id')->count();
+            $withoutRoll = $classEnrs->filter(fn($e) => empty($e->roll_number))->count();
+
+            $sectionsData = $cls->sections->map(function ($sec) use ($classEnrs) {
+                $secEnrs = $classEnrs->where('section_id', $sec->id);
+                $secTotal = $secEnrs->count();
+                $secMale = $secEnrs->where('gender', 'male')->count();
+                $secFemale = $secEnrs->where('gender', 'female')->count();
+                $secWithoutRoll = $secEnrs->filter(fn($e) => empty($e->roll_number))->count();
+                $secIncomplete = $secEnrs->filter(fn($e) => empty($e->dob) || empty($e->photo) || empty($e->father_mobile))->count();
+                $capacity = (int)($sec->capacity ?: 40);
+                $available = max(0, $capacity - $secTotal);
+
+                return (object)[
+                    'id'           => $sec->id,
+                    'name'         => $sec->name,
+                    'teacher_name' => $sec->classTeacher?->name ?? 'Not Assigned',
+                    'total'        => $secTotal,
+                    'male'         => $secMale,
+                    'female'       => $secFemale,
+                    'capacity'     => $capacity,
+                    'available'    => $available,
+                    'without_roll' => $secWithoutRoll,
+                    'incomplete'   => $secIncomplete,
+                ];
+            });
+
+            return (object)[
+                'id'             => $cls->id,
+                'name'           => $cls->name,
+                'display_name'   => $cls->display_name,
+                'total_sections' => $cls->sections->count(),
+                'total_students' => $total,
+                'male'           => $male,
+                'female'         => $female,
+                'unassigned'     => $unassigned,
+                'without_roll'   => $withoutRoll,
+                'sections'       => $sectionsData,
+            ];
+        });
+
+        // 15-Column Student Roster Query
+        $query = Student::with([
+            'currentEnrollment.class',
+            'currentEnrollment.section',
+            'currentEnrollment.houseGroup',
+            'currentEnrollment.academicYear'
+        ])
+        ->when($selectedYearId, function ($q) use ($selectedYearId) {
+            $q->whereHas('enrollments', fn($eq) => $eq->where('academic_year_id', $selectedYearId));
+        })
+        ->when($request->filled('search'), function ($q) use ($request) {
+            $v = strtolower(trim($request->search));
+            $q->where(function ($sq) use ($v) {
+                $sq->whereRaw("LOWER(first_name) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(last_name) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name)) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(admission_no) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(roll_number) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(mobile) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(father_name) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(father_mobile) LIKE ?", ["%$v%"])
+                  ->orWhereRaw("LOWER(mother_name) LIKE ?", ["%$v%"])
+                  ->orWhereHas('currentEnrollment', function ($eq) use ($v) {
+                      $eq->whereRaw("LOWER(roll_number) LIKE ?", ["%$v%"]);
+                  });
+            });
+        })
+        ->when($request->filled('class_id'), fn($q) => $q->whereHas('currentEnrollment', fn($eq) => $eq->where('class_id', $request->class_id)))
+        ->when($request->filled('section_id'), fn($q) => $q->whereHas('currentEnrollment', fn($eq) => $eq->where('section_id', $request->section_id)))
+        ->when($request->filled('section') && !$request->filled('section_id'), function ($q) use ($request) {
+            $rawSec = trim($request->section);
+            $cleanSec = trim(preg_replace('/^section\s*/i', '', $rawSec));
+            $q->whereHas('currentEnrollment.section', function ($sq) use ($cleanSec) {
                 $sq->whereRaw("UPPER(name) = ?", [strtoupper($cleanSec)])
                   ->orWhereRaw("UPPER(name) = ?", ['SECTION ' . strtoupper($cleanSec)])
                   ->orWhereRaw("UPPER(name) LIKE ?", ['%' . strtoupper($cleanSec) . '%']);
-            }))
-            ->when($request->filled('gender'), fn($q) => $q->where('gender', $request->gender))
-            ->when($request->filled('student_type'), fn($q) => $q->where('student_type', $request->student_type))
-            ->when($request->filled('status') && $request->status !== 'all', fn($q) => $q->where('status', $request->status))
-            ->when(!$request->has('status'), fn($q) => $q->where('status', 'active'))
-            // ScopeToUser: restrict class_teachers/subject_teachers to their assigned classes
-            ->when($request->is_scoped && empty($request->scope_student_ids), function($q) use ($request) {
-                if (!empty($request->scope_class_ids)) {
-                    $q->whereHas('currentEnrollment', fn($sq) => $sq->whereIn('class_id', $request->scope_class_ids));
-                } else {
-                    $q->whereRaw('1 = 0');
-                }
             });
+        })
+        ->when($request->filled('gender'), fn($q) => $q->where('gender', $request->gender))
+        ->when($request->filled('house_id'), function ($q) use ($request) {
+            if ($request->house_id === 'unallotted') {
+                $q->whereHas('currentEnrollment', function ($eq) {
+                    $eq->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', ''));
+                });
+            } else {
+                $house = House::find($request->house_id);
+                $q->whereHas('currentEnrollment', function ($eq) use ($request, $house) {
+                    $eq->where('house_id', $request->house_id)
+                      ->when($house, fn($sq) => $sq->orWhereRaw('UPPER(house) = ?', [strtoupper($house->code)]));
+                });
+            }
+        })
+        ->when($request->filled('student_type'), fn($q) => $q->where('student_type', $request->student_type))
+        ->when($request->filled('status') && $request->status !== 'all', fn($q) => $q->where('status', $request->status))
+        ->when(!$request->has('status'), fn($q) => $q->where('status', 'active'))
+        ->when($request->filled('admission_date_from'), fn($q) => $q->whereDate('admission_date', '>=', $request->admission_date_from))
+        ->when($request->filled('admission_date_to'), fn($q) => $q->whereDate('admission_date', '<=', $request->admission_date_to))
+        ->when($request->filled('missing_data'), function ($q) use ($request) {
+            match ($request->missing_data) {
+                'without_roll' => $q->whereHas('currentEnrollment', fn($eq) => $eq->whereNull('roll_number')->orWhere('roll_number', '')),
+                'without_section' => $q->whereHas('currentEnrollment', fn($eq) => $eq->whereNull('section_id')),
+                'without_house' => $q->whereHas('currentEnrollment', fn($eq) => $eq->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', ''))),
+                'without_photo' => $q->where(fn($sq) => $sq->whereNull('photo')->orWhere('photo', '')),
+                'incomplete_profile' => $q->where(fn($sq) => $sq->whereNull('dob')->orWhereNull('father_mobile')->orWhereNull('residential_address')->orWhereNull('photo')),
+                default => null,
+            };
+        })
+        ->when($request->is_scoped && empty($request->scope_student_ids), function ($q) use ($request) {
+            if (!empty($request->scope_class_ids)) {
+                $q->whereHas('currentEnrollment', fn($sq) => $sq->whereIn('class_id', $request->scope_class_ids));
+            } else {
+                $q->whereRaw('1 = 0');
+            }
+        });
 
         // Sorting
         switch ($sort) {
@@ -134,25 +303,26 @@ class StudentController extends Controller
                 break;
         }
 
-        $students = $query->paginate(25)->withQueryString();
-        $classes  = Classes::activeCached();
+        $perPage = min(100, max(10, (int)$request->input('per_page', 25)));
+        $students = $query->paginate($perPage)->withQueryString();
 
-        // Distinct section names (cached 1 hour)
+        $classes = Classes::activeCached();
+        $houses = House::allCached();
+
+        // Distinct section names
         $sectionNames = \Illuminate\Support\Facades\Cache::remember('active_section_names', 3600, function () {
             $names = Section::where('is_active', true)
                 ->pluck('name')
-                ->map(function ($n) {
-                    $clean = trim(preg_replace('/^section\s*/i', '', $n));
-                    return strtoupper($clean);
-                })
-                ->unique()
-                ->sort()
-                ->values();
-
+                ->map(fn($n) => strtoupper(trim(preg_replace('/^section\s*/i', '', $n))))
+                ->unique()->sort()->values();
             return $names->isNotEmpty() ? $names : collect(['A', 'B', 'C', 'D']);
         });
 
-        return view('students.index', compact('students', 'classes', 'sectionNames', 'currentYear'));
+        return view('students.index', compact(
+            'students', 'classes', 'sectionNames', 'currentYear',
+            'academicYears', 'selectedYear', 'selectedYearId',
+            'houses', 'metrics', 'classOverview'
+        ));
     }
 
     public function create(Request $request)
@@ -293,8 +463,11 @@ class StudentController extends Controller
             'enrollments.class',
             'enrollments.section',
             'enrollments.academicYear',
+            'enrollments.houseGroup',
             'transportRoute',
             'transportStop',
+            'siblings',
+            'allotmentHistories.changedBy',
         ])->findOrFail($id);
 
         $year = AcademicYear::current();
@@ -403,6 +576,14 @@ class StudentController extends Controller
         $qrUrl = route('public.student.documents', ['token' => $student->document_token]);
         $qrSvg = QrCode::size(140)->margin(1)->generate($qrUrl);
 
+        // Additional Module Information
+        $disciplinaryRecords = StudentDisciplinary::where('student_id', $id)->latest()->get();
+        $medicalRecord       = StudentMedicalRecord::where('student_id', $id)->first();
+        $vaccinations        = StudentVaccination::where('student_id', $id)->get();
+        $libraryIssues       = \App\Models\BookIssue::with('book')->where('student_id', $id)->latest()->take(10)->get();
+        $houses              = House::where('is_active', true)->orderBy('name')->get();
+        $sections            = Section::where('class_id', $student->currentEnrollment?->class_id)->where('is_active', true)->orderBy('name')->get();
+
         return response()
             ->view('students.show', compact(
                 'student', 'feeCharged', 'feePaid', 'feeBalance',
@@ -413,7 +594,9 @@ class StudentController extends Controller
                 'attPct', 'annualTargetPct', 'statutoryMinDaysRequired',
                 'recentAttendanceRecords', 'monthlyAttendance',
                 'recentPayments',
-                'studentDocuments', 'documentCategories', 'qrUrl', 'qrSvg'
+                'studentDocuments', 'documentCategories', 'qrUrl', 'qrSvg',
+                'disciplinaryRecords', 'medicalRecord', 'vaccinations', 'libraryIssues',
+                'houses', 'sections'
             ))
             ->header('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
@@ -2701,5 +2884,997 @@ class StudentController extends Controller
 
             return back()->with('success', 'Fee payment of ₹' . number_format($amount, 2) . ' verified and recorded successfully! Receipt #' . $payment->receipt_number . '. Student status updated to ' . ($newStatus === 'paid' ? 'Paid' : 'Partially Paid') . '.');
         });
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // DEDICATED HOUSE ALLOTMENT MODULE
+    // ═════════════════════════════════════════════════════════════════════════
+
+    public function houseAllotmentIndex(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $academicYears = AcademicYear::orderByDesc('start_date')->get();
+        $currentYear   = AcademicYear::current();
+        $selectedYearId = $request->filled('academic_year_id')
+            ? (int)$request->academic_year_id
+            : ($currentYear?->id ?? $academicYears->first()?->id);
+        $selectedYear = $academicYears->firstWhere('id', $selectedYearId) ?? $currentYear;
+
+        $classes = Classes::active()->orderBy('sort_order')->get();
+        $houses  = House::with(['captain', 'viceCaptain', 'teacher'])->where('is_active', true)->orderBy('name')->get();
+
+        // Calculate House Strengths
+        $houseStats = $houses->map(function ($h) use ($selectedYearId) {
+            $enrs = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->whereNull('students.deleted_at')
+                ->where('student_enrollments.status', 'active')
+                ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId))
+                ->where(function ($q) use ($h) {
+                    $q->where('student_enrollments.house_id', $h->id)
+                      ->orWhereRaw('UPPER(student_enrollments.house) = ?', [strtoupper($h->code)]);
+                })
+                ->select('student_enrollments.id', 'students.gender')
+                ->get();
+
+            $total = $enrs->count();
+            $male = $enrs->where('gender', 'male')->count();
+            $female = $enrs->where('gender', 'female')->count();
+
+            return (object)[
+                'house'     => $h,
+                'total'     => $total,
+                'male'      => $male,
+                'female'    => $female,
+                'capacity'  => $h->capacity ?: 'Unlimited',
+                'available' => $h->capacity ? max(0, $h->capacity - $total) : 'Unlimited',
+            ];
+        });
+
+        // Unallotted Students Count
+        $unallottedCount = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+            ->whereNull('students.deleted_at')
+            ->where('student_enrollments.status', 'active')
+            ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId))
+            ->whereNull('student_enrollments.house_id')
+            ->where(fn($sq) => $sq->whereNull('student_enrollments.house')->orWhere('student_enrollments.house', ''))
+            ->count();
+
+        // Query Students for House Roster
+        $query = StudentEnrollment::with(['student', 'class', 'section', 'houseGroup'])
+            ->whereHas('student')
+            ->where('student_enrollments.status', 'active')
+            ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId))
+            ->when($request->filled('class_id'), fn($q) => $q->where('student_enrollments.class_id', $request->class_id))
+            ->when($request->filled('section_id'), fn($q) => $q->where('student_enrollments.section_id', $request->section_id))
+            ->when($request->filled('gender'), fn($q) => $q->whereHas('student', fn($sq) => $sq->where('gender', $request->gender)))
+            ->when($request->filled('house_filter'), function ($q) use ($request) {
+                if ($request->house_filter === 'unallotted') {
+                    $q->whereNull('student_enrollments.house_id')
+                      ->where(fn($sq) => $sq->whereNull('student_enrollments.house')->orWhere('student_enrollments.house', ''));
+                } else {
+                    $hId = (int)$request->house_filter;
+                    $h = House::find($hId);
+                    $q->where(function ($sq) use ($hId, $h) {
+                        $sq->where('student_enrollments.house_id', $hId);
+                        if ($h) {
+                            $sq->orWhereRaw('UPPER(student_enrollments.house) = ?', [strtoupper($h->code)]);
+                        }
+                    });
+                }
+            })
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $term = strtolower(trim($request->search));
+                $q->whereHas('student', function ($sq) use ($term) {
+                    $sq->whereRaw("LOWER(first_name) LIKE ?", ["%$term%"])
+                      ->orWhereRaw("LOWER(last_name) LIKE ?", ["%$term%"])
+                      ->orWhereRaw("LOWER(CONCAT(first_name, ' ', last_name)) LIKE ?", ["%$term%"])
+                      ->orWhereRaw("LOWER(admission_no) LIKE ?", ["%$term%"])
+                      ->orWhereRaw("LOWER(roll_number) LIKE ?", ["%$term%"]);
+                });
+            });
+
+        $students = $query->orderBy('class_id')->orderBy('section_id')->paginate(50)->withQueryString();
+
+        // Recent Allotment History
+        $recentHistory = StudentAllotmentHistory::with(['student', 'changedBy'])
+            ->where('allotment_type', 'house')
+            ->latest()
+            ->limit(15)
+            ->get();
+
+        $staffUsers = User::whereHas('roles', fn($q) => $q->whereIn('name', ['teacher', 'admin', 'principal']))->orderBy('name')->get();
+
+        return view('students.house-allotment', compact(
+            'academicYears', 'selectedYear', 'selectedYearId',
+            'classes', 'houses', 'houseStats', 'unallottedCount',
+            'students', 'recentHistory', 'staffUsers'
+        ));
+    }
+
+    public function assignHouse(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_id' => 'required|exists:students,id',
+            'house_id'   => 'required|exists:houses,id',
+            'reason'     => 'nullable|string|max:255',
+        ]);
+
+        $student = Student::findOrFail($validated['student_id']);
+        $house   = House::findOrFail($validated['house_id']);
+        $enrollment = $student->currentEnrollment;
+
+        if (!$enrollment) {
+            return back()->with('error', 'Student does not have an active enrollment record.');
+        }
+
+        $oldHouseName = $enrollment->houseGroup?->name ?: ($enrollment->house ?: 'Unallotted');
+        $newHouseName = $house->name;
+
+        DB::transaction(function () use ($enrollment, $house, $student, $oldHouseName, $newHouseName, $validated) {
+            $enrollment->update([
+                'house_id' => $house->id,
+                'house'    => $house->code,
+            ]);
+
+            StudentAllotmentHistory::log(
+                $student->id,
+                'house',
+                $oldHouseName,
+                $newHouseName,
+                $validated['reason'] ?? 'Individual house allotment',
+                $enrollment->academic_year_id
+            );
+        });
+
+        return back()->with('success', "Student {$student->full_name} allotted to {$house->name} successfully.");
+    }
+
+    public function bulkAssignHouse(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'exists:students,id',
+            'house_id'    => 'required|exists:houses,id',
+            'reason'      => 'nullable|string|max:255',
+        ]);
+
+        $house = House::findOrFail($validated['house_id']);
+        $count = 0;
+
+        DB::transaction(function () use ($validated, $house, &$count) {
+            foreach ($validated['student_ids'] as $stId) {
+                $enrollment = StudentEnrollment::where('student_id', $stId)->where('status', 'active')->latest()->first();
+                if ($enrollment) {
+                    $oldHouse = $enrollment->houseGroup?->name ?: ($enrollment->house ?: 'Unallotted');
+                    $enrollment->update([
+                        'house_id' => $house->id,
+                        'house'    => $house->code,
+                    ]);
+
+                    StudentAllotmentHistory::log(
+                        $stId,
+                        'house',
+                        $oldHouse,
+                        $house->name,
+                        $validated['reason'] ?? 'Bulk house allotment',
+                        $enrollment->academic_year_id
+                    );
+                    $count++;
+                }
+            }
+        });
+
+        return back()->with('success', "Successfully allotted {$count} students to {$house->name}.");
+    }
+
+    public function removeHouseAllotment(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_id' => 'required|exists:students,id',
+            'reason'     => 'required|string|min:5|max:255',
+        ]);
+
+        $student = Student::findOrFail($validated['student_id']);
+        $enrollment = $student->currentEnrollment;
+
+        if (!$enrollment) {
+            return back()->with('error', 'Student active enrollment not found.');
+        }
+
+        $oldHouseName = $enrollment->houseGroup?->name ?: ($enrollment->house ?: 'Unallotted');
+
+        DB::transaction(function () use ($enrollment, $student, $oldHouseName, $validated) {
+            $enrollment->update([
+                'house_id' => null,
+                'house'    => null,
+            ]);
+
+            StudentAllotmentHistory::log(
+                $student->id,
+                'house',
+                $oldHouseName,
+                'Unallotted',
+                $validated['reason'],
+                $enrollment->academic_year_id
+            );
+        });
+
+        return back()->with('success', "House allotment removed for {$student->full_name}.");
+    }
+
+    public function autoBalanceHouses(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'academic_year_id' => 'required|exists:academic_years,id',
+            'class_id'         => 'nullable|exists:classes,id',
+        ]);
+
+        $activeHouses = House::where('is_active', true)->orderBy('name')->get();
+        if ($activeHouses->isEmpty()) {
+            return back()->with('error', 'No active houses configured for distribution.');
+        }
+
+        $query = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+            ->whereNull('students.deleted_at')
+            ->where('student_enrollments.status', 'active')
+            ->where('student_enrollments.academic_year_id', $validated['academic_year_id'])
+            ->whereNull('student_enrollments.house_id')
+            ->where(fn($sq) => $sq->whereNull('student_enrollments.house')->orWhere('student_enrollments.house', ''))
+            ->when(!empty($validated['class_id']), fn($q) => $q->where('student_enrollments.class_id', $validated['class_id']))
+            ->select('student_enrollments.*', 'students.gender', 'students.id as st_id');
+
+        $unallotted = $query->get();
+        if ($unallotted->isEmpty()) {
+            return back()->with('info', 'No unallotted students found matching the selected criteria.');
+        }
+
+        // Initialize counts per house
+        $houseCounts = [];
+        foreach ($activeHouses as $h) {
+            $countM = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->where('student_enrollments.academic_year_id', $validated['academic_year_id'])
+                ->where(fn($q) => $q->where('house_id', $h->id)->orWhereRaw('UPPER(house) = ?', [strtoupper($h->code)]))
+                ->where('students.gender', 'male')
+                ->count();
+            $countF = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->where('student_enrollments.academic_year_id', $validated['academic_year_id'])
+                ->where(fn($q) => $q->where('house_id', $h->id)->orWhereRaw('UPPER(house) = ?', [strtoupper($h->code)]))
+                ->where('students.gender', 'female')
+                ->count();
+
+            $houseCounts[$h->id] = [
+                'model'  => $h,
+                'male'   => $countM,
+                'female' => $countF,
+                'total'  => $countM + $countF,
+            ];
+        }
+
+        $distributedCount = 0;
+
+        DB::transaction(function () use ($unallotted, &$houseCounts, $validated, &$distributedCount) {
+            // Group by gender to balance boys and girls evenly
+            $males = $unallotted->where('gender', 'male');
+            $females = $unallotted->where('gender', 'female');
+            $others = $unallotted->whereNotIn('gender', ['male', 'female']);
+
+            // Distribute Males
+            foreach ($males as $enr) {
+                // Find house with minimum male count
+                uasort($houseCounts, fn($a, $b) => $a['male'] <=> $b['male'] ?: $a['total'] <=> $b['total']);
+                $bestHouseId = array_key_first($houseCounts);
+                $targetHouse = $houseCounts[$bestHouseId]['model'];
+
+                StudentEnrollment::where('id', $enr->id)->update([
+                    'house_id' => $targetHouse->id,
+                    'house'    => $targetHouse->code,
+                ]);
+
+                StudentAllotmentHistory::log(
+                    $enr->st_id,
+                    'house',
+                    'Unallotted',
+                    $targetHouse->name,
+                    'Balanced automated house allocation',
+                    $validated['academic_year_id']
+                );
+
+                $houseCounts[$bestHouseId]['male']++;
+                $houseCounts[$bestHouseId]['total']++;
+                $distributedCount++;
+            }
+
+            // Distribute Females
+            foreach ($females as $enr) {
+                // Find house with minimum female count
+                uasort($houseCounts, fn($a, $b) => $a['female'] <=> $b['female'] ?: $a['total'] <=> $b['total']);
+                $bestHouseId = array_key_first($houseCounts);
+                $targetHouse = $houseCounts[$bestHouseId]['model'];
+
+                StudentEnrollment::where('id', $enr->id)->update([
+                    'house_id' => $targetHouse->id,
+                    'house'    => $targetHouse->code,
+                ]);
+
+                StudentAllotmentHistory::log(
+                    $enr->st_id,
+                    'house',
+                    'Unallotted',
+                    $targetHouse->name,
+                    'Balanced automated house allocation',
+                    $validated['academic_year_id']
+                );
+
+                $houseCounts[$bestHouseId]['female']++;
+                $houseCounts[$bestHouseId]['total']++;
+                $distributedCount++;
+            }
+
+            // Distribute Others
+            foreach ($others as $enr) {
+                uasort($houseCounts, fn($a, $b) => $a['total'] <=> $b['total']);
+                $bestHouseId = array_key_first($houseCounts);
+                $targetHouse = $houseCounts[$bestHouseId]['model'];
+
+                StudentEnrollment::where('id', $enr->id)->update([
+                    'house_id' => $targetHouse->id,
+                    'house'    => $targetHouse->code,
+                ]);
+
+                StudentAllotmentHistory::log(
+                    $enr->st_id,
+                    'house',
+                    'Unallotted',
+                    $targetHouse->name,
+                    'Balanced automated house allocation',
+                    $validated['academic_year_id']
+                );
+
+                $houseCounts[$bestHouseId]['total']++;
+                $distributedCount++;
+            }
+        });
+
+        return back()->with('success', "Auto-balanced and allotted {$distributedCount} students across {$activeHouses->count()} houses with gender balance.");
+    }
+
+    public function storeOrUpdateHouse(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'id'                      => 'nullable|exists:houses,id',
+            'name'                    => 'required|string|max:100',
+            'code'                    => 'required|string|max:20',
+            'color'                   => 'required|string|max:20',
+            'captain_student_id'      => 'nullable|exists:students,id',
+            'vice_captain_student_id' => 'nullable|exists:students,id',
+            'teacher_id'              => 'nullable|exists:users,id',
+            'capacity'                => 'nullable|integer|min:0',
+            'description'             => 'nullable|string|max:500',
+        ]);
+
+        if (!empty($validated['id'])) {
+            $house = House::findOrFail($validated['id']);
+            $house->update($validated);
+            $msg = "House {$house->name} updated successfully.";
+        } else {
+            $currentYear = AcademicYear::current();
+            $house = House::create(array_merge($validated, [
+                'academic_year_id' => $currentYear?->id,
+                'is_active'        => true,
+            ]));
+            $msg = "House {$house->name} created successfully.";
+        }
+
+        \Illuminate\Support\Facades\Cache::forget('all_houses_list');
+        return back()->with('success', $msg);
+    }
+
+    public function exportHouses(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $yearId = $request->academic_year_id ?: AcademicYear::current()?->id;
+
+        $enrollments = StudentEnrollment::with(['student', 'class', 'section', 'houseGroup'])
+            ->whereHas('student')
+            ->where('status', 'active')
+            ->when($yearId, fn($q) => $q->where('academic_year_id', $yearId))
+            ->when($request->filled('class_id'), fn($q) => $q->where('class_id', $request->class_id))
+            ->when($request->filled('house_filter'), function ($q) use ($request) {
+                if ($request->house_filter === 'unallotted') {
+                    $q->whereNull('house_id')->where(fn($sq) => $sq->whereNull('house')->orWhere('house', ''));
+                } else {
+                    $hId = (int)$request->house_filter;
+                    $q->where(fn($sq) => $sq->where('house_id', $hId)->orWhere('house', House::find($hId)?->code));
+                }
+            })
+            ->get();
+
+        $csv = "Admission No,Roll No,Student Name,Class,Section,Gender,House Name,House Code\n";
+        foreach ($enrollments as $enr) {
+            $st = $enr->student;
+            $hName = $enr->houseGroup?->name ?: ($enr->house ?: 'Unallotted');
+            $hCode = $enr->houseGroup?->code ?: ($enr->house ?: 'NONE');
+
+            $csv .= sprintf(
+                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                $st->admission_no,
+                $enr->roll_number ?: '',
+                str_replace('"', '""', $st->full_name),
+                $enr->class?->name ?: '',
+                $enr->section?->name ?: '',
+                ucfirst($st->gender ?: ''),
+                str_replace('"', '""', $hName),
+                $hCode
+            );
+        }
+
+        return response($csv)
+            ->header('Content-Type', 'text/csv')
+            ->header('Content-Disposition', 'attachment; filename="house_allotment_' . date('Ymd_His') . '.csv"');
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // DEDICATED SECTION ALLOTMENT MODULE
+    // ═════════════════════════════════════════════════════════════════════════
+
+    public function sectionAllotmentIndex(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $academicYears = AcademicYear::orderByDesc('start_date')->get();
+        $currentYear   = AcademicYear::current();
+        $selectedYearId = $request->filled('academic_year_id')
+            ? (int)$request->academic_year_id
+            : ($currentYear?->id ?? $academicYears->first()?->id);
+        $selectedYear = $academicYears->firstWhere('id', $selectedYearId) ?? $currentYear;
+
+        $classes = Classes::active()->orderBy('sort_order')->get();
+        $selectedClassId = $request->filled('class_id')
+            ? (int)$request->class_id
+            : ($classes->first()?->id);
+        $selectedClass = $classes->firstWhere('id', $selectedClassId);
+
+        // Sections in the selected class
+        $sections = Section::with('classTeacher')
+            ->where('class_id', $selectedClassId)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        // Calculate statistics for each section
+        $sectionStats = $sections->map(function ($sec) use ($selectedYearId) {
+            $enrs = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->whereNull('students.deleted_at')
+                ->where('student_enrollments.section_id', $sec->id)
+                ->where('student_enrollments.status', 'active')
+                ->when($selectedYearId, fn($q) => $q->where('student_enrollments.academic_year_id', $selectedYearId))
+                ->select('student_enrollments.id', 'student_enrollments.roll_number', 'students.gender', 'students.dob', 'students.photo', 'students.father_mobile')
+                ->get();
+
+            $total = $enrs->count();
+            $male = $enrs->where('gender', 'male')->count();
+            $female = $enrs->where('gender', 'female')->count();
+            $withoutRoll = $enrs->filter(fn($e) => empty($e->roll_number))->count();
+            $incomplete = $enrs->filter(fn($e) => empty($e->dob) || empty($e->photo) || empty($e->father_mobile))->count();
+            $capacity = (int)($sec->capacity ?: 40);
+            $available = max(0, $capacity - $total);
+
+            return (object)[
+                'section'      => $sec,
+                'total'        => $total,
+                'male'         => $male,
+                'female'       => $female,
+                'capacity'     => $capacity,
+                'available'    => $available,
+                'without_roll' => $withoutRoll,
+                'incomplete'   => $incomplete,
+                'is_full'      => $total >= $capacity,
+            ];
+        });
+
+        // Unassigned Students in this class
+        $unassignedStudents = StudentEnrollment::with(['student', 'class'])
+            ->whereHas('student')
+            ->where('class_id', $selectedClassId)
+            ->whereNull('section_id')
+            ->where('status', 'active')
+            ->when($selectedYearId, fn($q) => $q->where('academic_year_id', $selectedYearId))
+            ->get();
+
+        // Assigned Students in this class (filterable by section)
+        $assignedStudentsQuery = StudentEnrollment::with(['student', 'section', 'class', 'houseGroup'])
+            ->whereHas('student')
+            ->where('class_id', $selectedClassId)
+            ->whereNotNull('section_id')
+            ->where('status', 'active')
+            ->when($selectedYearId, fn($q) => $q->where('academic_year_id', $selectedYearId))
+            ->when($request->filled('section_id'), fn($q) => $q->where('section_id', $request->section_id));
+
+        $assignedStudents = $assignedStudentsQuery->orderBy('section_id')->paginate(50)->withQueryString();
+
+        // Recent Section Allotment History
+        $recentHistory = StudentAllotmentHistory::with(['student', 'changedBy'])
+            ->where('allotment_type', 'section')
+            ->latest()
+            ->limit(15)
+            ->get();
+
+        return view('students.section-allotment', compact(
+            'academicYears', 'selectedYear', 'selectedYearId',
+            'classes', 'selectedClass', 'selectedClassId',
+            'sections', 'sectionStats', 'unassignedStudents',
+            'assignedStudents', 'recentHistory'
+        ));
+    }
+
+    public function assignSection(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_id' => 'required|exists:students,id',
+            'section_id' => 'required|exists:sections,id',
+            'override_capacity' => 'nullable|boolean',
+        ]);
+
+        $section = Section::findOrFail($validated['section_id']);
+        $student = Student::findOrFail($validated['student_id']);
+        $enrollment = $student->currentEnrollment;
+
+        if (!$enrollment) {
+            return back()->with('error', 'Active enrollment record not found.');
+        }
+
+        // Check Capacity
+        $currentCount = StudentEnrollment::where('section_id', $section->id)->where('status', 'active')->count();
+        $capacity = (int)($section->capacity ?: 40);
+        if ($currentCount >= $capacity && empty($validated['override_capacity'])) {
+            return back()->with('warning', "Section {$section->name} is at full capacity ({$currentCount}/{$capacity}). Check 'Override Capacity Limit' to proceed.");
+        }
+
+        $oldSecName = $enrollment->section?->name ?: 'Unassigned';
+
+        DB::transaction(function () use ($enrollment, $section, $student, $oldSecName) {
+            $enrollment->update(['section_id' => $section->id]);
+
+            StudentAllotmentHistory::log(
+                $student->id,
+                'section',
+                $oldSecName,
+                $section->name,
+                'Single section assignment',
+                $enrollment->academic_year_id
+            );
+        });
+
+        return back()->with('success', "Student {$student->full_name} assigned to Section {$section->name}.");
+    }
+
+    public function bulkAssignSections(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_ids'       => 'required|array|min:1',
+            'student_ids.*'     => 'exists:students,id',
+            'section_id'        => 'required|exists:sections,id',
+            'override_capacity' => 'nullable|boolean',
+        ]);
+
+        $section = Section::findOrFail($validated['section_id']);
+        $currentCount = StudentEnrollment::where('section_id', $section->id)->where('status', 'active')->count();
+        $capacity = (int)($section->capacity ?: 40);
+        $toAdd = count($validated['student_ids']);
+
+        if (($currentCount + $toAdd) > $capacity && empty($validated['override_capacity'])) {
+            return back()->with('warning', "Cannot assign {$toAdd} students. Section {$section->name} currently has {$currentCount}/{$capacity} seats filled. Check override to force assignment.");
+        }
+
+        $assignedCount = 0;
+
+        DB::transaction(function () use ($validated, $section, &$assignedCount) {
+            foreach ($validated['student_ids'] as $stId) {
+                $enrollment = StudentEnrollment::where('student_id', $stId)->where('status', 'active')->latest()->first();
+                if ($enrollment) {
+                    $oldSecName = $enrollment->section?->name ?: 'Unassigned';
+                    $enrollment->update(['section_id' => $section->id]);
+
+                    StudentAllotmentHistory::log(
+                        $stId,
+                        'section',
+                        $oldSecName,
+                        $section->name,
+                        'Bulk section allotment',
+                        $enrollment->academic_year_id
+                    );
+                    $assignedCount++;
+                }
+            }
+        });
+
+        return back()->with('success', "Assigned {$assignedCount} students to Section {$section->name} successfully.");
+    }
+
+    public function transferSection(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_id'        => 'required|exists:students,id',
+            'to_section_id'     => 'required|exists:sections,id',
+            'reason'            => 'required|string|min:4|max:255',
+            'override_capacity' => 'nullable|boolean',
+        ]);
+
+        $student = Student::findOrFail($validated['student_id']);
+        $toSection = Section::findOrFail($validated['to_section_id']);
+        $enrollment = $student->currentEnrollment;
+
+        if (!$enrollment) {
+            return back()->with('error', 'Active enrollment record not found.');
+        }
+
+        if ($enrollment->section_id === $toSection->id) {
+            return back()->with('info', "Student is already enrolled in Section {$toSection->name}.");
+        }
+
+        // Check Capacity
+        $currentCount = StudentEnrollment::where('section_id', $toSection->id)->where('status', 'active')->count();
+        $capacity = (int)($toSection->capacity ?: 40);
+        if ($currentCount >= $capacity && empty($validated['override_capacity'])) {
+            return back()->with('warning', "Destination Section {$toSection->name} is full ({$currentCount}/{$capacity}). Check override to proceed.");
+        }
+
+        $oldSecName = $enrollment->section?->name ?: 'Unassigned';
+
+        DB::transaction(function () use ($enrollment, $toSection, $student, $oldSecName, $validated) {
+            $enrollment->update([
+                'section_id'  => $toSection->id,
+                // Clear roll number upon section transfer so it can be reassigned properly
+                'roll_number' => null,
+            ]);
+
+            StudentAllotmentHistory::log(
+                $student->id,
+                'section',
+                $oldSecName,
+                $toSection->name,
+                $validated['reason'],
+                $enrollment->academic_year_id
+            );
+        });
+
+        return back()->with('success', "Student {$student->full_name} transferred from Section {$oldSecName} to Section {$toSection->name}. Note: Roll number has been reset for new section numbering.");
+    }
+
+    public function autoBalanceSections(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'class_id'         => 'required|exists:classes,id',
+            'academic_year_id' => 'required|exists:academic_years,id',
+        ]);
+
+        $sections = Section::where('class_id', $validated['class_id'])->where('is_active', true)->orderBy('name')->get();
+        if ($sections->isEmpty()) {
+            return back()->with('error', 'No active sections found for this class.');
+        }
+
+        $unassigned = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+            ->whereNull('students.deleted_at')
+            ->where('student_enrollments.class_id', $validated['class_id'])
+            ->where('student_enrollments.academic_year_id', $validated['academic_year_id'])
+            ->where('student_enrollments.status', 'active')
+            ->whereNull('student_enrollments.section_id')
+            ->select('student_enrollments.*', 'students.gender', 'students.id as st_id')
+            ->get();
+
+        if ($unassigned->isEmpty()) {
+            return back()->with('info', 'No unassigned students found in this class.');
+        }
+
+        // Initialize section counts
+        $secCounts = [];
+        foreach ($sections as $s) {
+            $countM = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->where('student_enrollments.section_id', $s->id)
+                ->where('student_enrollments.academic_year_id', $validated['academic_year_id'])
+                ->where('students.gender', 'male')
+                ->count();
+            $countF = StudentEnrollment::join('students', 'student_enrollments.student_id', '=', 'students.id')
+                ->where('student_enrollments.section_id', $s->id)
+                ->where('student_enrollments.academic_year_id', $validated['academic_year_id'])
+                ->where('students.gender', 'female')
+                ->count();
+
+            $secCounts[$s->id] = [
+                'model'    => $s,
+                'male'     => $countM,
+                'female'   => $countF,
+                'total'    => $countM + $countF,
+                'capacity' => (int)($s->capacity ?: 40),
+            ];
+        }
+
+        $distributedCount = 0;
+
+        DB::transaction(function () use ($unassigned, &$secCounts, $validated, &$distributedCount) {
+            $males = $unassigned->where('gender', 'male');
+            $females = $unassigned->where('gender', 'female');
+            $others = $unassigned->whereNotIn('gender', ['male', 'female']);
+
+            foreach ($males as $enr) {
+                uasort($secCounts, fn($a, $b) => $a['male'] <=> $b['male'] ?: $a['total'] <=> $b['total']);
+                $bestSecId = array_key_first($secCounts);
+                $targetSec = $secCounts[$bestSecId]['model'];
+
+                StudentEnrollment::where('id', $enr->id)->update(['section_id' => $targetSec->id]);
+
+                StudentAllotmentHistory::log(
+                    $enr->st_id,
+                    'section',
+                    'Unassigned',
+                    $targetSec->name,
+                    'Balanced automated section allocation',
+                    $validated['academic_year_id']
+                );
+
+                $secCounts[$bestSecId]['male']++;
+                $secCounts[$bestSecId]['total']++;
+                $distributedCount++;
+            }
+
+            foreach ($females as $enr) {
+                uasort($secCounts, fn($a, $b) => $a['female'] <=> $b['female'] ?: $a['total'] <=> $b['total']);
+                $bestSecId = array_key_first($secCounts);
+                $targetSec = $secCounts[$bestSecId]['model'];
+
+                StudentEnrollment::where('id', $enr->id)->update(['section_id' => $targetSec->id]);
+
+                StudentAllotmentHistory::log(
+                    $enr->st_id,
+                    'section',
+                    'Unassigned',
+                    $targetSec->name,
+                    'Balanced automated section allocation',
+                    $validated['academic_year_id']
+                );
+
+                $secCounts[$bestSecId]['female']++;
+                $secCounts[$bestSecId]['total']++;
+                $distributedCount++;
+            }
+
+            foreach ($others as $enr) {
+                uasort($secCounts, fn($a, $b) => $a['total'] <=> $b['total']);
+                $bestSecId = array_key_first($secCounts);
+                $targetSec = $secCounts[$bestSecId]['model'];
+
+                StudentEnrollment::where('id', $enr->id)->update(['section_id' => $targetSec->id]);
+
+                StudentAllotmentHistory::log(
+                    $enr->st_id,
+                    'section',
+                    'Unassigned',
+                    $targetSec->name,
+                    'Balanced automated section allocation',
+                    $validated['academic_year_id']
+                );
+
+                $secCounts[$bestSecId]['total']++;
+                $distributedCount++;
+            }
+        });
+
+        return back()->with('success', "Auto-balanced and allotted {$distributedCount} students across {$sections->count()} sections with gender balance.");
+    }
+
+    public function exportSections(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $yearId = $request->academic_year_id ?: AcademicYear::current()?->id;
+
+        $enrollments = StudentEnrollment::with(['student', 'class', 'section'])
+            ->whereHas('student')
+            ->where('status', 'active')
+            ->when($yearId, fn($q) => $q->where('academic_year_id', $yearId))
+            ->when($request->filled('class_id'), fn($q) => $q->where('class_id', $request->class_id))
+            ->when($request->filled('section_id'), fn($q) => $q->where('section_id', $request->section_id))
+            ->get();
+
+        $csv = "Admission No,Roll No,Student Name,Class,Section,Gender,Parent Mobile,Status\n";
+        foreach ($enrollments as $enr) {
+            $st = $enr->student;
+            $csv .= sprintf(
+                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                $st->admission_no,
+                $enr->roll_number ?: '',
+                str_replace('"', '""', $st->full_name),
+                $enr->class?->name ?: '',
+                $enr->section?->name ?: 'Unassigned',
+                ucfirst($st->gender ?: ''),
+                $st->father_mobile ?: $st->mobile,
+                ucfirst($enr->status ?: '')
+            );
+        }
+
+        return response($csv)
+            ->header('Content-Type', 'text/csv')
+            ->header('Content-Disposition', 'attachment; filename="section_allotment_' . date('Ymd_His') . '.csv"');
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // ROLL NUMBER ENHANCEMENTS
+    // ═════════════════════════════════════════════════════════════════════════
+
+    public function updateSingleRollNumber(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $validated = $request->validate([
+            'student_id'       => 'required|exists:students,id',
+            'academic_year_id' => 'required|exists:academic_years,id',
+            'roll_number'      => 'required|string|max:20',
+        ]);
+
+        $enrollment = StudentEnrollment::where('student_id', $validated['student_id'])
+            ->where('academic_year_id', $validated['academic_year_id'])
+            ->where('status', 'active')
+            ->firstOrFail();
+
+        // Check uniqueness within the same class, section, and academic year
+        $existing = StudentEnrollment::where('class_id', $enrollment->class_id)
+            ->where('section_id', $enrollment->section_id)
+            ->where('academic_year_id', $validated['academic_year_id'])
+            ->where('id', '!=', $enrollment->id)
+            ->where('roll_number', trim($validated['roll_number']))
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => "Roll number '{$validated['roll_number']}' is already assigned to student (Admn: {$existing->student?->admission_no}) in this section.",
+            ], 422);
+        }
+
+        $oldRoll = $enrollment->roll_number ?: 'None';
+        $newRoll = trim($validated['roll_number']);
+
+        DB::transaction(function () use ($enrollment, $oldRoll, $newRoll, $validated) {
+            $enrollment->update(['roll_number' => $newRoll]);
+            Student::where('id', $validated['student_id'])->update(['roll_number' => $newRoll]);
+
+            StudentAllotmentHistory::log(
+                $validated['student_id'],
+                'roll_number',
+                $oldRoll,
+                $newRoll,
+                'Manual roll number update',
+                $validated['academic_year_id']
+            );
+        });
+
+        return response()->json([
+            'success'     => true,
+            'message'     => 'Roll number updated successfully.',
+            'roll_number' => $newRoll,
+        ]);
+    }
+
+    public function exportRollNumbers(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $yearId = $request->academic_year_id ?: AcademicYear::current()?->id;
+
+        $enrollments = StudentEnrollment::with(['student', 'class', 'section'])
+            ->whereHas('student')
+            ->where('status', 'active')
+            ->when($yearId, fn($q) => $q->where('academic_year_id', $yearId))
+            ->when($request->filled('class_id'), fn($q) => $q->where('class_id', $request->class_id))
+            ->when($request->filled('section_id'), fn($q) => $q->where('section_id', $request->section_id))
+            ->orderBy('class_id')
+            ->orderBy('section_id')
+            ->orderBy('roll_number')
+            ->get();
+
+        $csv = "Roll No,Admission No,Student Name,Class,Section,Gender,Date of Birth\n";
+        foreach ($enrollments as $enr) {
+            $st = $enr->student;
+            $csv .= sprintf(
+                "\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                $enr->roll_number ?: '',
+                $st->admission_no,
+                str_replace('"', '""', $st->full_name),
+                $enr->class?->name ?: '',
+                $enr->section?->name ?: 'Unassigned',
+                ucfirst($st->gender ?: ''),
+                $st->dob ? $st->dob->format('d/m/Y') : ''
+            );
+        }
+
+        return response($csv)
+            ->header('Content-Type', 'text/csv')
+            ->header('Content-Disposition', 'attachment; filename="roll_numbers_' . date('Ymd_His') . '.csv"');
+    }
+
+    public function printRollNumbers(Request $request)
+    {
+        $this->assertCanManageRollNumbers();
+
+        $yearId = $request->academic_year_id ?: AcademicYear::current()?->id;
+        $academicYear = AcademicYear::find($yearId) ?? AcademicYear::current();
+        $class = Classes::find($request->class_id);
+        $section = Section::find($request->section_id);
+
+        $enrollments = StudentEnrollment::with(['student', 'class', 'section'])
+            ->whereHas('student')
+            ->where('status', 'active')
+            ->when($yearId, fn($q) => $q->where('academic_year_id', $yearId))
+            ->when($request->filled('class_id'), fn($q) => $q->where('class_id', $request->class_id))
+            ->when($request->filled('section_id'), fn($q) => $q->where('section_id', $request->section_id))
+            ->orderBy('roll_number')
+            ->get();
+
+        return view('students.print-roll-numbers', compact('enrollments', 'academicYear', 'class', 'section'));
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // PROFILE PRINT & ALLOTMENT HISTORY
+    // ═════════════════════════════════════════════════════════════════════════
+
+    public function printProfile(Request $request, int $id)
+    {
+        $this->assertStudentInScope($request, $id);
+
+        $student = Student::with([
+            'currentEnrollment.class',
+            'currentEnrollment.section',
+            'currentEnrollment.houseGroup',
+            'currentEnrollment.academicYear',
+            'transportRoute',
+            'transportStop',
+        ])->findOrFail($id);
+
+        $academicYear = AcademicYear::current();
+        $documents = StudentDocument::where('student_id', $id)->get();
+
+        return view('students.print-profile', compact('student', 'academicYear', 'documents'));
+    }
+
+    public function auditHistoryJson(Request $request, int $id)
+    {
+        $this->assertStudentInScope($request, $id);
+
+        $histories = StudentAllotmentHistory::with(['changedBy', 'academicYear'])
+            ->where('student_id', $id)
+            ->latest()
+            ->get()
+            ->map(fn($h) => [
+                'id'            => $h->id,
+                'type'          => ucfirst($h->allotment_type),
+                'from'          => $h->from_value ?: '—',
+                'to'            => $h->to_value ?: '—',
+                'reason'        => $h->reason ?: 'Standard update',
+                'changed_by'    => $h->changedBy?->name ?? 'System',
+                'academic_year' => $h->academicYear?->name ?? '—',
+                'date'          => $h->created_at->format('d M Y, h:i A'),
+            ]);
+
+        return response()->json(['success' => true, 'histories' => $histories]);
     }
 }

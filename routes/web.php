@@ -164,8 +164,28 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::get('/roll-numbers',                 [StudentController::class, 'rollNumberManager'])->name('roll-numbers.index');
         Route::post('/roll-numbers/preview',        [StudentController::class, 'previewRollNumbers'])->name('roll-numbers.preview');
         Route::post('/roll-numbers/generate',       [StudentController::class, 'generateRollNumbers'])->name('roll-numbers.generate');
+        Route::post('/roll-numbers/update-single',  [StudentController::class, 'updateSingleRollNumber'])->name('roll-numbers.update-single');
+        Route::get('/roll-numbers/export',          [StudentController::class, 'exportRollNumbers'])->name('roll-numbers.export');
+        Route::get('/roll-numbers/print',           [StudentController::class, 'printRollNumbers'])->name('roll-numbers.print');
         Route::post('/roll-numbers/allocate-sections', [StudentController::class, 'allocateSections'])->name('roll-numbers.allocate-sections');
         Route::post('/promotions/generate-next-year', [StudentController::class, 'generateNextYearRollNumbers'])->name('promotions.generate-next-year');
+
+        // Separate Section Allotment Module
+        Route::get('/section-allotment',             [StudentController::class, 'sectionAllotmentIndex'])->name('section-allotment.index');
+        Route::post('/section-allotment/assign',      [StudentController::class, 'assignSection'])->name('section-allotment.assign');
+        Route::post('/section-allotment/bulk-assign', [StudentController::class, 'bulkAssignSections'])->name('section-allotment.bulk-assign');
+        Route::post('/section-allotment/transfer',    [StudentController::class, 'transferSection'])->name('section-allotment.transfer');
+        Route::post('/section-allotment/auto-balance',[StudentController::class, 'autoBalanceSections'])->name('section-allotment.auto-balance');
+        Route::get('/section-allotment/export',       [StudentController::class, 'exportSections'])->name('section-allotment.export');
+
+        // Separate House Allotment Module
+        Route::get('/house-allotment',               [StudentController::class, 'houseAllotmentIndex'])->name('house-allotment.index');
+        Route::post('/house-allotment/assign',        [StudentController::class, 'assignHouse'])->name('house-allotment.assign');
+        Route::post('/house-allotment/bulk-assign',   [StudentController::class, 'bulkAssignHouse'])->name('house-allotment.bulk-assign');
+        Route::post('/house-allotment/remove',        [StudentController::class, 'removeHouseAllotment'])->name('house-allotment.remove');
+        Route::post('/house-allotment/auto-balance',  [StudentController::class, 'autoBalanceHouses'])->name('house-allotment.auto-balance');
+        Route::post('/house-allotment/manage-houses', [StudentController::class, 'storeOrUpdateHouse'])->name('house-allotment.manage');
+        Route::get('/house-allotment/export',         [StudentController::class, 'exportHouses'])->name('house-allotment.export');
 
         // Static sub-pages
         Route::get('/promotions',          [StudentController::class, 'promotions'])->name('promotions');
@@ -193,6 +213,8 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
 
         // Parameterized routes on {id} (Defined after static routes)
         Route::get('/{id}',            [StudentController::class, 'show'])->name('show')->where('id', '[0-9]+');
+        Route::get('/{id}/print-profile', [StudentController::class, 'printProfile'])->name('print-profile')->where('id', '[0-9]+');
+        Route::get('/{id}/audit-history', [StudentController::class, 'auditHistoryJson'])->name('audit-history')->where('id', '[0-9]+');
         Route::get('/{id}/fee-status', [StudentController::class, 'feeStatusJson'])->name('fee-status')->where('id', '[0-9]+');
         Route::get('/{id}/fee-statement', [FeeController::class, 'studentStatement'])->name('fee-statement')->where('id', '[0-9]+');
         Route::get('/{id}/edit',       [StudentController::class, 'edit'])->middleware('permission:edit students')->name('edit')->where('id', '[0-9]+');

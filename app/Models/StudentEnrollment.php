@@ -8,8 +8,13 @@ class StudentEnrollment extends Model
 {
     protected $fillable = [
         'student_id', 'academic_year_id', 'class_id', 'section_id',
-        'roll_number', 'house', 'status',
+        'roll_number', 'house', 'house_id', 'status',
     ];
+
+    public function houseGroup(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(House::class, 'house_id');
+    }
 
     public function student(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

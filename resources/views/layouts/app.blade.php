@@ -123,6 +123,8 @@
       @endcan
       @can('view students')
       <x-nav-item route="students.index"    icon="users"                   label="Students"    :active="request()->routeIs('students.index*') || request()->routeIs('students.show*')"    :open="$sidebarOpen ?? true" />
+      <x-nav-item route="students.section-allotment.index" icon="users"    label="Section Allotment" :active="str_starts_with($currentRoute, 'students.section-allotment')" :open="$sidebarOpen ?? true" />
+      <x-nav-item route="students.house-allotment.index"   icon="users"    label="House Allotment" :active="str_starts_with($currentRoute, 'students.house-allotment')" :open="$sidebarOpen ?? true" />
       <x-nav-item route="students.id-card-management" icon="identification" label="Student ID Cards" :active="str_starts_with($currentRoute, 'students.id-card')" :open="$sidebarOpen ?? true" />
       @endcan
       @can('view academics')
