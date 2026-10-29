@@ -161,8 +161,11 @@
     </div>
   @endif
 
+  {{-- Print Engine Toolbar for Dynamic Paper Size & Orientation --}}
+  <x-print-paper-controls default-size="a4" default-orientation="portrait" />
+
   {{-- 📜 OFFICIAL LETTERHEAD CONTAINER --}}
-  <div class="official-letterhead-card bg-white rounded-3xl border border-slate-200 shadow-sm p-8 sm:p-12 space-y-6 print:border-0 print:shadow-none print:p-0 print:space-y-4">
+  <div class="official-letterhead-card paper-sheet bg-white rounded-3xl border border-slate-200 shadow-sm p-8 sm:p-12 space-y-6 print:border-0 print:shadow-none print:p-0 print:space-y-4">
 
     {{-- School Header / Letterhead --}}
     <div class="official-letterhead-header text-center border-b-2 border-maroon-900 pb-5 space-y-1.5 print:pb-3 print:space-y-1">

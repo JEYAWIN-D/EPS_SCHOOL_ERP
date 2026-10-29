@@ -1,0 +1,290 @@
+/* ==========================================================================
+   PRINT-DOCUMENT.CSS — Enterprise ERP Document Generation & Print Engine
+   Supports: Content Isolation, Screen Paper Canvas, A1-A5 & CR80 ID Card,
+             Dynamic Margins, and Multi-page Repeating Table Headers.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. GLOBAL PRINT OVERRIDES & CONTENT ISOLATION
+   -------------------------------------------------------------------------- */
+@media print {
+  /* Hide all dashboard chrome, navigation bars, sidebars, buttons, and popups */
+  .no-print,
+  #sidebar,
+  header,
+  nav,
+  aside,
+  button,
+  .print-toolbar,
+  .app-header,
+  .app-sidebar,
+  .toast-container,
+  #toast-container,
+  #dasa-nav-loader {
+    display: none !important;
+  }
+
+  /* Reset document root to prevent flex/grid/overflow clipping */
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force layout wrappers out of screen-locked heights */
+  .app-layout,
+  .main-content,
+  .document-preview-canvas,
+  .flex.h-screen.overflow-hidden,
+  div[class*="h-screen"],
+  .flex-1.flex.flex-col.min-w-0.overflow-hidden,
+  main {
+    display: block !important;
+    height: auto !important;
+    min-height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  /* Strips screen-only margins, shadows, and borders from the paper document */
+  .paper-sheet,
+  .official-letterhead-card {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  /* Text overflow protection */
+  p, h1, h2, h3, h4, th, td, span, div {
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* Remove link URLs injected by some browsers */
+  a[href]:after {
+    content: none !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   2. SCREEN VIEW STYLING (Realistic Paper Simulation)
+   -------------------------------------------------------------------------- */
+@media screen {
+  .document-preview-canvas {
+    background-color: rgba(100, 116, 139, 0.12); /* Subtle matte slate canvas backdrop */
+    padding: 2.5rem 1.5rem;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+  }
+
+  .paper-sheet {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow:
+      0 10px 25px -5px rgba(15, 23, 42, 0.10),
+      0 4px 6px -2px rgba(15, 23, 42, 0.05);
+    margin-bottom: 2.5rem;
+    position: relative;
+    box-sizing: border-box;
+    /* Physical paper simulation padding on screen */
+    padding: 20mm;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  /* Screen Paper Dimensions */
+  /* A5 (148 x 210 mm) */
+  body.paper-a5.portrait .paper-sheet,
+  .paper-a5.portrait.paper-sheet   { width: 148mm; min-height: 210mm; }
+  body.paper-a5.landscape .paper-sheet,
+  .paper-a5.landscape.paper-sheet  { width: 210mm; min-height: 148mm; }
+
+  /* A4 (210 x 297 mm - Standard Default) */
+  body.paper-a4.portrait .paper-sheet,
+  .paper-a4.portrait.paper-sheet,
+  body:not([class*="paper-"]) .paper-sheet { width: 210mm; min-height: 297mm; }
+  body.paper-a4.landscape .paper-sheet,
+  .paper-a4.landscape.paper-sheet  { width: 297mm; min-height: 210mm; }
+
+  /* A3 (297 x 420 mm) */
+  body.paper-a3.portrait .paper-sheet,
+  .paper-a3.portrait.paper-sheet   { width: 297mm; min-height: 420mm; }
+  body.paper-a3.landscape .paper-sheet,
+  .paper-a3.landscape.paper-sheet  { width: 420mm; min-height: 297mm; }
+
+  /* A2 (420 x 594 mm) */
+  body.paper-a2.portrait .paper-sheet,
+  .paper-a2.portrait.paper-sheet   { width: 420mm; min-height: 594mm; }
+  body.paper-a2.landscape .paper-sheet,
+  .paper-a2.landscape.paper-sheet  { width: 594mm; min-height: 420mm; }
+
+  /* A1 (594 x 841 mm) */
+  body.paper-a1.portrait .paper-sheet,
+  .paper-a1.portrait.paper-sheet   { width: 594mm; min-height: 841mm; }
+  body.paper-a1.landscape .paper-sheet,
+  .paper-a1.landscape.paper-sheet  { width: 841mm; min-height: 594mm; }
+
+  /* CR80 ID Card (Standard 54mm x 86mm PVC) */
+  body.paper-id-card.portrait .paper-sheet,
+  .paper-id-card.portrait.paper-sheet {
+    width: 54mm;
+    height: 86mm;
+    min-height: 86mm;
+    padding: 3.5mm;
+    border-radius: 3.18mm; /* Standard CR80 corner radius */
+  }
+  body.paper-id-card.landscape .paper-sheet,
+  .paper-id-card.landscape.paper-sheet {
+    width: 86mm;
+    height: 54mm;
+    min-height: 54mm;
+    padding: 3.5mm;
+    border-radius: 3.18mm;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   3. DYNAMIC @PAGE RULES FOR PAPER SIZES & PHYSICAL MARGINS
+   -------------------------------------------------------------------------- */
+/* A5 (148mm x 210mm) */
+body.paper-a5.portrait  { @page { size: A5 portrait;  margin: 15mm; } }
+body.paper-a5.landscape { @page { size: A5 landscape; margin: 15mm; } }
+
+/* A4 (210mm x 297mm - Default) */
+body.paper-a4.portrait,
+body:not([class*="paper-"]) { @page { size: A4 portrait;  margin: 20mm; } }
+body.paper-a4.landscape     { @page { size: A4 landscape; margin: 20mm; } }
+
+/* A3 (297mm x 420mm) */
+body.paper-a3.portrait  { @page { size: A3 portrait;  margin: 25mm; } }
+body.paper-a3.landscape { @page { size: A3 landscape; margin: 25mm; } }
+
+/* A2 (420mm x 594mm) */
+body.paper-a2.portrait  { @page { size: A2 portrait;  margin: 30mm; } }
+body.paper-a2.landscape { @page { size: A2 landscape; margin: 30mm; } }
+
+/* A1 (594mm x 841mm) */
+body.paper-a1.portrait  { @page { size: A1 portrait;  margin: 35mm; } }
+body.paper-a1.landscape { @page { size: A1 landscape; margin: 35mm; } }
+
+/* --------------------------------------------------------------------------
+   4. BATCH STUDENT ID CARD PRINT ENGINE (CR80 54x86mm)
+   -------------------------------------------------------------------------- */
+body.paper-id-card.portrait,
+body.print-id-card.portrait  { @page { size: 54mm 86mm; margin: 0mm; } }
+
+body.paper-id-card.landscape,
+body.print-id-card.landscape { @page { size: 86mm 54mm; margin: 0mm; } }
+
+.id-card-sheet,
+.print-id-card {
+  page-break-after: always;
+  break-after: page;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+}
+
+@media print {
+  body.paper-id-card .id-card-sheet,
+  body.print-id-card .id-card-sheet,
+  .print-id-card {
+    width: 100vw !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    padding: 2.5mm !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  /* Avoid blank trailing page after the last ID card */
+  .id-card-sheet:last-child,
+  .print-id-card:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. MULTI-PAGE TABLE REPORT RULES (Repeating Headers on Every Page)
+   -------------------------------------------------------------------------- */
+table.printable-report-table,
+table.printable-table,
+.printable-report-container table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10pt;
+  margin-top: 1rem;
+}
+
+/* Forces <thead> to automatically repeat at the top of every new printed page */
+table.printable-report-table thead,
+table.printable-table thead,
+.printable-report-container table thead {
+  display: table-header-group !important;
+}
+
+/* Forces <tfoot> to repeat at the bottom of printed pages if needed */
+table.printable-report-table tfoot,
+table.printable-table tfoot,
+.printable-report-container table tfoot {
+  display: table-footer-group !important;
+}
+
+/* Prevents rows from splitting horizontally across page boundaries */
+table.printable-report-table tr,
+table.printable-table tr,
+.printable-report-container table tr {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+table.printable-report-table th,
+table.printable-report-table td,
+table.printable-table th,
+table.printable-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+table.printable-report-table th,
+table.printable-table th {
+  background-color: #f1f5f9 !important;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 8.5pt;
+  letter-spacing: 0.05em;
+  color: #1e293b;
+}
+
+/* Document Page Breaks & Section Integrity */
+.page-break {
+  page-break-after: always !important;
+  break-after: page !important;
+}
+
+.avoid-break {
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
