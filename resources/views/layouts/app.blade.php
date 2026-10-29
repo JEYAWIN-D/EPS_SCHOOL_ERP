@@ -18,6 +18,56 @@
   {{-- Dynamic Theme Styling --}}
   {!! \App\Models\SchoolSetting::getThemeCssVariables() !!}
 
+  <style>
+    @media print {
+      /* Hide application chrome when printing */
+      #sidebar,
+      header,
+      #toast-container,
+      #dasa-nav-loader,
+      .print\:hidden,
+      .no-print {
+        display: none !important;
+      }
+
+      /* Reset document root & layout wrappers */
+      html, body {
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        color: #0f172a !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .flex.h-screen.overflow-hidden,
+      div[class*="h-screen"],
+      .flex-1.flex.flex-col.min-w-0.overflow-hidden {
+        display: block !important;
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      main {
+        display: block !important;
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        background: #ffffff !important;
+      }
+    }
+  </style>
+
   @stack('head')
   @stack('styles')
 </head>
