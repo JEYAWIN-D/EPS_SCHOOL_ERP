@@ -1437,9 +1437,36 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
 
     // API helpers
     Route::get('/api/sections', function (\Illuminate\Http\Request $r) {
-        $sections = \App\Models\Section::where('class_id', $r->class_id)
-            ->where(function ($q) { $q->whereNull('academic_year_id')->orWhere('academic_year_id', \App\Models\AcademicYear::current()?->id); })
-            ->get(['id', 'name']);
+        $classId = $r->get('class_id');
+        if (!$classId) {
+            return response()->json([]);
+        }
+
+        $currentYearId = \App\Models\AcademicYear::current()?->id;
+
+        $query = \App\Models\Section::where('class_id', $classId)
+            ->where('is_active', true);
+
+        if ($currentYearId) {
+            $yearSpecificExists = (clone $query)->where('academic_year_id', $currentYearId)->exists();
+            if ($yearSpecificExists) {
+                $query->where('academic_year_id', $currentYearId);
+            }
+        }
+
+        $sections = $query->orderBy('name')->get(['id', 'class_id', 'name']);
+        if ($sections->isEmpty()) {
+            $sections = \App\Models\Section::where('class_id', $classId)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'class_id', 'name']);
+        }
+        if ($sections->isEmpty()) {
+            $sections = \App\Models\Section::where('class_id', $classId)
+                ->orderBy('name')
+                ->get(['id', 'class_id', 'name']);
+        }
+
         return response()->json($sections);
     })->name('api.sections');
 

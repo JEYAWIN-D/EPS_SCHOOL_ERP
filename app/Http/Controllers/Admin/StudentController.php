@@ -433,7 +433,8 @@ class StudentController extends Controller
         if ($request->enquiry_id) {
             $prefill = \App\Models\AdmissionEnquiry::find($request->enquiry_id);
         }
-        return view('students.create', compact('classes', 'academicYear', 'prefill'));
+        $houses       = \App\Models\House::where('is_active', true)->orderBy('name')->get();
+        return view('students.create', compact('classes', 'academicYear', 'prefill', 'houses'));
     }
 
     public function store(Request $request)

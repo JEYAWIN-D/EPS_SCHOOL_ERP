@@ -3,7 +3,7 @@
 @section('title', 'Admit Student')
 
 @section('content')
-<div class="max-w-4xl mx-auto space-y-6" x-data="admitForm()">
+<div class="max-w-4xl mx-auto space-y-6" x-data="admitForm()" x-init="init()">
 
   <nav class="text-sm text-slate-400 flex items-center gap-1.5 mb-1">
     <a href="{{ route('students.index') }}" class="hover:text-slate-600">Students</a>
@@ -190,14 +190,18 @@
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label class="label">Class <span class="text-red-500">*</span></label>
-          <select name="class_id" class="select @error('class_id') input-error @enderror"
-                  @change="loadSections($event.target.value)">
+          <select name="class_id" id="class_select" required
+                  class="select @error('class_id') input-error @enderror"
+                  x-model="selectedClassId"
+                  @change="onClassChange($event.target.value)">
             <option value="">Select class</option>
             @foreach($classes as $cls)
-              <option value="{{ $cls->id }}" @selected(old('class_id') == $cls->id)>{{ $cls->name }}</option>
+              <option value="{{ $cls->id }}" @selected(old('class_id', request('class_id')) == $cls->id)>{{ $cls->name }}</option>
             @endforeach
           </select>
-          @error('class_id') <p class="field-error">{{ $message }}</p> @enderror
+          @error('class_id')
+            <p id="class_id_server_err" class="field-error" x-show="!selectedClassId">{{ $message }}</p>
+          @enderror
         </div>
         <div>
           <label class="label">Section</label>
@@ -211,7 +215,16 @@
         </div>
         <div>
           <label class="label">House</label>
-          <input type="text" name="house" value="{{ old('house') }}" class="input" placeholder="e.g. Red, Blue">
+          @if(isset($houses) && $houses->count() > 0)
+            <select name="house" class="select">
+              <option value="">Select house (optional)</option>
+              @foreach($houses as $h)
+                <option value="{{ $h->name }}" @selected(old('house') === $h->name || old('house') === explode(' ', $h->name)[0])>{{ $h->name }}</option>
+              @endforeach
+            </select>
+          @else
+            <input type="text" name="house" value="{{ old('house') }}" class="input" placeholder="e.g. Red, Blue">
+          @endif
         </div>
       </div>
     </div>
@@ -235,19 +248,49 @@ function admitForm() {
     residentialAddress: '{{ old('residential_address') }}',
     permanentAddress: '{{ old('permanent_address') }}',
     isDisabled: {{ old('is_disabled') ? 'true' : 'false' }},
+    selectedClassId: '{{ old('class_id', request('class_id', '')) }}',
+    selectedSectionId: '{{ old('section_id', request('section_id', '')) }}',
     copyAddress() {
       this.permanentAddress = this.residentialAddress;
     },
-    async loadSections(classId) {
+    init() {
+      if (this.selectedClassId) {
+        this.loadSections(this.selectedClassId, this.selectedSectionId);
+      }
+    },
+    onClassChange(classId) {
+      this.selectedClassId = classId;
+      const srvErr = document.getElementById('class_id_server_err');
+      if (srvErr) srvErr.style.display = 'none';
+      this.loadSections(classId, '');
+    },
+    async loadSections(classId, preselectedSection = '') {
       const sel = document.getElementById('section_select');
-      if (!classId) { sel.innerHTML = '<option value="">Select class first</option>'; return; }
-      sel.innerHTML = '<option value="">Loading…</option>';
+      if (!sel) return;
+      if (!classId) {
+        sel.innerHTML = '<option value="">Select class first</option>';
+        return;
+      }
+      sel.innerHTML = '<option value="">Loading sections…</option>';
       try {
-        const res = await fetch(`/api/sections?class_id=${classId}`);
+        const res = await fetch(`/api/sections?class_id=${encodeURIComponent(classId)}`);
+        if (!res.ok) throw new Error('API returned ' + res.status);
         const data = await res.json();
-        sel.innerHTML = '<option value="">Select section</option>' +
-          data.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-      } catch {
+        if (!Array.isArray(data) || data.length === 0) {
+          sel.innerHTML = '<option value="">No sections found</option>';
+          return;
+        }
+        let html = '<option value="">Select section</option>';
+        data.forEach(s => {
+          const isSel = (preselectedSection && String(preselectedSection) === String(s.id)) ? ' selected' : '';
+          html += `<option value="${s.id}"${isSel}>Section ${s.name}</option>`;
+        });
+        sel.innerHTML = html;
+        if (preselectedSection) {
+          sel.value = preselectedSection;
+        }
+      } catch (err) {
+        console.error('Failed to load sections:', err);
         sel.innerHTML = '<option value="">No sections found</option>';
       }
     }
