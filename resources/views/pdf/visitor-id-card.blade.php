@@ -32,16 +32,16 @@
      LANDSCAPE VISITOR PASS (85.6mm x 53.98mm)
   ══════════════════════════════════════════════════════════════════ */
   .card-landscape {
-    width: 100%;
-    height: 100%;
+    width: 240.5pt;
+    height: 151pt;
     box-sizing: border-box;
     border-radius: 3.5mm;
     overflow: hidden;
     background: #ffffff;
-    border: 1.5px solid #b91c1c;
+    border: 1pt solid #b91c1c;
     position: relative;
     text-align: left;
-    margin: 0;
+    margin: 0 auto;
     page-break-inside: avoid;
     page-break-after: avoid;
   }
@@ -147,16 +147,16 @@
      PORTRAIT VISITOR PASS (53.98mm x 85.6mm)
   ══════════════════════════════════════════════════════════════════ */
   .card-portrait {
-    width: 100%;
-    height: 100%;
+    width: 151pt;
+    height: 240.5pt;
     box-sizing: border-box;
     border-radius: 3.5mm;
     overflow: hidden;
     background: #ffffff;
-    border: 1.5px solid #b91c1c;
+    border: 1pt solid #b91c1c;
     position: relative;
     text-align: center;
-    margin: 0;
+    margin: 0 auto;
     page-break-inside: avoid;
     page-break-after: avoid;
   }

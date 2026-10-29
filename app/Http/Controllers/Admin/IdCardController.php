@@ -647,12 +647,12 @@ class IdCardController extends Controller
         $format = $request->get('format', 'cr80'); // cr80 or a4
         if ($format === 'cr80') {
             if ($orientation === 'landscape') {
-                $pdf->setPaper([0, 0, 242.65, 153.01], 'landscape'); // 85.6mm x 53.98mm in pt (approx 242.65 x 153.01 pt)
+                $pdf->setPaper([0, 0, 242.65, 153.01], 'portrait'); // 85.6mm x 53.98mm canvas in pt
             } else {
-                $pdf->setPaper([0, 0, 153.01, 242.65], 'portrait');
+                $pdf->setPaper([0, 0, 153.01, 242.65], 'portrait'); // 53.98mm x 85.6mm canvas in pt
             }
         } else {
-            $pdf->setPaper('A4', 'portrait');
+            $pdf->setPaper('A4', $orientation);
         }
 
         $cleanPass = preg_replace('/[^A-Za-z0-9]/', '', $visitor->pass_number ?: ('VP' . $visitor->id));
