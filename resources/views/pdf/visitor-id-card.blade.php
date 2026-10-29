@@ -5,30 +5,45 @@
 <title>Visitor Pass — {{ $visitor->pass_number }}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
+  
+  @page {
+    margin: 0;
+    padding: 0;
+    @if($orientation === 'portrait')
+      size: 53.98mm 85.6mm;
+    @else
+      size: 85.6mm 53.98mm;
+    @endif
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
     font-family: DejaVu Sans, Helvetica, Arial, sans-serif;
     font-size: 8px;
     color: #0f172a;
     background: #ffffff;
   }
 
-  @page {
-    margin: 3mm;
-  }
-
   /* ═════════════════════════════════════════════════════════════════
      LANDSCAPE VISITOR PASS (85.6mm x 53.98mm)
   ══════════════════════════════════════════════════════════════════ */
   .card-landscape {
-    width: 85.6mm;
-    height: 53.98mm;
-    border-radius: 4mm;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-radius: 3.5mm;
     overflow: hidden;
     background: #ffffff;
-    border: 2px solid #b91c1c;
+    border: 1.5px solid #b91c1c;
     position: relative;
     text-align: left;
-    margin: 0 auto;
+    margin: 0;
+    page-break-inside: avoid;
+    page-break-after: avoid;
   }
 
   .v-security-band {
@@ -132,15 +147,18 @@
      PORTRAIT VISITOR PASS (53.98mm x 85.6mm)
   ══════════════════════════════════════════════════════════════════ */
   .card-portrait {
-    width: 53.98mm;
-    height: 85.6mm;
-    border-radius: 4mm;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-radius: 3.5mm;
     overflow: hidden;
     background: #ffffff;
-    border: 2px solid #b91c1c;
+    border: 1.5px solid #b91c1c;
     position: relative;
     text-align: center;
-    margin: 0 auto;
+    margin: 0;
+    page-break-inside: avoid;
+    page-break-after: avoid;
   }
 
   .vp-band {

@@ -17,12 +17,14 @@
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
         @if($employee->photo)
-          <img src="{{ asset('storage/'.$employee->photo) }}" alt="{{ $employee->full_name }}" class="w-16 h-16 rounded-2xl object-cover ring-2 ring-slate-100 shadow-md">
-        @else
-          <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-indigo-700 flex items-center justify-center flex-shrink-0 shadow-md text-white font-black text-xl">
-            {{ strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1)) }}
-          </div>
+          <img src="{{ asset('storage/'.$employee->photo) }}" alt="{{ $employee->full_name }}" 
+               class="w-16 h-16 rounded-2xl object-cover ring-2 ring-slate-100 shadow-md"
+               onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
         @endif
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-blue-600 to-indigo-700 flex items-center justify-center flex-shrink-0 shadow-md text-white font-black text-xl"
+             style="{{ $employee->photo ? 'display: none;' : '' }}">
+          {{ strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1)) }}
+        </div>
 
         <div>
           <div class="flex items-center gap-2 flex-wrap">

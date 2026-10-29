@@ -5,7 +5,8 @@
 @section('content')
 <div class="space-y-6 max-w-7xl mx-auto" x-data="{ 
   viewStyle: '{{ $style ?? 'landscape' }}', 
-  activeSide: '{{ $side ?? 'both' }}' 
+  activeSide: '{{ $side ?? 'both' }}',
+  selectedBatch: '1'
 }">
 
   {{-- ── Top Navigation & Category Filter Tabs ────────────────── --}}
@@ -72,14 +73,35 @@
           </button>
         </div>
 
+        @php
+          $totalCount = $filteredEmployees->count();
+          $batchLimit = 24;
+          $totalBatches = ceil($totalCount / $batchLimit);
+        @endphp
+
+        @if($totalBatches > 1)
+          <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <span class="text-[10px] font-bold text-slate-500 uppercase px-1.5">Batch</span>
+            <select x-model="selectedBatch" class="text-xs font-bold bg-white text-slate-800 border border-slate-200 rounded-lg px-2 py-1 outline-none cursor-pointer">
+              @for($b = 1; $b <= $totalBatches; $b++)
+                @php
+                  $bStart = ($b - 1) * $batchLimit + 1;
+                  $bEnd = min($b * $batchLimit, $totalCount);
+                @endphp
+                <option value="{{ $b }}">Batch {{ $b }} ({{ $bStart }}–{{ $bEnd }})</option>
+              @endfor
+            </select>
+          </div>
+        @endif
+
         {{-- Bulk PDF Download Button --}}
-        <a :href="'{{ route('hr.id-cards.download') }}?category={{ $categoryFilter }}&department_id={{ $deptFilter }}&search={{ urlencode($search ?? '') }}&style=' + viewStyle + '&side=' + activeSide"
+        <a :href="'{{ route('hr.id-cards.download') }}?category={{ $categoryFilter }}&department_id={{ $deptFilter }}&search={{ urlencode($search ?? '') }}&style=' + viewStyle + '&side=' + activeSide + '&batch=' + selectedBatch + '&limit=24'"
            target="_blank"
            class="btn btn-primary btn-sm flex items-center gap-2 text-xs font-black shadow-md bg-rose-900 hover:bg-rose-800 text-white px-3.5 py-2 rounded-xl transition cursor-pointer">
           <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
-          <span>Download PDF ({{ $filteredEmployees->count() }})</span>
+          <span>Download PDF (<span x-text="selectedBatch && {{ $totalBatches }} > 1 ? 'Batch ' + selectedBatch : '{{ $totalCount }}'"></span>)</span>
         </a>
       </div>
     </div>

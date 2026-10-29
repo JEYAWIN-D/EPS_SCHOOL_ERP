@@ -126,6 +126,11 @@ class AttendanceController extends Controller
                 $sections = Section::where('class_id', $classId)->where('is_active', true)->orderBy('name', 'asc')->get();
             }
 
+            // If sectionId is invalid or belongs to a different class, reset so it defaults to this class's section
+            if ($sectionId && $sections->isNotEmpty() && !$sections->pluck('id')->contains((int)$sectionId)) {
+                $sectionId = null;
+            }
+
             // If no section selected but sections exist, default to first section
             if (!$sectionId && $sections->isNotEmpty()) {
                 $sectionId = $sections->first()->id;

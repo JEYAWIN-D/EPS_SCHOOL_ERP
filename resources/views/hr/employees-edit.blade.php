@@ -384,7 +384,7 @@
           </label>
           <div class="flex items-center gap-4">
             @if($employee->photo)
-              <img src="{{ asset('storage/'.$employee->photo) }}" class="w-12 h-12 rounded-xl object-cover border border-slate-200" alt="Current Photo">
+              <img src="{{ asset('storage/'.$employee->photo) }}" class="w-12 h-12 rounded-xl object-cover border border-slate-200" alt="Current Photo" onerror="this.style.display='none';">
             @endif
             <div class="flex-1">
               <input type="file" id="photo" name="photo" accept="image/*" class="input text-xs @error('photo') border-rose-500 ring-2 ring-rose-200 @enderror">

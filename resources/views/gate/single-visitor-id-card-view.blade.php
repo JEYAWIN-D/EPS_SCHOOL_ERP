@@ -8,8 +8,44 @@
   checkoutModal: false
 }">
 
+  <style>
+    @media print {
+      /* Hide all dashboard UI, sidebars, headers, action buttons */
+      header, nav, aside, .app-sidebar, .app-header, .no-print, [role="navigation"],
+      .visitor-action-bar, .visitor-meta-panel, .visitor-spec-header {
+        display: none !important;
+      }
+      body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .visitor-card-stage-container {
+        padding: 0 !important;
+        margin: 0 auto !important;
+        background: transparent !important;
+        border: none !important;
+        min-height: auto !important;
+      }
+      .visitor-preview-stage {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+      .visitor-print-target {
+        box-shadow: none !important;
+        margin: 0 auto !important;
+        page-break-inside: avoid !important;
+        page-break-after: avoid !important;
+      }
+      @page {
+        margin: 8mm;
+      }
+    }
+  </style>
+
   {{-- Top Navigation & Action Bar --}}
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+  <div class="visitor-action-bar flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
     <div class="flex items-center gap-3">
       <a href="{{ route('gate.visitor-id-card-management') }}" class="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
@@ -68,15 +104,15 @@
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
     
     {{-- Card Preview Stage --}}
-    <div class="lg:col-span-8 bg-slate-900/5 p-6 sm:p-10 rounded-3xl border border-slate-200 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden">
+    <div class="lg:col-span-8 bg-slate-900/5 p-6 sm:p-10 rounded-3xl border border-slate-200 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden visitor-card-stage-container">
       
-      <div class="absolute top-3 left-4 text-[10px] font-mono text-slate-400 font-bold tracking-wider">
+      <div class="absolute top-3 left-4 text-[10px] font-mono text-slate-400 font-bold tracking-wider visitor-spec-header">
         VISITOR CREDENTIAL SPEC • CR80 (85.60 × 53.98 mm)
       </div>
 
       {{-- LANDSCAPE VISITOR PASS --}}
-      <div x-show="orientation === 'landscape'" style="display:none" class="w-full max-w-[500px]">
-        <div class="w-full aspect-[85.6/53.98] bg-white rounded-2xl shadow-2xl border-2 border-[#b91c1c] overflow-hidden flex flex-col justify-between relative transition-all duration-300">
+      <div x-show="orientation === 'landscape'" style="display:none" class="w-full max-w-[500px] visitor-preview-stage">
+        <div class="w-full aspect-[85.6/53.98] bg-white rounded-2xl shadow-2xl border-2 border-[#b91c1c] overflow-hidden flex flex-col justify-between relative transition-all duration-300 visitor-print-target">
           
           {{-- Security Band --}}
           <div class="h-6 bg-[#b91c1c] text-white text-[10px] font-black uppercase tracking-widest text-center flex items-center justify-center shadow-xs">
@@ -154,8 +190,8 @@
       </div>
 
       {{-- PORTRAIT VISITOR PASS --}}
-      <div x-show="orientation === 'portrait'" style="display:none" class="w-full max-w-[340px]">
-        <div class="w-full aspect-[53.98/85.6] bg-white rounded-2xl shadow-2xl border-2 border-[#b91c1c] overflow-hidden flex flex-col justify-between text-center relative transition-all duration-300">
+      <div x-show="orientation === 'portrait'" style="display:none" class="w-full max-w-[340px] visitor-preview-stage">
+        <div class="w-full aspect-[53.98/85.6] bg-white rounded-2xl shadow-2xl border-2 border-[#b91c1c] overflow-hidden flex flex-col justify-between text-center relative transition-all duration-300 visitor-print-target">
           
           <div class="bg-[#b91c1c] text-white py-1 px-2 text-[9px] font-black uppercase tracking-wider">
             ★ VISITOR GATE PASS ★
@@ -217,7 +253,7 @@
     </div>
 
     {{-- Metadata & Actions Sidebar --}}
-    <div class="lg:col-span-4 space-y-5">
+    <div class="lg:col-span-4 space-y-5 visitor-meta-panel">
       <div class="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Pass Security Parameters</h3>
         

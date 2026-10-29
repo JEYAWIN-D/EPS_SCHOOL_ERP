@@ -242,18 +242,20 @@
               <div class="flex items-start justify-between gap-3 pt-1">
                 <div class="flex items-center gap-3">
                   @if($emp->photo)
-                    <img src="{{ asset('storage/'.$emp->photo) }}" alt="{{ $emp->full_name }}" class="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-100 shadow-sm flex-shrink-0">
-                  @else
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br 
-                         {{ strtolower($emp->employee_type) === 'teaching' ? 'from-indigo-500 to-blue-600' : '' }}
-                         {{ strtolower($emp->employee_type) === 'non_teaching' ? 'from-purple-500 to-indigo-600' : '' }}
-                         {{ strtolower($emp->employee_type) === 'driver' ? 'from-amber-500 to-orange-600' : '' }}
-                         {{ strtolower($emp->employee_type) === 'cleaner' ? 'from-teal-500 to-emerald-600' : '' }}
-                         {{ in_array(strtolower($emp->employee_type), ['nanny', 'naani']) ? 'from-rose-500 to-pink-600' : '' }}
-                         flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0">
-                      {{ strtoupper(substr($emp->first_name, 0, 1) . substr($emp->last_name, 0, 1)) }}
-                    </div>
+                    <img src="{{ asset('storage/'.$emp->photo) }}" alt="{{ $emp->full_name }}" 
+                         class="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-100 shadow-sm flex-shrink-0"
+                         onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';">
                   @endif
+                  <div class="w-12 h-12 rounded-xl bg-gradient-to-br 
+                       {{ strtolower($emp->employee_type) === 'teaching' ? 'from-indigo-500 to-blue-600' : '' }}
+                       {{ strtolower($emp->employee_type) === 'non_teaching' ? 'from-purple-500 to-indigo-600' : '' }}
+                       {{ strtolower($emp->employee_type) === 'driver' ? 'from-amber-500 to-orange-600' : '' }}
+                       {{ strtolower($emp->employee_type) === 'cleaner' ? 'from-teal-500 to-emerald-600' : '' }}
+                       {{ in_array(strtolower($emp->employee_type), ['nanny', 'naani']) ? 'from-rose-500 to-pink-600' : '' }}
+                       flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0"
+                       style="{{ $emp->photo ? 'display: none;' : '' }}">
+                    {{ strtoupper(substr($emp->first_name, 0, 1) . substr($emp->last_name, 0, 1)) }}
+                  </div>
 
                   <div class="min-w-0">
                     <h3 class="font-bold text-slate-800 text-sm truncate group-hover:text-indigo-600 transition-colors">{{ $emp->full_name }}</h3>

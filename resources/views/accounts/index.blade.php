@@ -11,6 +11,25 @@ function accountManagementData() {
     detailModalOpen: false,
     selectedTxn: null,
     txnList: @json($paginator->items()),
+    init() {
+      if (window.location.hash === '#transaction-logs') {
+        this.$nextTick(() => {
+          const el = document.getElementById('transaction-logs');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+      }
+    },
+    filterAccountAndScroll(acc) {
+      const currentAcc = '{{ $accountFilter }}';
+      if (currentAcc === acc) {
+        const el = document.getElementById('transaction-logs');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        window.location.href = "{{ route('accounts.index') }}?account=" + acc + "&date_filter=all#transaction-logs";
+      }
+    },
     viewTxnByIndex(idx) {
       this.selectedTxn = this.txnList[idx] || null;
       this.detailModalOpen = true;
@@ -208,7 +227,9 @@ function accountManagementData() {
             <span>Today: <strong class="text-emerald-700 font-bold">+₹{{ number_format($todayUpiInflow) }}</strong></span>
             <span>Out: <strong class="text-slate-600 font-bold">₹{{ number_format($todayUpiOutflow) }}</strong></span>
           </div>
-          <a href="{{ route('accounts.index', ['account' => 'upi']) }}" class="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-0.5">
+          <a href="{{ route('accounts.index', ['account' => 'upi', 'date_filter' => 'all']) }}#transaction-logs"
+             @click.prevent="filterAccountAndScroll('upi')"
+             class="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-0.5 cursor-pointer">
             <span>View Logs</span> &rarr;
           </a>
         </div>
@@ -245,7 +266,9 @@ function accountManagementData() {
             <span>Today: <strong class="text-emerald-700 font-bold">+₹{{ number_format($todayBox1Inflow) }}</strong></span>
             <span>Out: <strong class="text-slate-600 font-bold">₹{{ number_format($todayBox1Outflow) }}</strong></span>
           </div>
-          <a href="{{ route('accounts.index', ['account' => 'cash_box_1']) }}" class="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-0.5">
+          <a href="{{ route('accounts.index', ['account' => 'cash_box_1', 'date_filter' => 'all']) }}#transaction-logs"
+             @click.prevent="filterAccountAndScroll('cash_box_1')"
+             class="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-0.5 cursor-pointer">
             <span>View Logs</span> &rarr;
           </a>
         </div>
@@ -282,7 +305,9 @@ function accountManagementData() {
             <span>Today: <strong class="text-emerald-700 font-bold">+₹{{ number_format($todayBox2Inflow) }}</strong></span>
             <span>Out: <strong class="text-slate-600 font-bold">₹{{ number_format($todayBox2Outflow) }}</strong></span>
           </div>
-          <a href="{{ route('accounts.index', ['account' => 'cash_box_2']) }}" class="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-0.5">
+          <a href="{{ route('accounts.index', ['account' => 'cash_box_2', 'date_filter' => 'all']) }}#transaction-logs"
+             @click.prevent="filterAccountAndScroll('cash_box_2')"
+             class="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-0.5 cursor-pointer">
             <span>View Logs</span> &rarr;
           </a>
         </div>
@@ -291,7 +316,7 @@ function accountManagementData() {
   </div>
 
   {{-- ── 4. Unified Transaction Ledger & Activity Logs ────────────── --}}
-  <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-4 overflow-hidden">
+  <div id="transaction-logs" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-4 overflow-hidden scroll-mt-6">
     {{-- Header & Search Filter Bar --}}
     <div class="p-5 border-b border-slate-100 space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -307,7 +332,8 @@ function accountManagementData() {
       </div>
 
       {{-- Filter Controls Form --}}
-      <form method="GET" action="{{ route('accounts.index') }}" class="space-y-3 pt-1">
+      <form id="account-filter-form" method="GET" action="{{ route('accounts.index') }}" class="space-y-3 pt-1">
+        <input type="hidden" name="date_filter" value="{{ $dateFilter }}">
         {{-- Quick Date Filter Pills --}}
         <div class="flex flex-wrap items-center gap-2">
           @php
@@ -332,7 +358,7 @@ function accountManagementData() {
           {{-- Account Filter --}}
           <div class="lg:col-span-3">
             <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Account / Drawer</label>
-            <select name="account" onchange="this.form.submit()"
+            <select id="account-select-dropdown" name="account" onchange="this.form.submit()"
                     class="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500 outline-none transition cursor-pointer">
               <option value="all" {{ $accountFilter === 'all' ? 'selected' : '' }}>All Accounts</option>
               <option value="upi" {{ $accountFilter === 'upi' ? 'selected' : '' }}>UPI Digital Account</option>

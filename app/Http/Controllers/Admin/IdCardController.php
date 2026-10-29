@@ -412,27 +412,52 @@ class IdCardController extends Controller
     public function bulkDownloadStaffPdf(Request $request)
     {
         ini_set('memory_limit', '512M');
-        set_time_limit(240);
+        set_time_limit(180);
 
         $deptFilter = $request->get('department_id');
-        $orientation = in_array($request->get('orientation'), ['portrait', 'landscape']) ? $request->get('orientation') : 'landscape';
+        $orientation = $request->get('orientation') ?? $request->get('style', 'landscape');
+        $orientation = in_array($orientation, ['portrait', 'landscape']) ? $orientation : 'landscape';
         $side = in_array($request->get('side'), ['both', 'front', 'back']) ? $request->get('side') : 'both';
-        $staffIds = $request->get('staff_ids');
+        $staffIds = $request->get('staff_ids') ?? $request->get('ids');
+        $category = $request->get('category');
+        $search = trim((string) $request->get('search', ''));
+        $batch = max(1, (int) $request->get('batch', 1));
+        $limit = max(1, min(50, (int) $request->get('limit', 24))); // Default 24 cards per batch to avoid Nginx 504 timeouts
 
         $query = Employee::with('department')->where('is_active', true);
 
         if (!empty($staffIds)) {
-            $ids = is_array($staffIds) ? $staffIds : explode(',', $staffIds);
+            $ids = is_array($staffIds) ? $staffIds : explode(',', (string) $staffIds);
             $query->whereIn('id', $ids);
-        } elseif ($deptFilter) {
-            $query->where('department_id', $deptFilter);
+        } else {
+            if ($category && $category !== 'all') {
+                $query->where('employee_type', $category);
+            }
+            if ($deptFilter) {
+                $query->where('department_id', $deptFilter);
+            }
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere('employee_code', 'like', "%{$search}%")
+                      ->orWhere('designation', 'like', "%{$search}%");
+                });
+            }
+        }
+
+        $totalMatching = (clone $query)->count();
+        if ($totalMatching === 0) {
+            return back()->with('error', 'No eligible staff records found for ID card printing.');
+        }
+
+        // Apply batch pagination if downloading bulk without specific individual IDs
+        if (empty($staffIds) && $totalMatching > $limit) {
+            $offset = ($batch - 1) * $limit;
+            $query->skip($offset)->take($limit);
         }
 
         $employees = $query->orderBy('first_name')->get();
-
-        if ($employees->isEmpty()) {
-            return back()->with('error', 'No eligible staff records found for ID card printing.');
-        }
 
         $template = IdCardTemplate::where('card_type', IdCard::TYPE_STAFF)
             ->where('orientation', $orientation)
@@ -442,9 +467,25 @@ class IdCardController extends Controller
         $config = $template?->configuration_json ?? IdCardTemplate::getDefaultConfig('staff', $orientation);
         $school = SchoolSetting::first();
 
+        // Preload existing cards in one bulk query
+        $empIds = $employees->pluck('id')->all();
+        $existingCards = IdCard::where('linked_entity_type', Employee::class)
+            ->whereIn('linked_entity_id', $empIds)
+            ->whereIn('status', [IdCard::STATUS_ACTIVE, IdCard::STATUS_ISSUED, IdCard::STATUS_GENERATED])
+            ->get()
+            ->keyBy('linked_entity_id');
+
         $cardsData = [];
         foreach ($employees as $emp) {
-            $card = $this->idCardService->getOrCreateCardForEmployee($emp, $template?->id, $orientation, $side);
+            $card = $existingCards->get($emp->id);
+            if (!$card) {
+                $card = $this->idCardService->getOrCreateCardForEmployee($emp, $template?->id, $orientation, $side);
+            } elseif ($card->orientation !== $orientation || $card->side !== $side) {
+                $card->orientation = $orientation;
+                $card->side = $side;
+                $card->saveQuietly();
+            }
+
             $barcodeVal = $card->barcode_value ?: ('EMP-' . ($emp->employee_code ?: $emp->id));
             $barcodeSvg = $this->idCardService->generateBarcodeSvg($barcodeVal, 24, 2, '#0f172a');
             $cardsData[] = [
@@ -459,6 +500,9 @@ class IdCardController extends Controller
             'cardsData', 'school', 'orientation', 'side', 'config'
         ));
 
+        $pdf->setOption('isRemoteEnabled', false);
+        $pdf->setOption('isHtml5ParserEnabled', true);
+
         if ($orientation === 'landscape') {
             $pdf->setPaper('A4', 'landscape');
         } else {
@@ -468,7 +512,13 @@ class IdCardController extends Controller
         IdCardGenerationJob::create([
             'job_type'          => 'staff_bulk',
             'requested_by'      => Auth::id(),
-            'filters_json'      => ['department_id' => $deptFilter, 'orientation' => $orientation, 'side' => $side],
+            'filters_json'      => [
+                'category'      => $category,
+                'department_id' => $deptFilter,
+                'orientation'   => $orientation,
+                'side'          => $side,
+                'batch'         => $batch,
+            ],
             'total_records'     => count($cardsData),
             'processed_records' => count($cardsData),
             'failed_records'    => 0,
@@ -476,7 +526,9 @@ class IdCardController extends Controller
             'completed_at'      => now(),
         ]);
 
-        return $pdf->download("staff-id-cards-{$orientation}-{$side}.pdf");
+        $catLabel = $category ?: 'all-staff';
+        $batchLabel = ($totalMatching > $limit && empty($staffIds)) ? "-batch-{$batch}" : '';
+        return $pdf->download("staff-id-cards-{$catLabel}-{$orientation}-{$side}{$batchLabel}.pdf");
     }
 
     /* ═════════════════════════════════════════════════════════════════════════
