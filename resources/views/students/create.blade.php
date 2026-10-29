@@ -273,7 +273,12 @@ function admitForm() {
       }
       sel.innerHTML = '<option value="">Loading sections…</option>';
       try {
-        const res = await fetch(`/api/sections?class_id=${encodeURIComponent(classId)}`);
+        const res = await fetch(`/api/sections?class_id=${encodeURIComponent(classId)}`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
         if (!res.ok) throw new Error('API returned ' + res.status);
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) {

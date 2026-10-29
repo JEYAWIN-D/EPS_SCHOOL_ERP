@@ -435,7 +435,7 @@
         <span class="badge-blue text-[11px] sm:text-xs cursor-default hidden xs:inline-flex" title="Academic Year">2025-2026</span>
 
         {{-- Role badge --}}
-        @php $roleName = auth()->user()->getRoleNames()->first(); @endphp
+        @php $roleName = auth()->user()?->getRoleNames()?->first(); @endphp
         @if($roleName)
           <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 capitalize">
             {{ str_replace('_', ' ', $roleName) }}
@@ -487,12 +487,13 @@
         </div>
 
         {{-- Topbar User Avatar Dropdown (With Log Out) --}}
+        @auth
         <div class="relative" @click.outside="topUserOpen = false">
           <button type="button"
                   @click="topUserOpen = !topUserOpen; if(topUserOpen) notifOpen = false"
                   class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center cursor-pointer ring-2 ring-indigo-100 hover:ring-indigo-300 transition-all select-none flex-shrink-0 focus:outline-hidden"
-                  title="{{ auth()->user()->name }} — Click for menu">
-            <span class="text-white text-xs font-bold">{{ strtoupper(substr(auth()->user()->name, 0, 2)) }}</span>
+                  title="{{ auth()->user()?->name }} — Click for menu">
+            <span class="text-white text-xs font-bold">{{ strtoupper(substr(auth()->user()?->name ?? 'U', 0, 2)) }}</span>
           </button>
 
           {{-- User Menu Box --}}
@@ -506,8 +507,8 @@
                class="absolute right-0 top-full mt-2 z-50 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
                style="display:none">
             <div class="px-4 py-3 bg-slate-50 border-b border-slate-100">
-              <p class="text-xs font-bold text-slate-900 truncate">{{ auth()->user()->name }}</p>
-              <p class="text-xs text-slate-500 truncate mt-0.5">{{ auth()->user()->email }}</p>
+              <p class="text-xs font-bold text-slate-900 truncate">{{ auth()->user()?->name }}</p>
+              <p class="text-xs text-slate-500 truncate mt-0.5">{{ auth()->user()?->email }}</p>
               <span class="inline-block mt-1.5 px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold capitalize">
                 {{ str_replace('_', ' ', $roleName ?? 'User') }}
               </span>
@@ -541,6 +542,9 @@
             </div>
           </div>
         </div>
+        @else
+        <a href="{{ route('login') }}" class="btn-primary text-xs px-3 py-1.5 font-semibold">Sign In</a>
+        @endauth
 
       </div>
     </header>

@@ -1976,7 +1976,7 @@ class FeeController extends Controller
             $classId = $enrollment?->class_id;
             $dues = FeeStructure::where('class_id', $classId)
                 ->where('academic_year_id', $currentYear->id)
-                ->where('is_active', true)
+                ->whereHas('feeHead', fn($q) => $q->where('is_active', true))
                 ->with('feeHead')
                 ->get();
 

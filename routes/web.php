@@ -1283,7 +1283,10 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
             // Visitor ID Card Management Submenu & Studio
             Route::get('/visitor-id-card-management', [IdCardController::class, 'visitorIndex'])->name('visitor-id-card-management');
             Route::get('/visitor/{id}/id-card-studio', [IdCardController::class, 'singleVisitor'])->name('visitor.id-card.studio');
+            Route::get('/visitor/{id}/id-card',        [IdCardController::class, 'singleVisitor'])->name('visitors.id-card');
+            Route::get('/visitor/{id}/studio',         [IdCardController::class, 'singleVisitor'])->name('visitor-id-card.studio');
             Route::get('/visitor/{id}/id-card-pdf',    [IdCardController::class, 'downloadVisitorPdf'])->name('visitor.id-card.pdf');
+            Route::get('/visitor/{id}/pdf',            [IdCardController::class, 'downloadVisitorPdf'])->name('visitor-id-card.pdf');
         });
 
         // Host Approval & Rejection endpoints (accessible by authorised gatekeeper or admin)

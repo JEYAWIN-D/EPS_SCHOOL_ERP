@@ -503,13 +503,18 @@ class StudentController extends Controller
         DB::transaction(function () use ($validated, $request, $currentYear, &$newStudentId, &$feeHeadNames) {
             $admissionNumber = Student::generateAdmissionNumber($validated['gender'] ?? $request->gender);
 
-            $student = Student::create(array_merge($validated, [
-                'admission_no' => $admissionNumber,
-                'admission_date'   => today(),
-                'status'           => 'active',
-                'student_type'     => $validated['student_type'] ?? 'day_scholar',
-                'is_disabled'      => $request->boolean('is_disabled'),
-            ]));
+            $studentData = array_merge($validated, [
+                'admission_no'   => $admissionNumber,
+                'admission_date' => today(),
+                'status'         => 'active',
+                'student_type'   => $validated['student_type'] ?? 'day_scholar',
+                'is_disabled'    => $request->boolean('is_disabled'),
+            ]);
+            if (!empty($validated['aadhaar_number'])) {
+                $studentData['aadhaar_no'] = $validated['aadhaar_number'];
+            }
+
+            $student = Student::create($studentData);
             $newStudentId = $student->id;
             AuditLog::record('student_created', $student, [], ['admission_no' => $student->admission_no, 'first_name' => $student->first_name, 'last_name' => $student->last_name]);
 
@@ -542,7 +547,7 @@ class StudentController extends Controller
                 $feeHeads = \App\Models\FeeStructure::with('feeHead')
                     ->where('class_id', $validated['class_id'])
                     ->where('academic_year_id', $currentYear->id)
-                    ->where('is_active', true)
+                    ->whereHas('feeHead', fn($q) => $q->where('is_active', true))
                     ->get();
                 $feeHeadNames = $feeHeads->map(fn($fs) => ($fs->feeHead?->name ?? 'Fee') . ' ₹' . number_format($fs->amount, 0))->values()->toArray();
             }
