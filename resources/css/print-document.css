@@ -8,6 +8,12 @@
    1. GLOBAL PRINT OVERRIDES & CONTENT ISOLATION
    -------------------------------------------------------------------------- */
 @media print {
+  /* Default physical printer page and margins for the entire ERP system */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 18mm 18mm 18mm;
+  }
+
   /* Hide all dashboard chrome, navigation bars, sidebars, buttons, and popups */
   .no-print,
   #sidebar,
@@ -58,9 +64,11 @@
     background: transparent !important;
   }
 
-  /* Strips screen-only margins, shadows, and borders from the paper document */
+  /* Strips screen-only outer shadows while maintaining proper box sizing */
   .paper-sheet,
-  .official-letterhead-card {
+  .official-letterhead-card,
+  #receipt-print,
+  #voucher-print {
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
@@ -68,7 +76,7 @@
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: auto !important;
+    box-sizing: border-box !important;
     background: transparent !important;
     overflow: visible !important;
   }
@@ -105,12 +113,12 @@
     box-shadow:
       0 10px 25px -5px rgba(15, 23, 42, 0.10),
       0 4px 6px -2px rgba(15, 23, 42, 0.05);
-    margin-bottom: 2.5rem;
+    margin: 0 auto 2.5rem auto;
     position: relative;
     box-sizing: border-box;
     /* Physical paper simulation padding on screen */
-    padding: 20mm;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    padding: 18mm 20mm;
+    transition: width 0.2s ease, min-height 0.2s ease, transform 0.2s ease;
   }
 
   /* Screen Paper Dimensions */
@@ -165,38 +173,8 @@
 }
 
 /* --------------------------------------------------------------------------
-   3. DYNAMIC @PAGE RULES FOR PAPER SIZES & PHYSICAL MARGINS
+   3. BATCH STUDENT ID CARD PRINT ENGINE (CR80 54x86mm)
    -------------------------------------------------------------------------- */
-/* A5 (148mm x 210mm) */
-body.paper-a5.portrait  { @page { size: A5 portrait;  margin: 15mm; } }
-body.paper-a5.landscape { @page { size: A5 landscape; margin: 15mm; } }
-
-/* A4 (210mm x 297mm - Default) */
-body.paper-a4.portrait,
-body:not([class*="paper-"]) { @page { size: A4 portrait;  margin: 20mm; } }
-body.paper-a4.landscape     { @page { size: A4 landscape; margin: 20mm; } }
-
-/* A3 (297mm x 420mm) */
-body.paper-a3.portrait  { @page { size: A3 portrait;  margin: 25mm; } }
-body.paper-a3.landscape { @page { size: A3 landscape; margin: 25mm; } }
-
-/* A2 (420mm x 594mm) */
-body.paper-a2.portrait  { @page { size: A2 portrait;  margin: 30mm; } }
-body.paper-a2.landscape { @page { size: A2 landscape; margin: 30mm; } }
-
-/* A1 (594mm x 841mm) */
-body.paper-a1.portrait  { @page { size: A1 portrait;  margin: 35mm; } }
-body.paper-a1.landscape { @page { size: A1 landscape; margin: 35mm; } }
-
-/* --------------------------------------------------------------------------
-   4. BATCH STUDENT ID CARD PRINT ENGINE (CR80 54x86mm)
-   -------------------------------------------------------------------------- */
-body.paper-id-card.portrait,
-body.print-id-card.portrait  { @page { size: 54mm 86mm; margin: 0mm; } }
-
-body.paper-id-card.landscape,
-body.print-id-card.landscape { @page { size: 86mm 54mm; margin: 0mm; } }
-
 .id-card-sheet,
 .print-id-card {
   page-break-after: always;
@@ -226,35 +204,38 @@ body.print-id-card.landscape { @page { size: 86mm 54mm; margin: 0mm; } }
 }
 
 /* --------------------------------------------------------------------------
-   5. MULTI-PAGE TABLE REPORT RULES (Repeating Headers on Every Page)
+   4. MULTI-PAGE TABLE REPORT RULES (Repeating Headers on Every Page)
    -------------------------------------------------------------------------- */
 table.printable-report-table,
 table.printable-table,
-.printable-report-container table {
+.printable-report-container table,
+.card table {
   width: 100%;
   border-collapse: collapse;
   font-size: 10pt;
-  margin-top: 1rem;
 }
 
 /* Forces <thead> to automatically repeat at the top of every new printed page */
 table.printable-report-table thead,
 table.printable-table thead,
-.printable-report-container table thead {
+.printable-report-container table thead,
+.card table thead {
   display: table-header-group !important;
 }
 
 /* Forces <tfoot> to repeat at the bottom of printed pages if needed */
 table.printable-report-table tfoot,
 table.printable-table tfoot,
-.printable-report-container table tfoot {
+.printable-report-container table tfoot,
+.card table tfoot {
   display: table-footer-group !important;
 }
 
 /* Prevents rows from splitting horizontally across page boundaries */
 table.printable-report-table tr,
 table.printable-table tr,
-.printable-report-container table tr {
+.printable-report-container table tr,
+.card table tr {
   page-break-inside: avoid !important;
   break-inside: avoid !important;
 }

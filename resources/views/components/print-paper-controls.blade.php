@@ -54,10 +54,27 @@ function documentPrintEngine(initialSize, initialOrientation) {
       this.applyClasses();
     },
     applyClasses() {
-      const allSizes = ['paper-a5', 'paper-a4', 'paper-a3', 'paper-a2', 'paper-a1', 'paper-id-card', 'portrait', 'landscape'];
-      document.body.classList.remove(...allSizes);
-      document.body.classList.add(`paper-${this.paperSize}`, this.orientation);
+      if (typeof window.setPrintPageSetup === 'function') {
+        window.setPrintPageSetup(this.paperSize, this.orientation);
+      } else {
+        const size = (this.paperSize || 'a4').toUpperCase();
+        const orientation = this.orientation || 'portrait';
+        let style = document.getElementById('global-print-page-style');
+        if (!style) {
+          style = document.createElement('style');
+          style.id = 'global-print-page-style';
+          document.head.appendChild(style);
+        }
+        const m = this.paperSize === 'a5' ? '12mm 15mm 15mm 15mm' : (this.paperSize === 'id-card' ? '3mm' : '16mm 18mm 18mm 18mm');
+        const s = this.paperSize === 'id-card' ? (orientation === 'landscape' ? '86mm 54mm' : '54mm 86mm') : `${size} ${orientation}`;
+        style.textContent = `@media print { @page { size: ${s}; margin: ${m}; } }`;
+
+        const allSizes = ['paper-a5', 'paper-a4', 'paper-a3', 'paper-a2', 'paper-a1', 'paper-id-card', 'print-id-card', 'portrait', 'landscape'];
+        document.body.classList.remove(...allSizes);
+        document.body.classList.add(`paper-${this.paperSize}`, orientation);
+      }
     }
   };
 }
 </script>
+

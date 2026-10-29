@@ -20,6 +20,12 @@
 
   <style>
     @media print {
+      /* Global default physical printer margins for all app pages */
+      @page {
+        size: A4 portrait;
+        margin: 16mm 18mm 18mm 18mm;
+      }
+
       /* Hide application chrome when printing */
       #sidebar,
       header,
@@ -65,8 +71,66 @@
         max-width: 100% !important;
         background: #ffffff !important;
       }
+
+      /* Protect text from boundary clipping */
+      p, h1, h2, h3, h4, th, td, span, div {
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
+      }
+
+      /* Standard printable tables */
+      table thead {
+        display: table-header-group !important;
+      }
+      table tr {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
     }
   </style>
+
+  <script>
+    window.setPrintPageSetup = function(size, orientation) {
+      size = (size || 'a4').toLowerCase();
+      orientation = (orientation || 'portrait').toLowerCase();
+
+      let styleEl = document.getElementById('global-print-page-style');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'global-print-page-style';
+        document.head.appendChild(styleEl);
+      }
+
+      let sizeDecl = 'A4 portrait';
+      let marginDecl = '16mm 18mm 18mm 18mm';
+
+      if (size === 'id-card') {
+        sizeDecl = orientation === 'landscape' ? '86mm 54mm' : '54mm 86mm';
+        marginDecl = '3mm';
+      } else {
+        const margins = {
+          a5: '12mm 15mm 15mm 15mm',
+          a4: '16mm 18mm 18mm 18mm',
+          a3: '20mm 24mm 24mm 24mm',
+          a2: '25mm 28mm 28mm 28mm',
+          a1: '30mm 35mm 35mm 35mm',
+        };
+        marginDecl = margins[size] || '16mm 18mm 18mm 18mm';
+        sizeDecl = `${size.toUpperCase()} ${orientation}`;
+      }
+
+      // Injects the valid top-level @page rule so Chromium, Firefox & Safari print preview updates dynamically
+      styleEl.textContent = `@media print { @page { size: ${sizeDecl}; margin: ${marginDecl}; } }`;
+
+      const allSizes = ['paper-a5', 'paper-a4', 'paper-a3', 'paper-a2', 'paper-a1', 'paper-id-card', 'print-id-card', 'portrait', 'landscape'];
+      document.body.classList.remove(...allSizes);
+      document.body.classList.add(`paper-${size}`, orientation);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.setPrintPageSetup('a4', 'portrait');
+    }
+  </script>
 
   @stack('head')
   @stack('styles')

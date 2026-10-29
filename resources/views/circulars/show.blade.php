@@ -4,11 +4,6 @@
 @push('styles')
 <style>
   @media print {
-    @page {
-      size: A4 portrait;
-      margin: 12mm 14mm 14mm 14mm;
-    }
-
     /* Hide non-printable UI elements */
     .print\:hidden,
     #sidebar,

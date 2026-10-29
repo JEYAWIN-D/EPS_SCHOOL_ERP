@@ -24,17 +24,27 @@ export default function DocumentGenerator({
 
   // Sync active paper layout with document.body to trigger appropriate @page CSS rules
   useEffect(() => {
-    const paperClass = `paper-${paperSize}`;
-    const orientationClass = orientation;
+    if (typeof window !== 'undefined') {
+      if (typeof window.setPrintPageSetup === 'function') {
+        window.setPrintPageSetup(paperSize, orientation);
+      } else {
+        const size = (paperSize || 'a4').toUpperCase();
+        const orient = orientation || 'portrait';
+        let style = document.getElementById('global-print-page-style');
+        if (!style) {
+          style = document.createElement('style');
+          style.id = 'global-print-page-style';
+          document.head.appendChild(style);
+        }
+        const m = paperSize === 'a5' ? '12mm 15mm 15mm 15mm' : (paperSize === 'id-card' ? '3mm' : '16mm 18mm 18mm 18mm');
+        const s = paperSize === 'id-card' ? (orient === 'landscape' ? '86mm 54mm' : '54mm 86mm') : `${size} ${orient}`;
+        style.textContent = `@media print { @page { size: ${s}; margin: ${m}; } }`;
 
-    // Clean up previous paper classes
-    document.body.classList.remove(
-      'paper-a5', 'paper-a4', 'paper-a3', 'paper-a2', 'paper-a1', 'paper-id-card', 'print-id-card',
-      'portrait', 'landscape'
-    );
-
-    // Apply active paper classes
-    document.body.classList.add(paperClass, orientationClass);
+        const allSizes = ['paper-a5', 'paper-a4', 'paper-a3', 'paper-a2', 'paper-a1', 'paper-id-card', 'print-id-card', 'portrait', 'landscape'];
+        document.body.classList.remove(...allSizes);
+        document.body.classList.add(`paper-${paperSize}`, orient);
+      }
+    }
 
     return () => {
       document.body.classList.remove(
@@ -432,3 +442,4 @@ export default function DocumentGenerator({
     </div>
   );
 }
+
