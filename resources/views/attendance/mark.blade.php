@@ -3,82 +3,85 @@
 @section('title', 'Mark Attendance — ' . ($selectedClass?->name ?? 'Class') . ' ' . ($selectedSection?->name ? 'Section ' . $selectedSection->name : ''))
 
 @section('content')
-<div class="space-y-6 max-w-6xl mx-auto" x-data="{
-  searchQuery: '',
-  statuses: {
-    @foreach($students as $s)
-      '{{ $s->id }}': '{{ $existing[$s->id]?->status ?? ($isHoliday ? "holiday" : "present") }}',
-    @endforeach
-  },
-  remarks: {
-    @foreach($students as $s)
-      '{{ $s->id }}': @json($existing[$s->id]?->remark ?? ''),
-    @endforeach
-  },
-  arrivalTimes: {
-    @foreach($students as $s)
-      '{{ $s->id }}': '{{ $existing[$s->id]?->arrival_time ?? "08:30" }}',
-    @endforeach
-  },
+<script>
+function attendanceMarkerData() {
+  const initialStatuses = {};
+  const initialRemarks = {};
+  const initialArrivalTimes = {};
 
-  counts: {
-    present: 0,
-    absent: 0,
-    late: 0,
-    half_day: 0,
-    leave: 0,
-    holiday: 0,
-    total: {{ $students->count() }},
-    rate: 0
-  },
-  recalc() {
-    let p = 0, a = 0, l = 0, h = 0, lv = 0, hol = 0;
-    const vals = Object.values(this.statuses);
-    for (let i = 0; i < vals.length; i++) {
-      const s = vals[i];
-      if (s === 'present') p++;
-      else if (s === 'absent') a++;
-      else if (s === 'late') l++;
-      else if (s === 'half_day') h++;
-      else if (s === 'leave') lv++;
-      else if (s === 'holiday') hol++;
-    }
-    const tot = vals.length;
-    let rate = 0;
-    if (tot > 0) {
-      if ({{ $isHoliday ? 'true' : 'false' }} && p === 0) rate = 100;
-      else rate = Math.round(((p + l + (h * 0.5)) / tot) * 100);
-    }
-    this.counts = { present: p, absent: a, late: l, half_day: h, leave: lv, holiday: hol, total: tot, rate: rate };
-  },
-  init() {
-    this.recalc();
-  },
-  setStatus(id, status) {
-    this.statuses[id] = status;
-    this.recalc();
-  },
-  markAll(status) {
-    for (const id in this.statuses) {
+  @foreach($students as $s)
+    initialStatuses['{{ $s->id }}'] = '{{ $existing[$s->id]?->status ?? ($isHoliday ? "holiday" : "present") }}';
+    initialRemarks['{{ $s->id }}'] = @json($existing[$s->id]?->remark ?? '');
+    initialArrivalTimes['{{ $s->id }}'] = '{{ $existing[$s->id]?->arrival_time ?? "08:30" }}';
+  @endforeach
+
+  return {
+    searchQuery: '',
+    statuses: initialStatuses,
+    remarks: initialRemarks,
+    arrivalTimes: initialArrivalTimes,
+    counts: {
+      present: 0,
+      absent: 0,
+      late: 0,
+      half_day: 0,
+      leave: 0,
+      holiday: 0,
+      total: {{ (int)$students->count() }},
+      rate: 0
+    },
+    recalc() {
+      let p = 0, a = 0, l = 0, h = 0, lv = 0, hol = 0;
+      const vals = Object.values(this.statuses);
+      for (let i = 0; i < vals.length; i++) {
+        const s = vals[i];
+        if (s === 'present') p++;
+        else if (s === 'absent') a++;
+        else if (s === 'late') l++;
+        else if (s === 'half_day') h++;
+        else if (s === 'leave') lv++;
+        else if (s === 'holiday') hol++;
+      }
+      const tot = vals.length;
+      let rate = 0;
+      if (tot > 0) {
+        if ({{ $isHoliday ? 'true' : 'false' }} && p === 0) rate = 100;
+        else rate = Math.round(((p + l + (h * 0.5)) / tot) * 100);
+      }
+      this.counts = { present: p, absent: a, late: l, half_day: h, leave: lv, holiday: hol, total: tot, rate: rate };
+    },
+    init() {
+      this.recalc();
+    },
+    setStatus(id, status) {
       this.statuses[id] = status;
-    }
-    this.recalc();
-  },
-  invertStatus() {
-    for (const id in this.statuses) {
-      this.statuses[id] = this.statuses[id] === 'present' ? 'absent' : 'present';
-    }
-    this.recalc();
-  },
-  getPresentCount() { return this.counts.present; },
-  getAbsentCount() { return this.counts.absent; },
-  getLateCount() { return this.counts.late; },
-  getHalfDayCount() { return this.counts.half_day; },
-  getLeaveCount() { return this.counts.leave; },
-  getHolidayCount() { return this.counts.holiday; },
-  getTotalCount() { return this.counts.total; },
-  getRate() { return this.counts.rate; }
-}">
+      this.recalc();
+    },
+    markAll(status) {
+      for (const id in this.statuses) {
+        this.statuses[id] = status;
+      }
+      this.recalc();
+    },
+    invertStatus() {
+      for (const id in this.statuses) {
+        this.statuses[id] = (this.statuses[id] === 'present') ? 'absent' : 'present';
+      }
+      this.recalc();
+    },
+    getPresentCount() { return this.counts.present; },
+    getAbsentCount() { return this.counts.absent; },
+    getLateCount() { return this.counts.late; },
+    getHalfDayCount() { return this.counts.half_day; },
+    getLeaveCount() { return this.counts.leave; },
+    getHolidayCount() { return this.counts.holiday; },
+    getTotalCount() { return this.counts.total; },
+    getRate() { return this.counts.rate; }
+  };
+}
+</script>
+
+<div class="space-y-6 max-w-6xl mx-auto" x-data="attendanceMarkerData()">
 
   {{-- ── Top Navigation & Selector Bar ────────────────────────── --}}
   <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 print:hidden">
