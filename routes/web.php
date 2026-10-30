@@ -20,6 +20,82 @@ use App\Http\Controllers\Admin\AccountManagementController;
 use App\Http\Controllers\Admin\IdCardController;
 use App\Http\Controllers\Public\PublicFeePaymentController;
 
+// ── System Health Check Endpoint ────────────────────────────
+Route::get('/health', function () {
+    $start = microtime(true);
+    $checks = [];
+    $allHealthy = true;
+
+    // 1. Database Check
+    try {
+        $dbStart = microtime(true);
+        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        \Illuminate\Support\Facades\DB::select('SELECT 1');
+        $checks['database'] = [
+            'status' => 'connected',
+            'driver' => \Illuminate\Support\Facades\DB::connection()->getDriverName(),
+            'latency_ms' => round((microtime(true) - $dbStart) * 1000, 2),
+        ];
+    } catch (\Throwable $e) {
+        $allHealthy = false;
+        $checks['database'] = [
+            'status' => 'disconnected',
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    // 2. Storage Writability Check
+    try {
+        $storagePath = storage_path('framework/cache');
+        $isWritable = is_writable($storagePath);
+        $checks['storage'] = [
+            'status' => $isWritable ? 'writable' : 'unwritable',
+            'path' => $storagePath,
+        ];
+        if (!$isWritable) {
+            $allHealthy = false;
+        }
+    } catch (\Throwable $e) {
+        $allHealthy = false;
+        $checks['storage'] = [
+            'status' => 'error',
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    // 3. Cache Driver Check
+    try {
+        $cacheStart = microtime(true);
+        $testKey = 'health_ping_' . uniqid();
+        \Illuminate\Support\Facades\Cache::put($testKey, 'ok', 5);
+        $retrieved = \Illuminate\Support\Facades\Cache::get($testKey);
+        \Illuminate\Support\Facades\Cache::forget($testKey);
+        $checks['cache'] = [
+            'status' => ($retrieved === 'ok') ? 'working' : 'failed',
+            'driver' => config('cache.default'),
+            'latency_ms' => round((microtime(true) - $cacheStart) * 1000, 2),
+        ];
+        if ($retrieved !== 'ok') {
+            $allHealthy = false;
+        }
+    } catch (\Throwable $e) {
+        $allHealthy = false;
+        $checks['cache'] = [
+            'status' => 'error',
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    $statusCode = $allHealthy ? 200 : 503;
+    return response()->json([
+        'status' => $allHealthy ? 'healthy' : 'unhealthy',
+        'timestamp' => now()->toIso8601String(),
+        'app_env' => config('app.env'),
+        'total_latency_ms' => round((microtime(true) - $start) * 1000, 2),
+        'checks' => $checks,
+    ], $statusCode);
+})->name('health.check');
+
 // ── Auth ──────────────────────────────────────────────────
 Route::get('/',       [LoginController::class, 'landing'])->name('home');
 Route::get('/login',  [LoginController::class, 'showLogin'])->name('login');
@@ -369,11 +445,21 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         // Section management (co-class teacher, capacity, deactivation)
         Route::get('/sections-manage',                  [AcademicController::class, 'sectionsManage'])->name('sections.manage');
         Route::post('/sections',                        [AcademicController::class, 'createSection'])->name('sections.create');
-        Route::put('/sections/{id}',                    [AcademicController::class, 'updateSection'])->name('sections.update');
-        Route::post('/sections/{id}/deactivate-empty',  [AcademicController::class, 'deactivateSectionIfEmpty'])->name('sections.deactivate-empty');
-        Route::put('/classes/{id}/rename',               [AcademicController::class, 'renameClass'])->name('classes.rename');
-        Route::post('/sections/{id}/merge',              [AcademicController::class, 'mergeSection'])->name('sections.merge');
-        Route::post('/sections/{id}/split',              [AcademicController::class, 'splitSection'])->name('sections.split');
+        Route::put('/sections/{id}',                    [AcademicController::class, 'updateSection'])->name('sections.update')->where('id', '[0-9]+');
+        Route::post('/sections/{id}/deactivate-empty',  [AcademicController::class, 'deactivateSectionIfEmpty'])->name('sections.deactivate-empty')->where('id', '[0-9]+');
+        Route::put('/classes/{id}/rename',               [AcademicController::class, 'renameClass'])->name('classes.rename')->where('id', '[0-9]+');
+        Route::post('/sections/{id}/merge',              [AcademicController::class, 'mergeSection'])->name('sections.merge')->where('id', '[0-9]+');
+        Route::post('/sections/{id}/split',              [AcademicController::class, 'splitSection'])->name('sections.split')->where('id', '[0-9]+');
+    });
+
+    // ── Global Section Management Route Aliases (Ensures backward-compatibility across views) ──
+    Route::middleware(['auth', 'staff.access', 'permission:view academics'])->group(function () {
+        Route::post('/academics/sections/create-alias',                 [AcademicController::class, 'createSection'])->name('sections.create');
+        Route::put('/academics/sections/{id}/update-alias',             [AcademicController::class, 'updateSection'])->name('sections.update')->where('id', '[0-9]+');
+        Route::post('/academics/sections/{id}/deactivate-empty-alias',   [AcademicController::class, 'deactivateSectionIfEmpty'])->name('sections.deactivate-empty')->where('id', '[0-9]+');
+        Route::put('/academics/classes/{id}/rename-alias',               [AcademicController::class, 'renameClass'])->name('classes.rename')->where('id', '[0-9]+');
+        Route::post('/academics/sections/{id}/merge-alias',              [AcademicController::class, 'mergeSection'])->name('sections.merge')->where('id', '[0-9]+');
+        Route::post('/academics/sections/{id}/split-alias',              [AcademicController::class, 'splitSection'])->name('sections.split')->where('id', '[0-9]+');
     });
 
     // ── Module — Staff Timetable & Teaching Work Management ──────
@@ -1271,28 +1357,30 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
             Route::get('/report',        [\App\Http\Controllers\Admin\GateController::class, 'report'])->name('report');
             Route::get('/blacklist',     [\App\Http\Controllers\Admin\GateController::class, 'blacklist'])->name('blacklist');
             Route::post('/blacklist',    [\App\Http\Controllers\Admin\GateController::class, 'storeBlacklist'])->name('blacklist.store');
-            Route::patch('/blacklist/{id}/remove', [\App\Http\Controllers\Admin\GateController::class, 'removeBlacklist'])->name('blacklist.remove');
+            Route::patch('/blacklist/{id}/remove', [\App\Http\Controllers\Admin\GateController::class, 'removeBlacklist'])->name('blacklist.remove')->where('id', '[0-9]+');
             Route::get('/outpass',       [\App\Http\Controllers\Admin\GateController::class, 'outpass'])->name('outpass');
             Route::get('/outpass/create',[\App\Http\Controllers\Admin\GateController::class, 'createOutpass'])->name('outpass.create');
             Route::post('/outpass',      [\App\Http\Controllers\Admin\GateController::class, 'storeOutpass'])->name('outpass.store');
-            Route::patch('/outpass/{id}/return', [\App\Http\Controllers\Admin\GateController::class, 'returnOutpass'])->name('outpass.return');
-            Route::get('/{id}',          [\App\Http\Controllers\Admin\GateController::class, 'show'])->name('show');
-            Route::get('/{id}/pass',     [\App\Http\Controllers\Admin\GateController::class, 'pass'])->name('pass');
-            Route::patch('/{id}/checkout',[\App\Http\Controllers\Admin\GateController::class, 'checkout'])->name('checkout');
+            Route::patch('/outpass/{id}/return', [\App\Http\Controllers\Admin\GateController::class, 'returnOutpass'])->name('outpass.return')->where('id', '[0-9]+');
 
-            // Visitor ID Card Management Submenu & Studio
+            // Visitor ID Card Management Submenu & Studio (defined before /{id} to prevent route collisions)
             Route::get('/visitor-id-card-management', [IdCardController::class, 'visitorIndex'])->name('visitor-id-card-management');
-            Route::get('/visitor/{id}/id-card-studio', [IdCardController::class, 'singleVisitor'])->name('visitor.id-card.studio');
-            Route::get('/visitor/{id}/id-card',        [IdCardController::class, 'singleVisitor'])->name('visitors.id-card');
-            Route::get('/visitor/{id}/studio',         [IdCardController::class, 'singleVisitor'])->name('visitor-id-card.studio');
-            Route::get('/visitor/{id}/id-card-pdf',    [IdCardController::class, 'downloadVisitorPdf'])->name('visitor.id-card.pdf');
-            Route::get('/visitor/{id}/pdf',            [IdCardController::class, 'downloadVisitorPdf'])->name('visitor-id-card.pdf');
+            Route::get('/visitor/{id}/id-card-studio', [IdCardController::class, 'singleVisitor'])->name('visitor.id-card.studio')->where('id', '[0-9]+');
+            Route::get('/visitor/{id}/id-card',        [IdCardController::class, 'singleVisitor'])->name('visitors.id-card')->where('id', '[0-9]+');
+            Route::get('/visitor/{id}/studio',         [IdCardController::class, 'singleVisitor'])->name('visitor-id-card.studio')->where('id', '[0-9]+');
+            Route::get('/visitor/{id}/id-card-pdf',    [IdCardController::class, 'downloadVisitorPdf'])->name('visitor.id-card.pdf')->where('id', '[0-9]+');
+            Route::get('/visitor/{id}/pdf',            [IdCardController::class, 'downloadVisitorPdf'])->name('visitor-id-card.pdf')->where('id', '[0-9]+');
+
+            // Single Gate Visitor Routes (strictly numeric {id})
+            Route::get('/{id}',          [\App\Http\Controllers\Admin\GateController::class, 'show'])->name('show')->where('id', '[0-9]+');
+            Route::get('/{id}/pass',     [\App\Http\Controllers\Admin\GateController::class, 'pass'])->name('pass')->where('id', '[0-9]+');
+            Route::patch('/{id}/checkout',[\App\Http\Controllers\Admin\GateController::class, 'checkout'])->name('checkout')->where('id', '[0-9]+');
         });
 
         // Host Approval & Rejection endpoints (accessible by authorised gatekeeper or admin)
         Route::middleware('permission:manage gate')->group(function () {
-            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\GateController::class, 'approve'])->name('approve');
-            Route::post('/{id}/reject',  [\App\Http\Controllers\Admin\GateController::class, 'reject'])->name('reject');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\GateController::class, 'approve'])->name('approve')->where('id', '[0-9]+');
+            Route::post('/{id}/reject',  [\App\Http\Controllers\Admin\GateController::class, 'reject'])->name('reject')->where('id', '[0-9]+');
         });
     });
 

@@ -12,6 +12,12 @@ class Timetable extends Model
         'room', 'is_active', 'status', 'conflict_note', 'period_type', 'effective_from', 'academic_year_id',
     ];
 
+    protected $attributes = [
+        'period_type' => 'regular',
+        'status'      => 'scheduled',
+        'is_active'   => true,
+    ];
+
     protected $casts = [
         'effective_from' => 'date',
         'is_active' => 'boolean',

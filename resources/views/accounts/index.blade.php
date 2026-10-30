@@ -11,21 +11,26 @@ function accountManagementData() {
     detailModalOpen: false,
     selectedTxn: null,
     txnList: @json($paginator->items()),
+    scrollToLedger() {
+      const el = document.getElementById('transaction-logs');
+      const main = document.querySelector('main');
+      if (el && main) {
+        const targetTop = el.offsetTop - 24;
+        main.scrollTo({ top: targetTop, behavior: 'smooth' });
+      } else if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    },
     init() {
-      if (window.location.hash === '#transaction-logs') {
-        this.$nextTick(() => {
-          const el = document.getElementById('transaction-logs');
-          if (el) {
-            el.scrollIntoView({ behavior: 'smooth' });
-          }
-        });
+      if (window.location.hash === '#transaction-logs' || '{{ request('account') }}') {
+        setTimeout(() => this.scrollToLedger(), 100);
+        setTimeout(() => this.scrollToLedger(), 400);
       }
     },
     filterAccountAndScroll(acc) {
       const currentAcc = '{{ $accountFilter }}';
       if (currentAcc === acc) {
-        const el = document.getElementById('transaction-logs');
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        this.scrollToLedger();
       } else {
         window.location.href = "{{ route('accounts.index') }}?account=" + acc + "&date_filter=all#transaction-logs";
       }

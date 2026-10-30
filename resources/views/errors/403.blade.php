@@ -15,7 +15,7 @@
     <p class="text-sm text-slate-400 mb-8">
       Your current role:
       <span class="font-semibold text-slate-600 capitalize">
-        {{ str_replace('_', ' ', auth()->user()?->getRoleNames()->first() ?? 'unknown') }}
+        {{ str_replace('_', ' ', auth()->user()?->getRoleNames()?->first() ?? 'Guest') }}
       </span>
     </p>
     <div class="flex items-center justify-center gap-3">

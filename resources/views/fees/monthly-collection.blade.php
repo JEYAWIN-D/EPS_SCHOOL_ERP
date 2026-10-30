@@ -1,6 +1,9 @@
 @extends('layouts.app')
 @section('title', 'Monthly Collection Report')
 @section('content')
+@php
+  $year = $year ?? $startYear ?? now()->year;
+@endphp
 <div class="space-y-6">
   <div class="flex items-center justify-between flex-wrap gap-3">
     <div>

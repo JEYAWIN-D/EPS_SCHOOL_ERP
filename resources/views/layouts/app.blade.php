@@ -556,21 +556,21 @@
       @if(session('success'))
         <div x-data="{ show: true }" x-show="show" x-transition class="alert-success mb-4 sm:mb-5 flex items-center justify-between gap-3 shadow-2xs">
           <div class="flex items-center gap-2.5 min-w-0">
-            <svg class="w-5 h-5 flex-shrink-0 text-emerald-600 cursor-pointer" @click="show = false" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            <svg class="w-5 h-5 flex-shrink-0 text-emerald-600 cursor-pointer pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             <span class="break-words text-sm font-medium">{{ session('success') }}</span>
           </div>
-          <button type="button" @click="show = false" class="text-emerald-700 hover:text-emerald-900 text-lg font-bold leading-none p-1 rounded-lg hover:bg-emerald-100/60 transition cursor-pointer" title="Dismiss" aria-label="Close">&times;</button>
+          <button type="button" @click="show = false" onclick="this.closest('.alert-success').style.display='none'; this.closest('.alert-success').remove();" class="text-emerald-700 hover:text-emerald-900 text-lg font-bold leading-none p-1 rounded-lg hover:bg-emerald-100/60 transition cursor-pointer" title="Dismiss" aria-label="Close">&times;</button>
         </div>
       @endif
       @if(session('error'))
         <div x-data="{ show: true }" x-show="show" x-transition class="alert-error mb-4 sm:mb-5 flex items-center justify-between gap-3 shadow-2xs">
           <div class="flex items-center gap-2.5 min-w-0">
-            <button type="button" @click="show = false" class="text-rose-600 hover:text-rose-900 flex-shrink-0 cursor-pointer p-0.5 rounded hover:bg-rose-100 transition" title="Dismiss" aria-label="Close">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+            <button type="button" @click="show = false" onclick="this.closest('.alert-error').style.display='none'; this.closest('.alert-error').remove();" class="text-rose-600 hover:text-rose-900 flex-shrink-0 cursor-pointer p-0.5 rounded hover:bg-rose-100 transition" title="Dismiss" aria-label="Close">
+              <svg class="w-5 h-5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
             <span class="break-words text-sm font-semibold text-rose-900">{{ session('error') }}</span>
           </div>
-          <button type="button" @click="show = false" class="text-rose-600 hover:text-rose-900 text-xl font-bold leading-none p-1 rounded-lg hover:bg-rose-100/60 transition cursor-pointer shrink-0" title="Dismiss" aria-label="Close">&times;</button>
+          <button type="button" @click="show = false" onclick="this.closest('.alert-error').style.display='none'; this.closest('.alert-error').remove();" class="text-rose-600 hover:text-rose-900 text-xl font-bold leading-none p-1 rounded-lg hover:bg-rose-100/60 transition cursor-pointer shrink-0" title="Dismiss" aria-label="Close">&times;</button>
         </div>
       @endif
 

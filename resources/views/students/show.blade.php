@@ -1893,14 +1893,14 @@
             @foreach($monthlyAttendance as $m)
             <tr class="hover:bg-slate-50/60 font-medium">
               <td class="py-2 px-3 font-bold text-slate-800">{{ $m->month_name }}</td>
-              <td class="py-2 px-3 text-center font-mono text-slate-600">{{ $m->total_days }}</td>
-              <td class="py-2 px-3 text-center font-mono font-bold text-emerald-600">{{ $m->present_days }}</td>
-              <td class="py-2 px-3 text-center font-mono font-bold text-rose-600">{{ $m->absent_days }}</td>
-              <td class="py-2 px-3 text-center font-mono text-amber-600">{{ $m->late_days }}</td>
-              <td class="py-2 px-3 text-center font-mono text-orange-600">{{ $m->half_day_days }}</td>
-              <td class="py-2 px-3 text-center font-mono text-blue-600">{{ $m->leave_days }}</td>
-              <td class="py-2 px-3 text-right font-mono font-bold {{ $m->pct >= 75 ? 'text-emerald-600' : 'text-rose-600' }}">
-                {{ $m->pct }}%
+              <td class="py-2 px-3 text-center font-mono text-slate-600">{{ $m->total_days ?? $m->total ?? 0 }}</td>
+              <td class="py-2 px-3 text-center font-mono font-bold text-emerald-600">{{ $m->present_days ?? $m->present_count ?? 0 }}</td>
+              <td class="py-2 px-3 text-center font-mono font-bold text-rose-600">{{ $m->absent_days ?? $m->absent_count ?? 0 }}</td>
+              <td class="py-2 px-3 text-center font-mono text-amber-600">{{ $m->late_days ?? 0 }}</td>
+              <td class="py-2 px-3 text-center font-mono text-orange-600">{{ $m->half_day_days ?? 0 }}</td>
+              <td class="py-2 px-3 text-center font-mono text-blue-600">{{ $m->leave_days ?? 0 }}</td>
+              <td class="py-2 px-3 text-right font-mono font-bold {{ ($m->pct ?? 0) >= 75 ? 'text-emerald-600' : 'text-rose-600' }}">
+                {{ $m->pct ?? 0 }}%
               </td>
             </tr>
             @endforeach

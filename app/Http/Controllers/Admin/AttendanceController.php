@@ -131,20 +131,32 @@ class AttendanceController extends Controller
                 $sectionId = null;
             }
 
-            // If no section selected but sections exist, default to first section
+            // If no section selected but sections exist, default to first section with active students, or first section
             if (!$sectionId && $sections->isNotEmpty()) {
-                $sectionId = $sections->first()->id;
+                $firstWithStudents = $sections->first(function($sec) use ($classId) {
+                    return StudentEnrollment::where('class_id', $classId)
+                        ->where('section_id', $sec->id)
+                        ->where('status', 'active')
+                        ->exists();
+                });
+                $sectionId = $firstWithStudents ? $firstWithStudents->id : $sections->first()->id;
             }
 
             $query = StudentEnrollment::with(['student', 'class', 'section'])
                 ->where('class_id', $classId)
                 ->where('status', 'active');
             if ($sectionId) $query->where('section_id', $sectionId);
-            if ($currentYear) $query->where('academic_year_id', $currentYear->id);
+
+            if ($currentYear) {
+                $hasYearSpecific = (clone $query)->where('academic_year_id', $currentYear->id)->count() >= 5;
+                if ($hasYearSpecific) {
+                    $query->where('academic_year_id', $currentYear->id);
+                }
+            }
 
             $enrollments = $query->get();
 
-            // Fallback: no students in current year — load without year filter
+            // Fallback: no students loaded — load without year filter
             if ($enrollments->isEmpty()) {
                 $enrollments = StudentEnrollment::with(['student', 'class', 'section'])
                     ->where('class_id', $classId)

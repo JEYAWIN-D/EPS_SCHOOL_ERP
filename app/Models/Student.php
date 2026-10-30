@@ -69,6 +69,13 @@ class Student extends Model
         });
     }
 
+    protected $attributes = [
+        'status'       => 'active',
+        'student_type' => 'day_scholar',
+        'category'     => 'general',
+        'nationality'  => 'Indian',
+    ];
+
     protected $casts = [
         'dob'            => 'date',
         'admission_date' => 'date',

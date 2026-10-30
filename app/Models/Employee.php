@@ -52,6 +52,14 @@ class Employee extends Model
         'unavailable_days', 'unavailable_periods', 'eligible_classes', 'eligible_subjects',
     ];
 
+    public function getPhotoUrlAttribute(): ?string
+    {
+        if (empty($this->photo)) {
+            return null;
+        }
+        return asset('storage/' . ltrim($this->photo, '/'));
+    }
+
     protected $casts = [
         'dob'                      => 'date',
         'joining_date'             => 'date',

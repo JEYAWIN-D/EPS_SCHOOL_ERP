@@ -1253,7 +1253,8 @@ class FeeController extends Controller
         }
 
         $feeHeads = FeeHead::where('is_active', true)->get();
-        return view('fees.monthly-collection', compact('months', 'data', 'total', 'startYear', 'feeHeads', 'currentYear'));
+        $year = $startYear;
+        return view('fees.monthly-collection', compact('months', 'data', 'total', 'startYear', 'year', 'feeHeads', 'currentYear'));
     }
 
     public function annualCollection(Request $request)

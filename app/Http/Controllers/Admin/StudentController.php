@@ -533,11 +533,19 @@ class StudentController extends Controller
                     $student->save();
                 }
 
+                $enrollSectionId = !empty($validated['section_id']) ? $validated['section_id'] : null;
+                if (!$enrollSectionId && !empty($validated['class_id'])) {
+                    $enrollSectionId = \App\Models\Section::where('class_id', $validated['class_id'])
+                        ->where('is_active', true)
+                        ->orderBy('name', 'asc')
+                        ->value('id');
+                }
+
                 StudentEnrollment::create([
                     'student_id'      => $student->id,
                     'academic_year_id'=> $currentYear->id,
                     'class_id'        => $validated['class_id'],
-                    'section_id'      => $validated['section_id'] ?? null,
+                    'section_id'      => $enrollSectionId,
                     'roll_number'     => $rollNo,
                     'house'           => $validated['house'] ?? null,
                     'status'          => 'active',
@@ -629,15 +637,26 @@ class StudentController extends Controller
             ->take(6)
             ->map(function ($records, $monthKey) {
                 $total = $records->count();
-                $presentCount = $records->whereIn('status', ['present', 'late'])->count()
-                    + ($records->where('status', 'half_day')->count() * 0.5);
+                $presentCount = $records->where('status', 'present')->count();
+                $lateCount = $records->where('status', 'late')->count();
+                $halfDayCount = $records->where('status', 'half_day')->count();
+                $leaveCount = $records->where('status', 'leave')->count();
                 $absentCount = $records->where('status', 'absent')->count();
+                $weightedPresent = $presentCount + $lateCount + ($halfDayCount * 0.5);
+                $pct = $total > 0 ? round(($weightedPresent / $total) * 100, 1) : 0;
                 $monthName = \Carbon\Carbon::parse($records->first()->date)->format('M Y');
                 return (object)[
                     'month_key'     => $monthKey,
                     'month_name'    => $monthName,
+                    'total_days'    => $total,
+                    'present_days'  => $presentCount,
+                    'absent_days'   => $absentCount,
+                    'late_days'     => $lateCount,
+                    'half_day_days' => $halfDayCount,
+                    'leave_days'    => $leaveCount,
+                    'pct'           => $pct,
                     'total'         => $total,
-                    'present_count' => $presentCount,
+                    'present_count' => $weightedPresent,
                     'absent_count'  => $absentCount,
                 ];
             })->values();

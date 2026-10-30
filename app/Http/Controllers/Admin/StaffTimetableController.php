@@ -185,9 +185,9 @@ class StaffTimetableController extends Controller
                 ->take(8)
                 ->get();
 
-            // 5. Recent Homework / Assignments
+            // 5. Recent Homework / Assignments (assigned_by is foreign key to employees/users)
             $recentHomework = Homework::with(['class', 'section', 'subject'])
-                ->where('employee_id', $selectedStaff->id)
+                ->where('assigned_by', $selectedStaff->id)
                 ->orderByDesc('assigned_date')
                 ->take(8)
                 ->get();

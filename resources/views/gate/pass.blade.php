@@ -31,18 +31,16 @@
   .alert-error,
   .no-print,
   .mobile-nav-speed,
-  .printable-badge,
   button,
   a {
     display: none !important;
   }
 
-  /* 2. Reset html & body to 80mm roll width, remove any browser default margins */
+  /* 2. Reset html & body, center content so it never clings to one side */
   html, body {
-    width: 80mm !important;
-    min-width: 80mm !important;
-    max-width: 80mm !important;
-    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
@@ -77,11 +75,11 @@
     box-shadow: none !important;
   }
 
-  /* 4. Display ONLY the dedicated thermal roll pass */
+  /* 4. Display pass container cleanly centered on single page */
   .thermal-pass-wrapper {
     display: block !important;
     width: 100% !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -91,16 +89,16 @@
   #thermal-roll-pass {
     display: block !important;
     visibility: visible !important;
-    width: 72mm !important;
-    max-width: 72mm !important;
+    width: 78mm !important;
+    max-width: 78mm !important;
     margin: 0 auto !important;
     padding: 2mm 1mm 4mm 1mm !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
     color: #000000 !important;
-    border: none !important;
+    border: 1px solid #cbd5e1 !important;
     box-shadow: none !important;
-    border-radius: 0 !important;
+    border-radius: 8px !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     page-break-after: avoid !important;
@@ -113,10 +111,9 @@
     text-shadow: none !important;
   }
 
-  /* Thermal roll page size */
   @page {
-    size: 80mm auto;
-    margin: 0mm;
+    size: auto;
+    margin: 8mm;
   }
 }
 </style>

@@ -193,7 +193,8 @@
           <select name="class_id" id="class_select" required
                   class="select @error('class_id') input-error @enderror"
                   x-model="selectedClassId"
-                  @change="onClassChange($event.target.value)">
+                  @change="onClassChange($event.target.value)"
+                  onchange="if(window.admitFormInstance) { window.admitFormInstance.onClassChange(this.value); } const srvErr = document.getElementById('class_id_server_err'); if(srvErr) srvErr.style.display='none';">
             <option value="">Select class</option>
             @foreach($classes as $cls)
               <option value="{{ $cls->id }}" @selected(old('class_id', request('class_id')) == $cls->id)>{{ $cls->name }}</option>
@@ -245,15 +246,16 @@
 <script>
 function admitForm() {
   return {
-    residentialAddress: '{{ old('residential_address') }}',
-    permanentAddress: '{{ old('permanent_address') }}',
+    residentialAddress: @json(old('residential_address', '')),
+    permanentAddress: @json(old('permanent_address', '')),
     isDisabled: {{ old('is_disabled') ? 'true' : 'false' }},
-    selectedClassId: '{{ old('class_id', request('class_id', '')) }}',
-    selectedSectionId: '{{ old('section_id', request('section_id', '')) }}',
+    selectedClassId: @json((string) old('class_id', request('class_id', ''))),
+    selectedSectionId: @json((string) old('section_id', request('section_id', ''))),
     copyAddress() {
       this.permanentAddress = this.residentialAddress;
     },
     init() {
+      window.admitFormInstance = this;
       if (this.selectedClassId) {
         this.loadSections(this.selectedClassId, this.selectedSectionId);
       }

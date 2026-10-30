@@ -18,6 +18,19 @@ class TransportRoute extends Model
         'monthly_fee' => 'decimal:2',
     ];
 
+    public function getRouteCodeAttribute(): ?string
+    {
+        return $this->attributes['route_code'] ?? $this->attributes['route_number'] ?? null;
+    }
+
+    public function setRouteCodeAttribute($value): void
+    {
+        $this->attributes['route_code'] = $value;
+        if (empty($this->attributes['route_number'])) {
+            $this->attributes['route_number'] = $value;
+        }
+    }
+
     public function vehicle(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Vehicle::class);

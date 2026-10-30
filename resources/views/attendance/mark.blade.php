@@ -12,7 +12,7 @@
   },
   remarks: {
     @foreach($students as $s)
-      '{{ $s->id }}': '{{ addslashes($existing[$s->id]?->remark ?? "") }}',
+      '{{ $s->id }}': @json($existing[$s->id]?->remark ?? ''),
     @endforeach
   },
   arrivalTimes: {
