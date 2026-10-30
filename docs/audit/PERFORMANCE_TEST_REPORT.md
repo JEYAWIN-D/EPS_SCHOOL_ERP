@@ -74,3 +74,4 @@ The current infrastructure configuration supports:
 - **Concurrent Web Users:** Up to 150 simultaneous active requests based on PHP-FPM dynamic process configuration (`pm = dynamic`, `pm.max_children = 50`).
 - **Nginx Workers:** 4 worker processes with 1024 connections each.
 - **PostgreSQL Connection Pool:** Maximum 150 concurrent client connections, operating at ~5% utilization during regular school operating hours.
+

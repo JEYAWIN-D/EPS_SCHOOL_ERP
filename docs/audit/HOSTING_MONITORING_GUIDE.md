@@ -185,3 +185,4 @@ Ensure the Laravel scheduler runs continuously in crontab under `www-data`:
    ```cron
    0 2 * * * pg_dump -U erp_user -d school_erp -F c -b -v -f "/var/backups/school_erp_$(date +\%Y\%m\%d).dump"
    ```
+

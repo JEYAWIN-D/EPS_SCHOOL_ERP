@@ -112,3 +112,4 @@ In `config/session.php`:
 - [x] Sensitive files (`.env`, `composer.json`, `package.json`) blocked by Nginx
 - [x] Database credentials restricted to `127.0.0.1` and specific private subnet
 - [x] Rate limiting active on all public application forms
+

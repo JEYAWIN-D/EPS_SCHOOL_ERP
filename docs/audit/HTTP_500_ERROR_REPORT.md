@@ -285,3 +285,4 @@ Instead:
 1. A unique correlation ID is generated (e.g. `EPS-8F3K9A`).
 2. Full stack trace, request URL, user ID, and IP address are recorded in `/var/www/dasa-eps-school/storage/logs/laravel.log`.
 3. The user is served a branded, professional error view (`resources/views/errors/500.blade.php`) displaying the correlation ID for IT support dispatch.
+

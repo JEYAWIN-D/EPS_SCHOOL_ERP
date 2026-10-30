@@ -125,3 +125,4 @@ For sustained production stability under high concurrent student/parent portal l
 2. **Laravel Persistent Connections:** Set `'sticky' => true` in `config/database.php` for read/write splitting if replica read nodes are introduced.
 3. **Transaction Timeouts:** Ensure `statement_timeout = 30000` (30 seconds) is configured in PostgreSQL to prevent rogue reports from holding database locks indefinitely.
 4. **Maintenance Autovacuum:** PostgreSQL `autovacuum = on` verified active, maintaining clean statistics on `student_attendances` and `fee_payments`.
+

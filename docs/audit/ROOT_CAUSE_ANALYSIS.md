@@ -306,3 +306,4 @@ In `resources/views/gate/pass.blade.php`:
 - Declared `@page { size: auto; margin: 8mm; }`.
 - Applied `break-inside: avoid; page-break-inside: avoid; page-break-after: avoid;` on the `.visitor-pass-card`.
 - Removed all screen dashboard elements with `.no-print { display: none !important; }`.
+
