@@ -70,16 +70,6 @@ class AdmissionDraft extends Model
         return $this->hasMany(AdmissionDraftDocument::class, 'draft_id');
     }
 
-    public function getCandidateNameAttribute(): ?string
-    {
-        return $this->student_name;
-    }
-
-    public function getDraftIdAttribute(): ?string
-    {
-        return $this->draft_number;
-    }
-
     public static function generateDraftNumber(): string
     {
         $year = date('Y');
@@ -133,3 +123,4 @@ class AdmissionDraft extends Model
         return (int) round(($earnedWeight / $totalWeight) * 100);
     }
 }
+

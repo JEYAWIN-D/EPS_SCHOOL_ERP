@@ -34,3 +34,4 @@ class AdmissionDraftDocument extends Model
         return $this->stored_path ? Storage::disk('public')->url($this->stored_path) : null;
     }
 }
+

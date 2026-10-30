@@ -302,3 +302,4 @@ class AdmissionDraftController extends Controller
             ->with('success', "Admission draft {$draft->draft_number} was discarded successfully.");
     }
 }
+

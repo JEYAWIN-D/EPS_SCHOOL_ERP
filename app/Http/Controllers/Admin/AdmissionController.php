@@ -359,7 +359,7 @@ class AdmissionController extends Controller
         $feeData   = $this->getFeeStructureData();
         $classes   = $feeData['classes'];
 
-        $stats = Cache::remember('admission_index_stats_v2', 30, function () {
+        $stats = Cache::remember('admission_index_stats_v1', 60, function () {
             $statsRow = DB::table('enquiries')->whereNull('deleted_at')->selectRaw("
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'new' THEN 1 END) as new,
@@ -368,19 +368,12 @@ class AdmissionController extends Controller
                 COUNT(CASE WHEN status = 'lost' THEN 1 END) as lost
             ")->first();
 
-            $total = (int) ($statsRow->total ?? 0);
-            $converted = (int) ($statsRow->converted ?? 0);
-            $rate = $total > 0 ? round(($converted / $total) * 100, 1) : 0;
-            $draftsCount = \App\Models\AdmissionDraft::whereIn('status', ['draft', 'submission_failed'])->count();
-
             return [
-                'total'           => $total,
-                'new'             => (int) ($statsRow->new ?? 0),
-                'follow_up'       => (int) ($statsRow->follow_up ?? 0),
-                'converted'       => $converted,
-                'lost'            => (int) ($statsRow->lost ?? 0),
-                'conversion_rate' => $rate,
-                'drafts_count'    => $draftsCount,
+                'total'     => (int) ($statsRow->total ?? 0),
+                'new'       => (int) ($statsRow->new ?? 0),
+                'follow_up' => (int) ($statsRow->follow_up ?? 0),
+                'converted' => (int) ($statsRow->converted ?? 0),
+                'lost'      => (int) ($statsRow->lost ?? 0),
             ];
         });
 
