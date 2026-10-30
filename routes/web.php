@@ -457,7 +457,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/academics/sections/create-alias',                 [AcademicController::class, 'createSection'])->name('sections.create');
         Route::put('/academics/sections/{id}/update-alias',             [AcademicController::class, 'updateSection'])->name('sections.update')->where('id', '[0-9]+');
         Route::post('/academics/sections/{id}/deactivate-empty-alias',   [AcademicController::class, 'deactivateSectionIfEmpty'])->name('sections.deactivate-empty')->where('id', '[0-9]+');
-        Route::put('/academics/classes/{id}/rename-alias',               [AcademicController::class, 'renameClass'])->name('classes.rename')->where('id', '[0-9]+');
+        Route::put('/academics/classes/{id}/rename-alias',               [AcademicController::class, 'renameClass'])->name('classes.rename-alias')->where('id', '[0-9]+');
         Route::post('/academics/sections/{id}/merge-alias',              [AcademicController::class, 'mergeSection'])->name('sections.merge')->where('id', '[0-9]+');
         Route::post('/academics/sections/{id}/split-alias',              [AcademicController::class, 'splitSection'])->name('sections.split')->where('id', '[0-9]+');
     });
