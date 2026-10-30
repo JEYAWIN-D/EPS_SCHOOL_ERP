@@ -27,6 +27,7 @@
   formatMoney(num) {
     return '₹' + Number(num || 0).toLocaleString('en-IN');
   },
+  newEnquiryModalOpen: {{ (isset($errors) && $errors->any() && old('student_name')) ? 'true' : 'false' }},
   followUpModalOpen: false,
   statusModalOpen: false,
   activeEnquiry: { id: '', number: '', name: '', phone: '', status: '', reason: '', notes: '' },
@@ -132,6 +133,16 @@
           <span class="hidden sm:inline">Approvals Desk</span>
           <span class="sm:hidden">Desk</span>
         </a>
+
+        {{-- Action: Add New Enquiry --}}
+        <button type="button" @click="newEnquiryModalOpen = true; activeTab = 'enquiries'"
+           class="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-xs transition hover:shadow-md cursor-pointer"
+           title="Register a new student enquiry">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+          </svg>
+          <span>+ New Enquiry</span>
+        </button>
 
         {{-- Primary Action: New Admission --}}
         <a href="{{ route('admissions.create') }}"
@@ -667,8 +678,26 @@
     </div>
     @endif
 
-    {{-- Search & Filters --}}
-    <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs">
+    {{-- Search, Filters & Quick Action Bar --}}
+    <div class="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/70 flex items-center justify-center font-bold text-xs shrink-0">
+            <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+          </span>
+          <div>
+            <h3 class="font-extrabold text-slate-900 text-sm">Admissions Pipeline &amp; Enquiries</h3>
+            <p class="text-[11px] text-slate-500 font-medium">Record new prospective student enquiries, track counseling follow-ups, and convert directly to admission.</p>
+          </div>
+        </div>
+
+        <button type="button" @click="newEnquiryModalOpen = true"
+                class="px-4 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-extrabold text-xs flex items-center gap-2 shadow-xs transition hover:shadow-md cursor-pointer self-start sm:self-auto">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          <span>+ Add New Enquiry</span>
+        </button>
+      </div>
+
       <form method="GET" action="{{ route('admissions.index') }}" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <input type="hidden" name="status" value="{{ request('status') }}">
         <div class="sm:col-span-2">
@@ -771,8 +800,20 @@
               </tr>
             @empty
               <tr>
-                <td colspan="6" class="py-12 text-center text-slate-400 font-medium">
-                  No admission enquiries found matching your filter criteria.
+                <td colspan="6" class="py-12 text-center text-slate-500 font-medium">
+                  <div class="max-w-xs mx-auto text-center space-y-3">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 mx-auto flex items-center justify-center border border-amber-200">
+                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                    </div>
+                    <div>
+                      <p class="text-sm font-bold text-slate-800">No Admission Enquiries Found</p>
+                      <p class="text-xs text-slate-400 mt-0.5">Start logging prospective student visits and counseling calls.</p>
+                    </div>
+                    <button type="button" @click="newEnquiryModalOpen = true" class="px-4 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white text-xs font-bold transition shadow-xs cursor-pointer inline-flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                      <span>Register New Enquiry</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             @endforelse
@@ -887,6 +928,284 @@
           <button type="button" @click="statusModalOpen = false" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs">Cancel</button>
           <button type="submit" class="px-5 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-black text-xs shadow-xs">Update Status</button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  {{-- ── 3. Register New Admission Enquiry Modal ────────────────────────────────────── --}}
+  <div x-show="newEnquiryModalOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/65 backdrop-blur-xs overflow-y-auto"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       x-on:keydown.escape.window="newEnquiryModalOpen = false">
+
+    <div class="bg-white rounded-3xl max-w-3xl w-full my-auto shadow-2xl border border-slate-200 overflow-hidden text-left flex flex-col max-h-[92vh]"
+         @click.outside="newEnquiryModalOpen = false">
+
+      {{-- Modal Top Ribbon / Header --}}
+      <div class="px-6 py-4.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex items-center justify-between border-b-2 border-amber-500 shrink-0">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center justify-center font-black shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+            </svg>
+          </span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-base font-black tracking-tight text-white">Register New Admission Enquiry</h3>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 uppercase tracking-wider">Desk Intake</span>
+            </div>
+            <p class="text-xs text-slate-300 font-medium">Erode Public School &bull; Academic Year {{ $academicYear?->name ?? '2026–2027' }}</p>
+          </div>
+        </div>
+
+        <button type="button" @click="newEnquiryModalOpen = false"
+                class="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white flex items-center justify-center text-lg font-bold transition cursor-pointer"
+                title="Close">&times;</button>
+      </div>
+
+      {{-- Modal Form Content --}}
+      <form action="{{ route('admissions.enquiry.store') }}" method="POST" class="flex flex-col flex-1 overflow-hidden">
+        @csrf
+
+        <div class="p-6 space-y-6 overflow-y-auto flex-1 text-slate-800 text-xs">
+
+          {{-- Validation Errors Banner (if any) --}}
+          @if(isset($errors) && $errors->any())
+            <div class="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-rose-800 space-y-1">
+              <div class="flex items-center gap-2 font-bold text-xs">
+                <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>Please correct the following fields:</span>
+              </div>
+              <ul class="list-disc list-inside text-[11px] space-y-0.5 pl-5">
+                @foreach($errors->all() as $err)
+                  <li>{{ $err }}</li>
+                @endforeach
+              </ul>
+            </div>
+          @endif
+
+          {{-- ── 1. Prospective Student Information ── --}}
+          <div class="bg-slate-50/80 rounded-2xl p-4.5 border border-slate-200/80 space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-200">
+              <span class="w-5 h-5 rounded-full bg-[#8C2826] text-white text-[10px] font-black flex items-center justify-center">1</span>
+              <h4 class="text-xs font-black uppercase tracking-wider text-slate-800">Student Information</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="sm:col-span-2">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Student Full Name <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="student_name" value="{{ old('student_name') }}" required
+                       oninput="this.value = this.value.toUpperCase()"
+                       placeholder="e.g. AARAV KUMAR"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                @error('student_name')<p class="text-rose-600 text-[10px] mt-1">{{ $message }}</p>@enderror
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Seeking Admission To Standard <span class="text-rose-500">*</span>
+                </label>
+                <select name="class_id" required
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                  <option value="">-- Select Class / Grade --</option>
+                  @foreach($classes as $c)
+                    <option value="{{ $c->id }}" @selected(old('class_id') == $c->id)>Class {{ $c->name }}</option>
+                  @endforeach
+                </select>
+                @error('class_id')<p class="text-rose-600 text-[10px] mt-1">{{ $message }}</p>@enderror
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Date of Birth
+                </label>
+                <input type="date" name="dob" value="{{ old('dob') }}" max="{{ date('Y-m-d') }}"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                @error('dob')<p class="text-rose-600 text-[10px] mt-1">{{ $message }}</p>@enderror
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Gender <span class="text-rose-500">*</span>
+                </label>
+                <select name="gender" required
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                  <option value="male" @selected(old('gender', 'male') === 'male')>Male</option>
+                  <option value="female" @selected(old('gender') === 'female')>Female</option>
+                  <option value="other" @selected(old('gender') === 'other')>Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  School Last Studied
+                </label>
+                <input type="text" name="previous_school" value="{{ old('previous_school') }}"
+                       placeholder="e.g. Green Valley Matric Hr Sec School"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+              </div>
+            </div>
+          </div>
+
+          {{-- ── 2. Parent / Guardian Contact Details ── --}}
+          <div class="bg-slate-50/80 rounded-2xl p-4.5 border border-slate-200/80 space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-200">
+              <span class="w-5 h-5 rounded-full bg-[#8C2826] text-white text-[10px] font-black flex items-center justify-center">2</span>
+              <h4 class="text-xs font-black uppercase tracking-wider text-slate-800">Parent / Guardian Information</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Father / Guardian Name <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" name="parent_name" value="{{ old('parent_name') }}" required
+                       placeholder="e.g. Rajesh Kumar"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                @error('parent_name')<p class="text-rose-600 text-[10px] mt-1">{{ $message }}</p>@enderror
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Primary Mobile Number <span class="text-rose-500">*</span>
+                </label>
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs pointer-events-none">+91</span>
+                  <input type="tel" name="parent_mobile" value="{{ old('parent_mobile') }}" required
+                         maxlength="10" minlength="10" inputmode="numeric"
+                         oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)"
+                         placeholder="9876543210"
+                         class="w-full pl-11 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-900 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                </div>
+                @error('parent_mobile')<p class="text-rose-600 text-[10px] mt-1">{{ $message }}</p>@enderror
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Mother's Name
+                </label>
+                <input type="text" name="mother_name" value="{{ old('mother_name') }}"
+                       placeholder="e.g. Priya Sharma"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Mother's Mobile Number
+                </label>
+                <div class="relative">
+                  <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 font-bold text-xs pointer-events-none">+91</span>
+                  <input type="tel" name="mother_mobile" value="{{ old('mother_mobile') }}"
+                         maxlength="10" minlength="10" inputmode="numeric"
+                         oninput="this.value = this.value.replace(/\D/g, '').slice(0, 10)"
+                         placeholder="9876543211"
+                         class="w-full pl-11 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-medium text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Email Address
+                </label>
+                <input type="email" name="parent_email" value="{{ old('parent_email') }}"
+                       placeholder="e.g. parent@example.com"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Residential Area / Town
+                </label>
+                <input type="text" name="address" value="{{ old('address') }}"
+                       placeholder="e.g. Perundurai Road, Erode - 638011"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+              </div>
+            </div>
+          </div>
+
+          {{-- ── 3. Lead Source & Follow-Up Schedule ── --}}
+          <div class="bg-slate-50/80 rounded-2xl p-4.5 border border-slate-200/80 space-y-4">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-200">
+              <span class="w-5 h-5 rounded-full bg-[#8C2826] text-white text-[10px] font-black flex items-center justify-center">3</span>
+              <h4 class="text-xs font-black uppercase tracking-wider text-slate-800">Lead Source &amp; Follow-Up Planning</h4>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Enquiry Source <span class="text-rose-500">*</span>
+                </label>
+                <select name="source" required
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+                  <option value="walk_in" @selected(old('source', 'walk_in') === 'walk_in')>Walk-in / Campus Visit</option>
+                  <option value="phone" @selected(old('source') === 'phone')>Phone Call</option>
+                  <option value="whatsapp" @selected(old('source') === 'whatsapp')>WhatsApp Inquiry</option>
+                  <option value="parent_referral" @selected(old('source') === 'parent_referral')>Existing Parent / Sibling</option>
+                  <option value="referral" @selected(old('source') === 'referral')>Friend / Staff Referral</option>
+                  <option value="banner" @selected(old('source') === 'banner')>Banner / Hoarding</option>
+                  <option value="website" @selected(old('source') === 'website')>Website / Online Portal</option>
+                  <option value="social_media" @selected(old('source') === 'social_media')>Social Media</option>
+                  <option value="other" @selected(old('source') === 'other')>Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Referred By
+                </label>
+                <input type="text" name="referred_by" value="{{ old('referred_by') }}"
+                       placeholder="e.g. S. Murugan / Staff Name"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                  Scheduled Next Follow-Up
+                </label>
+                <input type="date" name="follow_up_date" value="{{ old('follow_up_date', date('Y-m-d', strtotime('+3 days'))) }}"
+                       class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                Staff Counseling / Discussion Notes
+              </label>
+              <textarea name="notes" rows="2"
+                        placeholder="Inquired about school bus route #4, CBSE syllabus, fee installments, hostel facilities, sports quota..."
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-[#8C2826]/20 focus:border-[#8C2826]">{{ old('notes') }}</textarea>
+            </div>
+          </div>
+
+        </div>
+
+        {{-- Modal Footer Bar --}}
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+          <div class="flex items-center gap-2 text-[11px] text-slate-500">
+            <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>Generates unique ENQ number and automatically enters the counseling pipeline.</span>
+          </div>
+
+          <div class="flex items-center gap-2.5 self-end sm:self-auto">
+            <button type="button" @click="newEnquiryModalOpen = false"
+                    class="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs border border-slate-200 transition cursor-pointer">
+              Cancel
+            </button>
+            <button type="submit"
+                    class="px-5 py-2.5 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] active:bg-[#5a1715] text-white font-extrabold text-xs shadow-xs transition hover:shadow-md cursor-pointer flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              <span>Register &amp; Save Enquiry</span>
+            </button>
+          </div>
+        </div>
+
       </form>
     </div>
   </div>

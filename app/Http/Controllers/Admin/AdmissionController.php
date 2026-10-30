@@ -359,7 +359,7 @@ class AdmissionController extends Controller
         $feeData   = $this->getFeeStructureData();
         $classes   = $feeData['classes'];
 
-        $stats = Cache::remember('admission_index_stats_v1', 60, function () {
+        $stats = Cache::remember('admission_index_stats_v2', 60, function () {
             $statsRow = DB::table('enquiries')->whereNull('deleted_at')->selectRaw("
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'new' THEN 1 END) as new,
@@ -368,12 +368,19 @@ class AdmissionController extends Controller
                 COUNT(CASE WHEN status = 'lost' THEN 1 END) as lost
             ")->first();
 
+            $total = (int) ($statsRow->total ?? 0);
+            $converted = (int) ($statsRow->converted ?? 0);
+            $conversionRate = $total > 0 ? round(($converted / $total) * 100) : 0;
+            $draftsCount = DB::table('admission_drafts')->whereNull('deleted_at')->where('status', 'draft')->count();
+
             return [
-                'total'     => (int) ($statsRow->total ?? 0),
-                'new'       => (int) ($statsRow->new ?? 0),
-                'follow_up' => (int) ($statsRow->follow_up ?? 0),
-                'converted' => (int) ($statsRow->converted ?? 0),
-                'lost'      => (int) ($statsRow->lost ?? 0),
+                'total'           => $total,
+                'new'             => (int) ($statsRow->new ?? 0),
+                'follow_up'       => (int) ($statsRow->follow_up ?? 0),
+                'converted'       => $converted,
+                'lost'            => (int) ($statsRow->lost ?? 0),
+                'conversion_rate' => $conversionRate,
+                'drafts_count'    => $draftsCount,
             ];
         });
 
@@ -2761,6 +2768,146 @@ class AdmissionController extends Controller
     {
         $app = \App\Models\StudentApplication::with('formConfig')->where('application_number', $number)->firstOrFail();
         return view('admissions.application-success', compact('app'));
+    }
+
+    /**
+     * Store a newly created admission enquiry from the internal administrative desk.
+     */
+    public function storeEnquiry(Request $request)
+    {
+        // Clean mobile numbers
+        foreach (['parent_mobile', 'father_mobile', 'mother_mobile'] as $mobField) {
+            if ($request->filled($mobField)) {
+                $cleaned = preg_replace('/[^\d]/', '', (string)$request->input($mobField));
+                if (strlen($cleaned) === 12 && str_starts_with($cleaned, '91')) {
+                    $cleaned = substr($cleaned, 2);
+                }
+                $request->merge([$mobField => $cleaned]);
+            }
+        }
+
+        // Fallbacks for parent_name and parent_mobile from father/mother fields
+        if (!$request->filled('parent_name')) {
+            $request->merge(['parent_name' => $request->father_name ?: ($request->mother_name ?: 'Parent')]);
+        }
+        if (!$request->filled('parent_mobile')) {
+            $request->merge(['parent_mobile' => $request->father_mobile ?: $request->mother_mobile]);
+        }
+
+        $validated = $request->validate([
+            'student_name'          => 'required|string|max:100',
+            'class_id'              => 'required|exists:classes,id',
+            'dob'                   => 'nullable|date|before:today',
+            'gender'                => 'nullable|string|in:male,female,other',
+            'parent_name'           => 'required|string|max:100',
+            'parent_mobile'         => ['required', 'string', 'regex:/^[6-9][0-9]{9}$/'],
+            'parent_email'          => 'nullable|email|max:100',
+            'father_name'           => 'nullable|string|max:100',
+            'father_mobile'         => ['nullable', 'string', 'regex:/^[6-9][0-9]{9}$/'],
+            'father_occupation'     => 'nullable|string|max:100',
+            'father_qualification'  => 'nullable|string|max:100',
+            'mother_name'           => 'nullable|string|max:100',
+            'mother_mobile'         => ['nullable', 'string', 'regex:/^[6-9][0-9]{9}$/'],
+            'mother_occupation'     => 'nullable|string|max:100',
+            'mother_qualification'  => 'nullable|string|max:100',
+            'address'               => 'nullable|string|max:500',
+            'previous_school'       => 'nullable|string|max:150',
+            'previous_class'        => 'nullable|string|max:50',
+            'source'                => 'nullable|string|max:50',
+            'referred_by'           => 'nullable|string|max:100',
+            'follow_up_date'        => 'nullable|date',
+            'notes'                 => 'nullable|string|max:2000',
+        ], [
+            'parent_mobile.regex'   => 'Parent mobile must be a valid 10-digit Indian number.',
+            'father_mobile.regex'   => 'Father mobile must be a valid 10-digit Indian number.',
+            'mother_mobile.regex'   => 'Mother mobile must be a valid 10-digit Indian number.',
+            'class_id.required'     => 'Please select the Class / Standard for admission.',
+            'student_name.required' => 'Student name is required.',
+        ]);
+
+        $currentYear = AcademicYear::current();
+
+        $enquiry = Enquiry::create([
+            'enquiry_number'         => Enquiry::generateNumber(),
+            'student_name'           => strtoupper(trim($validated['student_name'])),
+            'class_id'               => $validated['class_id'],
+            'dob'                    => $validated['dob'] ?? null,
+            'gender'                 => $validated['gender'] ?? 'male',
+            'parent_name'            => trim($validated['parent_name']),
+            'parent_mobile'          => $validated['parent_mobile'],
+            'parent_email'           => $validated['parent_email'] ?? null,
+            'father_name'            => $validated['father_name'] ?? $validated['parent_name'],
+            'father_mobile'          => $validated['father_mobile'] ?? $validated['parent_mobile'],
+            'father_occupation'      => $validated['father_occupation'] ?? null,
+            'father_qualification'   => $validated['father_qualification'] ?? null,
+            'mother_name'            => $validated['mother_name'] ?? null,
+            'mother_mobile'          => $validated['mother_mobile'] ?? null,
+            'mother_occupation'      => $validated['mother_occupation'] ?? null,
+            'mother_qualification'   => $validated['mother_qualification'] ?? null,
+            'address'                => $validated['address'] ?? null,
+            'previous_school'        => $validated['previous_school'] ?? null,
+            'last_school_studied'    => $validated['previous_school'] ?? null,
+            'previous_class'         => $validated['previous_class'] ?? null,
+            'last_class_studied'     => $validated['previous_class'] ?? null,
+            'source'                 => (!empty($validated['source']) ? $validated['source'] : 'walk_in'),
+            'referred_by'            => $validated['referred_by'] ?? null,
+            'referral_name'          => $validated['referred_by'] ?? null,
+            'follow_up_date'         => $validated['follow_up_date'] ?? null,
+            'notes'                  => $validated['notes'] ?? null,
+            'follow_up_remarks'      => $validated['notes'] ?? null,
+            'status'                 => 'new',
+            'academic_year_id'       => $currentYear?->id,
+            'assigned_to'            => Auth::id(),
+            'created_by'             => Auth::id(),
+        ]);
+
+        // Audit status history
+        try {
+            EnquiryStatusHistory::create([
+                'enquiry_id'      => $enquiry->id,
+                'previous_status' => null,
+                'new_status'      => 'new',
+                'reason'          => 'Front Office Desk Registration',
+                'remarks'         => 'Enquiry created via admissions desk form.',
+                'changed_by'      => Auth::id(),
+                'changed_at'      => now(),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('EnquiryStatusHistory creation skipped: ' . $e->getMessage());
+        }
+
+        // Create initial follow-up record if notes or follow-up date are given
+        if (!empty($validated['notes']) || !empty($validated['follow_up_date'])) {
+            try {
+                $contactMethod = match($enquiry->source) {
+                    'phone', 'call' => 'phone',
+                    'whatsapp'      => 'whatsapp',
+                    'email'         => 'email',
+                    default         => 'in_person',
+                };
+
+                EnquiryFollowUp::create([
+                    'enquiry_id'          => $enquiry->id,
+                    'contact_person'      => $enquiry->parent_name,
+                    'contact_method'      => $contactMethod,
+                    'discussion'          => $validated['notes'] ?: 'Initial campus visit and front-office admission inquiry.',
+                    'parent_response'     => 'Interested in admission',
+                    'notes'               => 'Logged during enquiry registration',
+                    'next_follow_up_date' => $enquiry->follow_up_date,
+                    'status'              => 'completed',
+                    'assigned_staff_id'   => Auth::id(),
+                    'created_by'          => Auth::id(),
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('EnquiryFollowUp creation skipped: ' . $e->getMessage());
+            }
+        }
+
+        Cache::forget('admission_index_stats_v1');
+        Cache::forget('admission_index_stats_v2');
+
+        return redirect()->route('admissions.index', ['status' => 'new'])
+            ->with('success', "Enquiry #{$enquiry->enquiry_number} for {$enquiry->student_name} registered successfully!");
     }
 
     /**

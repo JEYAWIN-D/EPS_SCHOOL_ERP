@@ -229,6 +229,7 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::delete('/draft/document/{id}',  [AdmissionDraftController::class, 'deleteDraftDocument'])->name('draft.delete-document')->where('id', '[0-9]+');
 
         // Enquiry Lifecycle, Follow-Ups & Admission Conversion
+        Route::post('/enquiry',                [AdmissionController::class, 'storeEnquiry'])->name('enquiry.store');
         Route::get('/enquiry/{id}/details',    [AdmissionController::class, 'enquiryDetailsJson'])->name('enquiry.details')->where('id', '[0-9]+');
         Route::post('/enquiry/{id}/follow-up', [AdmissionController::class, 'addEnquiryFollowUp'])->name('enquiry.follow-up')->where('id', '[0-9]+');
         Route::post('/enquiry/{id}/status',    [AdmissionController::class, 'updateEnquiryStatusAction'])->name('enquiry.update-status')->where('id', '[0-9]+');
