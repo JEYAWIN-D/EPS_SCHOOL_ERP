@@ -47,6 +47,7 @@ class Student extends Model
         'father_qualification', 'mother_qualification', 'father_income', 'mother_income',
         'stream_group', 'stream_group_allotted', 'is_tc_enclosed', 'is_qualified_promotion', 'year_of_passing',
         'dress_size', 'shoe_size', 'second_language', 'custom_kit_items', 'textbook_custom_fields',
+        'enquiry_id', 'admission_draft_id',
     ];
 
     protected static function booted(): void
@@ -134,6 +135,16 @@ class Student extends Model
     public function transportHistories(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(TransportAssignmentHistory::class, 'student_id');
+    }
+
+    public function enquiry(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Enquiry::class, 'enquiry_id');
+    }
+
+    public function admissionDraft(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(AdmissionDraft::class, 'admission_draft_id');
     }
 
     public function getFullNameAttribute(): string

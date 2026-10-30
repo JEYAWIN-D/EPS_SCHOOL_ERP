@@ -9,11 +9,6 @@
   @page {
     margin: 0;
     padding: 0;
-    @if($orientation === 'portrait')
-      size: 53.98mm 85.6mm;
-    @else
-      size: 85.6mm 53.98mm;
-    @endif
   }
 
   html, body {
@@ -32,16 +27,17 @@
      LANDSCAPE VISITOR PASS (85.6mm x 53.98mm)
   ══════════════════════════════════════════════════════════════════ */
   .card-landscape {
-    width: 240.5pt;
-    height: 151pt;
+    width: 240pt;
+    height: 150pt;
     box-sizing: border-box;
-    border-radius: 3.5mm;
+    border-radius: 3mm;
     overflow: hidden;
     background: #ffffff;
     border: 1pt solid #b91c1c;
-    position: relative;
+    position: absolute;
+    top: 1pt;
+    left: 1pt;
     text-align: left;
-    margin: 0 auto;
     page-break-inside: avoid;
     page-break-after: avoid;
   }
@@ -147,16 +143,17 @@
      PORTRAIT VISITOR PASS (53.98mm x 85.6mm)
   ══════════════════════════════════════════════════════════════════ */
   .card-portrait {
-    width: 151pt;
-    height: 240.5pt;
+    width: 150pt;
+    height: 240pt;
     box-sizing: border-box;
-    border-radius: 3.5mm;
+    border-radius: 3mm;
     overflow: hidden;
     background: #ffffff;
     border: 1pt solid #b91c1c;
-    position: relative;
+    position: absolute;
+    top: 1pt;
+    left: 1pt;
     text-align: center;
-    margin: 0 auto;
     page-break-inside: avoid;
     page-break-after: avoid;
   }

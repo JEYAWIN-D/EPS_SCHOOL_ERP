@@ -26,6 +26,17 @@
   },
   formatMoney(num) {
     return '₹' + Number(num || 0).toLocaleString('en-IN');
+  },
+  followUpModalOpen: false,
+  statusModalOpen: false,
+  activeEnquiry: { id: '', number: '', name: '', phone: '', status: '', reason: '', notes: '' },
+  openFollowUp(enq) {
+    this.activeEnquiry = enq;
+    this.followUpModalOpen = true;
+  },
+  openStatusModal(enq) {
+    this.activeEnquiry = enq;
+    this.statusModalOpen = true;
   }
 }">
 
@@ -622,7 +633,7 @@
   <div x-show="activeTab === 'enquiries'" class="space-y-6 print:hidden">
     {{-- Quick KPI Ribbon --}}
     @if(isset($stats))
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3">
       <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
         <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Enquiries</span>
         <span class="text-2xl font-black text-slate-900 font-mono">{{ $stats['total'] }}</span>
@@ -632,17 +643,27 @@
         <span class="text-2xl font-black text-blue-700 font-mono">{{ $stats['new'] }}</span>
       </div>
       <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-        <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Follow-up</span>
+        <span class="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">In Follow-Up</span>
         <span class="text-2xl font-black text-amber-700 font-mono">{{ $stats['follow_up'] }}</span>
       </div>
       <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
-        <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Admitted / Converted</span>
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Converted</span>
+          <span class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">{{ $stats['conversion_rate'] ?? 0 }}%</span>
+        </div>
         <span class="text-2xl font-black text-emerald-700 font-mono">{{ $stats['converted'] }}</span>
       </div>
       <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
         <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">Lost / Closed</span>
         <span class="text-2xl font-black text-rose-700 font-mono">{{ $stats['lost'] }}</span>
       </div>
+      <a href="{{ route('admissions.drafts.index') }}" class="bg-gradient-to-br from-indigo-50 to-white p-4 rounded-2xl border border-indigo-200/80 shadow-2xs space-y-1 hover:border-indigo-400 transition group block">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Incomplete Drafts</span>
+          <svg class="w-3.5 h-3.5 text-indigo-500 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <span class="text-2xl font-black text-indigo-700 font-mono">{{ $stats['drafts_count'] ?? 0 }}</span>
+      </a>
     </div>
     @endif
 
@@ -676,34 +697,35 @@
         <table class="w-full text-xs text-left">
           <thead class="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
             <tr>
-              <th class="py-4 px-6">Enquiry No</th>
-              <th class="py-4 px-6">Student Name</th>
-              <th class="py-4 px-6">Standard</th>
-              <th class="py-4 px-6">Parent &amp; Phone</th>
-              <th class="py-4 px-6 text-center">Status</th>
+              <th class="py-4 px-5">Enquiry No</th>
+              <th class="py-4 px-5">Student Name</th>
+              <th class="py-4 px-5">Standard</th>
+              <th class="py-4 px-5">Parent &amp; Phone</th>
+              <th class="py-4 px-5 text-center">Status</th>
+              <th class="py-4 px-5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 font-medium">
             @forelse($enquiries as $enquiry)
               <tr class="hover:bg-slate-50/60 transition">
-                <td class="py-4 px-6 font-mono font-bold text-[#8C2826] whitespace-nowrap">
+                <td class="py-4 px-5 font-mono font-bold text-[#8C2826] whitespace-nowrap">
                   {{ $enquiry->enquiry_number }}
                 </td>
-                <td class="py-4 px-6 font-bold text-slate-900 text-sm">
+                <td class="py-4 px-5 font-bold text-slate-900 text-sm">
                   {{ $enquiry->student_name }}
                 </td>
-                <td class="py-4 px-6 whitespace-nowrap">
+                <td class="py-4 px-5 whitespace-nowrap">
                   <span class="px-2.5 py-1 rounded-lg bg-rose-50 text-[#8C2826] border border-rose-200 text-xs font-semibold">
                     Class {{ $enquiry->class?->name ?? '—' }}
                   </span>
                 </td>
-                <td class="py-4 px-6">
+                <td class="py-4 px-5">
                   <p class="font-semibold text-slate-800">{{ $enquiry->father_name ?: ($enquiry->parent_name ?: '—') }}</p>
                   @if($enquiry->father_mobile || $enquiry->parent_mobile)
                     <p class="font-mono text-xs text-slate-500 mt-0.5">{{ $enquiry->father_mobile ?: $enquiry->parent_mobile }}</p>
                   @endif
                 </td>
-                <td class="py-4 px-6 text-center whitespace-nowrap">
+                <td class="py-4 px-5 text-center whitespace-nowrap">
                   @php
                     $status = strtolower($enquiry->status ?? '');
                     $statusClass = match($status) {
@@ -718,10 +740,38 @@
                     {{ ucfirst(str_replace('_', ' ', $enquiry->status)) }}
                   </span>
                 </td>
+                <td class="py-4 px-5 text-right whitespace-nowrap">
+                  <div class="flex items-center justify-end gap-1.5">
+                    @if(in_array($status, ['converted', 'enrolled', 'admitted']))
+                      @if($enquiry->converted_student_id)
+                        <a href="{{ route('students.show', $enquiry->converted_student_id) }}" class="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[11px] transition flex items-center gap-1 shadow-2xs">
+                          <span>View Student</span> &rarr;
+                        </a>
+                      @else
+                        <span class="text-[11px] text-emerald-700 font-semibold px-2 py-1">Enrolled</span>
+                      @endif
+                    @else
+                      {{-- Convert Button --}}
+                      <a href="{{ route('admissions.enquiry.convert', $enquiry->id) }}" class="px-3 py-1.5 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-bold text-[11px] shadow-2xs transition flex items-center gap-1 cursor-pointer" title="Convert enquiry into new admission">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                        <span>Convert</span>
+                      </a>
+                      {{-- Follow-Up Button --}}
+                      <button type="button" @click="openFollowUp({ id: '{{ $enquiry->id }}', number: '{{ $enquiry->enquiry_number }}', name: '{{ addslashes($enquiry->student_name) }}', phone: '{{ $enquiry->father_mobile ?: $enquiry->parent_mobile }}' })" class="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[11px] transition flex items-center gap-1 shadow-2xs cursor-pointer" title="Log Follow-Up Activity">
+                        <svg class="w-3.5 h-3.5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                        <span>Follow-up</span>
+                      </button>
+                      {{-- Status Button --}}
+                      <button type="button" @click="openStatusModal({ id: '{{ $enquiry->id }}', number: '{{ $enquiry->enquiry_number }}', name: '{{ addslashes($enquiry->student_name) }}', status: '{{ $enquiry->status }}', reason: '{{ $enquiry->non_conversion_reason }}', notes: '{{ addslashes($enquiry->non_conversion_notes ?? '') }}' })" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold text-[11px] transition shadow-2xs cursor-pointer" title="Update Enquiry Status">
+                        Status
+                      </button>
+                    @endif
+                  </div>
+                </td>
               </tr>
             @empty
               <tr>
-                <td colspan="5" class="py-12 text-center text-slate-400 font-medium">
+                <td colspan="6" class="py-12 text-center text-slate-400 font-medium">
                   No admission enquiries found matching your filter criteria.
                 </td>
               </tr>
@@ -735,6 +785,109 @@
           {{ $enquiries->links() }}
         </div>
       @endif
+    </div>
+  </div>
+
+  {{-- ── Follow-Up Activity Modal ────────────────────────────────────── --}}
+  <div x-show="followUpModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+       x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4" @click.outside="followUpModalOpen = false">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="text-base font-black text-slate-900">Log Follow-Up Activity</h3>
+          <p class="text-xs text-slate-500" x-text="activeEnquiry.number + ' • ' + activeEnquiry.name"></p>
+        </div>
+        <button type="button" @click="followUpModalOpen = false" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-lg font-bold">&times;</button>
+      </div>
+
+      <form :action="'/admissions/enquiry/' + activeEnquiry.id + '/follow-up'" method="POST" class="space-y-4">
+        @csrf
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Contact Date <span class="text-rose-500">*</span></label>
+            <input type="date" name="contact_date" value="{{ date('Y-m-d') }}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Contact Mode <span class="text-rose-500">*</span></label>
+            <select name="contact_mode" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold">
+              <option value="phone">Phone Call</option>
+              <option value="whatsapp">WhatsApp Message</option>
+              <option value="in_person">In-Person Campus Visit</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Next Follow-Up Date</label>
+          <input type="date" name="next_follow_up_date" min="{{ date('Y-m-d') }}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Discussion Summary &amp; Notes <span class="text-rose-500">*</span></label>
+          <textarea name="remarks" rows="3" required placeholder="Key discussion points, parent feedback, fee queries, campus visit impressions..." class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-normal focus:ring-2 focus:ring-[#8C2826]/20"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" @click="followUpModalOpen = false" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-black text-xs shadow-xs">Save Follow-Up</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {{-- ── Status & Reason Modal ─────────────────────────────────────── --}}
+  <div x-show="statusModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+       x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+       x-data="{ newStatus: 'follow_up' }" x-init="$watch('activeEnquiry', val => { if(val && val.status) newStatus = val.status; })">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4" @click.outside="statusModalOpen = false">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div>
+          <h3 class="text-base font-black text-slate-900">Update Enquiry Status</h3>
+          <p class="text-xs text-slate-500" x-text="activeEnquiry.number + ' • ' + activeEnquiry.name"></p>
+        </div>
+        <button type="button" @click="statusModalOpen = false" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-lg font-bold">&times;</button>
+      </div>
+
+      <form :action="'/admissions/enquiry/' + activeEnquiry.id + '/status'" method="POST" class="space-y-4">
+        @csrf
+        <div>
+          <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">Enquiry Status <span class="text-rose-500">*</span></label>
+          <select name="status" x-model="newStatus" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold">
+            <option value="new">New Enquiry</option>
+            <option value="follow_up">In Follow-Up</option>
+            <option value="converted">Admitted / Converted</option>
+            <option value="lost">Lost / Did Not Join</option>
+            <option value="cancelled">Cancelled / Invalid</option>
+          </select>
+        </div>
+
+        <div x-show="newStatus === 'lost' || newStatus === 'cancelled'" class="space-y-3 p-3.5 bg-rose-50/60 rounded-2xl border border-rose-200">
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-rose-900 mb-1">Non-Conversion Reason <span class="text-rose-500">*</span></label>
+            <select name="non_conversion_reason" class="w-full px-3 py-2 rounded-xl border border-rose-300 text-xs font-semibold bg-white">
+              <option value="">Select Primary Reason</option>
+              <option value="fees_not_affordable">Fee Structure Not Affordable</option>
+              <option value="distance_transport">Distance / Transport Inconvenience</option>
+              <option value="taken_another_school">Took Admission in Another School</option>
+              <option value="location_changed">Relocated / Shifted Out of Town</option>
+              <option value="curriculum_preference">Curriculum Preference (State Board / ICSE)</option>
+              <option value="personal_reasons">Family / Personal Reasons</option>
+              <option value="other">Other / Not Specified</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold uppercase tracking-wider text-rose-900 mb-1">Non-Conversion Notes</label>
+            <textarea name="non_conversion_notes" rows="2" placeholder="Specific notes, which competitor school was chosen, etc." class="w-full px-3 py-2 rounded-xl border border-rose-300 text-xs bg-white"></textarea>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" @click="statusModalOpen = false" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-black text-xs shadow-xs">Update Status</button>
+        </div>
+      </form>
     </div>
   </div>
 

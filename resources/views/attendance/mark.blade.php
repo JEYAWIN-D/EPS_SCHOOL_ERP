@@ -123,7 +123,7 @@ function attendanceMarkerData() {
       <div class="flex flex-wrap items-center gap-3">
         <div>
           <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Class / Standard</label>
-          <select name="class_id" onchange="const s = this.form.querySelector('[name=section_id]'); if(s) s.value=''; this.form.submit()" class="select select-sm text-xs font-bold bg-slate-50 border-slate-200 rounded-xl min-w-[140px]">
+          <select name="class_id" onchange="const s = this.form.querySelector('[name=section_id]'); if(s) s.disabled=true; this.form.submit()" class="select select-sm text-xs font-bold bg-slate-50 border-slate-200 rounded-xl min-w-[140px]">
             @foreach($classes as $cls)
               <option value="{{ $cls->id }}" @selected($classId == $cls->id)>Class {{ $cls->name }}</option>
             @endforeach

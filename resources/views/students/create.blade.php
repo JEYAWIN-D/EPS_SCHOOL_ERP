@@ -3,6 +3,68 @@
 @section('title', 'Admit Student')
 
 @section('content')
+<script>
+function admitForm() {
+  return {
+    residentialAddress: @json(old('residential_address', '')),
+    permanentAddress: @json(old('permanent_address', '')),
+    isDisabled: {{ old('is_disabled') ? 'true' : 'false' }},
+    selectedClassId: @json((string) old('class_id', request('class_id', ''))),
+    selectedSectionId: @json((string) old('section_id', request('section_id', ''))),
+    copyAddress() {
+      this.permanentAddress = this.residentialAddress;
+    },
+    init() {
+      window.admitFormInstance = this;
+      if (this.selectedClassId) {
+        this.loadSections(this.selectedClassId, this.selectedSectionId);
+      }
+    },
+    onClassChange(classId) {
+      this.selectedClassId = classId;
+      const srvErr = document.getElementById('class_id_server_err');
+      if (srvErr) srvErr.style.display = 'none';
+      this.loadSections(classId, '');
+    },
+    async loadSections(classId, preselectedSection = '') {
+      const sel = document.getElementById('section_select');
+      if (!sel) return;
+      if (!classId) {
+        sel.innerHTML = '<option value="">Select class first</option>';
+        return;
+      }
+      sel.innerHTML = '<option value="">Loading sections…</option>';
+      try {
+        const res = await fetch(`/api/sections?class_id=${encodeURIComponent(classId)}`, {
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+        if (!res.ok) throw new Error('API returned ' + res.status);
+        const data = await res.json();
+        if (!Array.isArray(data) || data.length === 0) {
+          sel.innerHTML = '<option value="">No sections found</option>';
+          return;
+        }
+        let html = '<option value="">Select section</option>';
+        data.forEach(s => {
+          const isSel = (preselectedSection && String(preselectedSection) === String(s.id)) ? ' selected' : '';
+          html += `<option value="${s.id}"${isSel}>Section ${s.name}</option>`;
+        });
+        sel.innerHTML = html;
+        if (preselectedSection) {
+          sel.value = preselectedSection;
+        }
+      } catch (err) {
+        console.error('Failed to load sections:', err);
+        sel.innerHTML = '<option value="">Failed to load sections</option>';
+      }
+    }
+  };
+}
+</script>
+
 <div class="max-w-4xl mx-auto space-y-6" x-data="admitForm()" x-init="init()">
 
   <nav class="text-sm text-slate-400 flex items-center gap-1.5 mb-1">
@@ -241,67 +303,3 @@
   </form>
 </div>
 @endsection
-
-@push('scripts')
-<script>
-function admitForm() {
-  return {
-    residentialAddress: @json(old('residential_address', '')),
-    permanentAddress: @json(old('permanent_address', '')),
-    isDisabled: {{ old('is_disabled') ? 'true' : 'false' }},
-    selectedClassId: @json((string) old('class_id', request('class_id', ''))),
-    selectedSectionId: @json((string) old('section_id', request('section_id', ''))),
-    copyAddress() {
-      this.permanentAddress = this.residentialAddress;
-    },
-    init() {
-      window.admitFormInstance = this;
-      if (this.selectedClassId) {
-        this.loadSections(this.selectedClassId, this.selectedSectionId);
-      }
-    },
-    onClassChange(classId) {
-      this.selectedClassId = classId;
-      const srvErr = document.getElementById('class_id_server_err');
-      if (srvErr) srvErr.style.display = 'none';
-      this.loadSections(classId, '');
-    },
-    async loadSections(classId, preselectedSection = '') {
-      const sel = document.getElementById('section_select');
-      if (!sel) return;
-      if (!classId) {
-        sel.innerHTML = '<option value="">Select class first</option>';
-        return;
-      }
-      sel.innerHTML = '<option value="">Loading sections…</option>';
-      try {
-        const res = await fetch(`/api/sections?class_id=${encodeURIComponent(classId)}`, {
-          headers: {
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        });
-        if (!res.ok) throw new Error('API returned ' + res.status);
-        const data = await res.json();
-        if (!Array.isArray(data) || data.length === 0) {
-          sel.innerHTML = '<option value="">No sections found</option>';
-          return;
-        }
-        let html = '<option value="">Select section</option>';
-        data.forEach(s => {
-          const isSel = (preselectedSection && String(preselectedSection) === String(s.id)) ? ' selected' : '';
-          html += `<option value="${s.id}"${isSel}>Section ${s.name}</option>`;
-        });
-        sel.innerHTML = html;
-        if (preselectedSection) {
-          sel.value = preselectedSection;
-        }
-      } catch (err) {
-        console.error('Failed to load sections:', err);
-        sel.innerHTML = '<option value="">No sections found</option>';
-      }
-    }
-  }
-}
-</script>
-@endpush

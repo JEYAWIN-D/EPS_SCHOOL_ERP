@@ -67,6 +67,31 @@
 @endpush
 
 @section('content')
+@php
+  $draftData = $draft?->form_data ?? [];
+  $enqParts = $enquiry ? preg_split('/\s+/', trim((string) $enquiry->student_name), 2) : [];
+  $enqFirstName = $enqParts[0] ?? '';
+  $enqLastName  = $enqParts[1] ?? '';
+
+  $val = function($key, $default = '') use ($draftData, $enquiry, $enqFirstName, $enqLastName) {
+      if (old($key) !== null) return old($key);
+      if (isset($draftData[$key]) && $draftData[$key] !== '') return $draftData[$key];
+      if ($enquiry) {
+          if ($key === 'first_name') return $enqFirstName;
+          if ($key === 'last_name') return $enqLastName;
+          if ($key === 'class_id') return $enquiry->class_id;
+          if ($key === 'dob') return $enquiry->dob ? \Carbon\Carbon::parse($enquiry->dob)->format('Y-m-d') : '';
+          if ($key === 'gender') return strtolower($enquiry->gender ?? '');
+          if ($key === 'father_name') return $enquiry->father_name ?: $enquiry->parent_name;
+          if ($key === 'father_mobile') return $enquiry->father_mobile ?: $enquiry->parent_mobile;
+          if ($key === 'parent_mobile') return $enquiry->father_mobile ?: $enquiry->parent_mobile;
+          if ($key === 'address' || $key === 'residential_address') return $enquiry->address;
+          if ($key === 'previous_school' || $key === 'previous_school_name') return $enquiry->previous_school;
+          if ($key === 'source') return $enquiry->source;
+      }
+      return $default;
+  };
+@endphp
 <div class="max-w-5xl mx-auto space-y-6 admission-form-wrapper" x-init="initAdmission()" x-data="{
   classList: {{ json_encode($classes->map(fn($c) => ['id' => $c->id, 'name' => $c->name])) }},
   sectionsList: {{ json_encode($sections->map(fn($s) => ['id' => $s->id, 'class_id' => $s->class_id, 'name' => $s->name])) }},
@@ -74,15 +99,15 @@
   activitiesData: {{ json_encode($activities) }},
   admissionKitsData: {{ json_encode($admissionKits ?? []) }},
   transportRoutesData: {{ json_encode($transportRoutes ?? []) }},
-  selectedClassId: '{{ old("class_id", request("class_id", "")) }}',
-  selectedSectionId: '{{ old("section_id", "") }}',
+  selectedClassId: '{{ $val("class_id", request("class_id", "")) }}',
+  selectedSectionId: '{{ $val("section_id", "") }}',
 
   // Books & Notes Master Checklist State
   academicYearId: '{{ $academicYear?->id ?? "" }}',
   academicYearsList: {{ json_encode(($academicYears ?? collect([$academicYear]))->map(fn($y) => ['id' => $y->id, 'name' => $y->name, 'is_current' => $y->is_current])) }},
   academicGroupsList: {{ json_encode(($academicGroups ?? collect([]))->map(fn($g) => ['id' => $g->id, 'name' => $g->name, 'code' => $g->code])) }},
   selectedBookNoteGroupId: '',
-  selectedGender: '{{ old('gender', '') }}',
+  selectedGender: '{{ $val('gender', '') }}',
   bookNoteList: { books: [], notes: [], uniforms: [] },
   bookNoteLoading: false,
   curriculumTab: 'all', // 'all' | 'books' | 'notes' | 'uniforms'
@@ -958,39 +983,114 @@
     <p class="text-xs text-slate-600 font-medium mt-0.5">Academic Year: {{ $academicYear?->name ?? '2026-2027' }} &bull; Date: {{ date('d-m-Y') }}</p>
   </div>
 
-  {{-- Modern Section Navigator --}}
+  {{-- Modern Section Navigator with Live Auto-Save Indicator --}}
   <div class="bg-white/95 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-2 overflow-x-auto print:hidden sticky top-3 z-30">
-    <a href="#section-student" class="flex-1 min-w-[150px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl hover:bg-[#FFF5F5] transition group border border-transparent hover:border-[#FECACA]">
-      <span class="w-7 h-7 rounded-xl bg-[#8C2826] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">1</span>
-      <div class="min-w-0">
-        <span class="font-bold text-slate-800 group-hover:text-[#8C2826] text-xs block truncate transition">Student &amp; Academic</span>
-        <span class="text-[10px] text-slate-400 block truncate">Profile &amp; Placement</span>
+    <div class="flex items-center gap-2 flex-1 min-w-[450px]">
+      <a href="#section-student" class="flex-1 min-w-[140px] flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-[#FFF5F5] transition group border border-transparent hover:border-[#FECACA]">
+        <span class="w-7 h-7 rounded-xl bg-[#8C2826] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">1</span>
+        <div class="min-w-0">
+          <span class="font-bold text-slate-800 group-hover:text-[#8C2826] text-xs block truncate transition">Student &amp; Academic</span>
+          <span class="text-[10px] text-slate-400 block truncate">Profile &amp; Placement</span>
+        </div>
+      </a>
+
+      <div class="h-4 w-px bg-slate-200 shrink-0"></div>
+
+      <a href="#section-parents" class="flex-1 min-w-[140px] flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-[#FFF5F5] transition group border border-transparent hover:border-[#FECACA]">
+        <span class="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 group-hover:bg-[#8C2826] group-hover:text-white font-bold text-xs flex items-center justify-center shrink-0 transition">2</span>
+        <div class="min-w-0">
+          <span class="font-bold text-slate-700 group-hover:text-[#8C2826] text-xs block truncate transition">Parents &amp; Facilities</span>
+          <span class="text-[10px] text-slate-400 block truncate">Family, Bus &amp; Programs</span>
+        </div>
+      </a>
+
+      <div class="h-4 w-px bg-slate-200 shrink-0"></div>
+
+      <a href="#section-billing" class="flex-1 min-w-[140px] flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-[#FEF9EE] transition group border border-transparent hover:border-[#FDE68A]">
+        <span class="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 group-hover:bg-[#C8973A] group-hover:text-white font-bold text-xs flex items-center justify-center shrink-0 transition">3</span>
+        <div class="min-w-0">
+          <span class="font-bold text-slate-700 group-hover:text-[#C8973A] text-xs block truncate transition">Kits, Fees &amp; Billing</span>
+          <span class="text-[10px] text-slate-400 block truncate">Package &amp; Payment</span>
+        </div>
+      </a>
+    </div>
+
+    {{-- Auto-Save Live Pill & Action Controls --}}
+    <div class="flex items-center gap-2 shrink-0 pl-3 border-l border-slate-200">
+      <div id="draftSaveIndicator" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 transition-all">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="draftSaveIndicatorText">Draft Synced</span>
       </div>
-    </a>
 
-    <div class="h-4 w-px bg-slate-200 shrink-0"></div>
+      <button type="button" onclick="triggerManualDraftSave()" id="btnManualSaveDraft"
+              class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer" title="Save draft now to cloud">
+        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+        <span class="hidden sm:inline">Save Draft</span>
+      </button>
 
-    <a href="#section-parents" class="flex-1 min-w-[150px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl hover:bg-[#FFF5F5] transition group border border-transparent hover:border-[#FECACA]">
-      <span class="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 group-hover:bg-[#8C2826] group-hover:text-white font-bold text-xs flex items-center justify-center shrink-0 transition">2</span>
-      <div class="min-w-0">
-        <span class="font-bold text-slate-700 group-hover:text-[#8C2826] text-xs block truncate transition">Parents &amp; Facilities</span>
-        <span class="text-[10px] text-slate-400 block truncate">Family, Bus &amp; Programs</span>
-      </div>
-    </a>
-
-    <div class="h-4 w-px bg-slate-200 shrink-0"></div>
-
-    <a href="#section-billing" class="flex-1 min-w-[150px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl hover:bg-[#FEF9EE] transition group border border-transparent hover:border-[#FDE68A]">
-      <span class="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 group-hover:bg-[#C8973A] group-hover:text-white font-bold text-xs flex items-center justify-center shrink-0 transition">3</span>
-      <div class="min-w-0">
-        <span class="font-bold text-slate-700 group-hover:text-[#C8973A] text-xs block truncate transition">Kits, Fees &amp; Billing</span>
-        <span class="text-[10px] text-slate-400 block truncate">Package &amp; Payment</span>
-      </div>
-    </a>
+      <a href="{{ route('admissions.drafts.index') }}" class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition flex items-center gap-1 shadow-2xs" title="View Incomplete Drafts Desk">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+        <span class="hidden md:inline">Drafts Desk</span>
+      </a>
+    </div>
   </div>
+
+  {{-- Enquiry Conversion Banner --}}
+  @if(isset($enquiry) && $enquiry)
+  <div class="p-4 sm:p-5 rounded-2xl bg-rose-50/90 border-2 border-rose-300 text-rose-950 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-start sm:items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-[#8C2826] text-white flex items-center justify-center shrink-0 shadow-xs font-black text-xs">
+        ENQ
+      </div>
+      <div>
+        <h4 class="text-xs sm:text-sm font-extrabold text-[#8C2826] flex items-center gap-2">
+          <span>Converting from Enquiry #{{ $enquiry->enquiry_number }}</span>
+          <span class="text-[10px] font-bold bg-rose-200 text-[#8C2826] px-2 py-0.5 rounded-full">Candidate Pre-Filled</span>
+        </h4>
+        <p class="text-[11px] sm:text-xs text-rose-800 mt-0.5">
+          Student: <strong>{{ $enquiry->student_name }}</strong> &bull; Class: <strong>{{ $enquiry->class?->name ?? '—' }}</strong> &bull; Parent: <strong>{{ $enquiry->father_name ?: ($enquiry->parent_name ?: '—') }}</strong> ({{ $enquiry->father_mobile ?: $enquiry->parent_mobile }}). Information has been loaded into the form.
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <a href="{{ route('admissions.index', ['status' => 'follow_up']) }}" class="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-100 text-[#8C2826] border border-rose-200 text-xs font-bold transition shadow-2xs">
+        Change Enquiry
+      </a>
+    </div>
+  </div>
+  @endif
+
+  {{-- Resumed Draft Banner --}}
+  @if(isset($draft) && $draft)
+  <div class="p-4 sm:p-5 rounded-2xl bg-indigo-50/90 border-2 border-indigo-300 text-indigo-950 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-start sm:items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs font-bold text-xs">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      </div>
+      <div>
+        <h4 class="text-xs sm:text-sm font-extrabold text-indigo-900 flex items-center gap-2">
+          <span>Resumed Draft #{{ $draft->draft_id }}</span>
+          <span class="text-[10px] font-bold bg-indigo-200 text-indigo-900 px-2 py-0.5 rounded-full">{{ $draft->completion_percentage }}% Complete</span>
+        </h4>
+        <p class="text-[11px] sm:text-xs text-indigo-800 mt-0.5">
+          Candidate: <strong>{{ $draft->candidate_name ?: 'New Student' }}</strong> &bull; Last saved {{ $draft->updated_at->diffForHumans() }} ({{ $draft->updated_at->format('d M Y, h:i A') }}).
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <a href="{{ route('admissions.drafts.index') }}" class="px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold transition shadow-2xs">
+        All Drafts
+      </a>
+    </div>
+  </div>
+  @endif
 
   <form id="admissionCreateForm" method="POST" action="{{ route('admissions.store') }}" enctype="multipart/form-data" class="space-y-10" novalidate>
     @csrf
+
+    {{-- Draft and Enquiry Linkage Hidden Fields --}}
+    <input type="hidden" name="draft_id" id="form_draft_id" value="{{ $draft?->id ?? old('draft_id', request('draft_id', '')) }}">
+    <input type="hidden" name="enquiry_id" id="form_enquiry_id" value="{{ $enquiry?->id ?? old('enquiry_id', request('enquiry_id', '')) }}">
 
     {{-- Idempotency Token and Payment Verification Hidden State --}}
     <input type="hidden" name="submission_token" id="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">
@@ -1184,7 +1284,7 @@
               <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-[#8C2826] transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
               </div>
-              <input type="text" id="first_name" name="first_name" required maxlength="50" value="{{ old('first_name') }}"
+              <input type="text" id="first_name" name="first_name" required maxlength="50" value="{{ $val('first_name') }}"
                      placeholder="Student first name (e.g. Akash)"
                      class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal hover:border-slate-300 focus:border-[#8C2826] focus:ring-4 focus:ring-[#8C2826]/10 transition shadow-2xs outline-none">
             </div>
@@ -1203,7 +1303,7 @@
               <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within/input:text-[#8C2826] transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
               </div>
-              <input type="text" id="last_name" name="last_name" maxlength="50" value="{{ old('last_name') }}"
+              <input type="text" id="last_name" name="last_name" maxlength="50" value="{{ $val('last_name') }}"
                      placeholder="Surname or initial (e.g. A R)"
                      class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-normal hover:border-slate-300 focus:border-[#8C2826] focus:ring-4 focus:ring-[#8C2826]/10 transition shadow-2xs outline-none">
             </div>
@@ -2083,7 +2183,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
             <label for="parent_name" class="block text-xs font-bold text-slate-700 mb-2">Father / Primary Parent Name <span class="text-rose-500">*</span></label>
-            <input type="text" id="parent_name" name="parent_name" required maxlength="100" value="{{ old('parent_name') }}"
+            <input type="text" id="parent_name" name="parent_name" required maxlength="100" value="{{ $val('parent_name', $val('father_name')) }}"
                    placeholder="Father full name"
                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
             @error('parent_name') <p class="text-xs text-rose-500 mt-1 font-semibold">{{ $message }}</p> @enderror
@@ -2099,7 +2199,7 @@
               <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-xs font-bold text-slate-400 select-none">+91</span>
               <input type="tel" id="parent_mobile" name="parent_mobile" required
                      inputmode="numeric" maxlength="10" minlength="10" pattern="[6-9][0-9]{9}"
-                     value="{{ old('parent_mobile') }}"
+                     value="{{ $val('parent_mobile', $val('father_mobile')) }}"
                      oninput="formatPhoneInput(this); updatePhoneBadge(this, 'parent_mobile_badge', true)"
                      onblur="validatePhoneLive(this, 'parent_mobile_client_err', 'parent_mobile_badge', true)"
                      placeholder="9876543210"
@@ -2424,7 +2524,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div class="sm:col-span-2">
             <label class="block text-xs font-bold text-slate-700 mb-2">Residential Street Address</label>
-            <input type="text" name="address" value="{{ old('address') }}"
+            <input type="text" name="address" value="{{ $val('address', $val('residential_address')) }}"
                    placeholder="Complete door no, street name, and locality"
                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-[#8C2826] focus:ring-2 focus:ring-[#FEE2E2] text-sm font-medium transition text-slate-900 bg-white">
           </div>
@@ -4793,40 +4893,68 @@
       });
     }
 
-    // ── Resilient Auto-Draft Storage Engine ──────────────────────────
+    // ── Resilient Intelligent Auto-Draft Storage Engine ──────────────────────────
     const DRAFT_KEY = 'dasa_admission_draft_v2';
     let draftSaveTimer = null;
+    let isSavingDraft = false;
+    let hasUnsavedChanges = false;
 
-    function saveAdmissionDraft() {
+    function setDraftIndicator(status, message) {
+      const ind = document.getElementById('draftSaveIndicator');
+      const txt = document.getElementById('draftSaveIndicatorText');
+      if (!ind || !txt) return;
+
+      if (status === 'saving') {
+        ind.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 transition-all';
+        ind.innerHTML = '<svg class="animate-spin -ml-0.5 mr-1 h-3 w-3 text-amber-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg><span>Saving draft...</span>';
+      } else if (status === 'saved') {
+        ind.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 transition-all';
+        ind.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>' + (message || 'Draft Saved') + '</span>';
+      } else if (status === 'unsaved') {
+        ind.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 transition-all';
+        ind.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span><span>Unsaved changes</span>';
+      } else if (status === 'offline') {
+        ind.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200 transition-all';
+        ind.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-400"></span><span>Saved locally (offline)</span>';
+      }
+    }
+
+    async function sendDraftToServer() {
       const formEl = document.getElementById('admissionCreateForm');
-      if (!formEl) return;
+      if (!formEl || isSavingDraft) return;
 
-      const draft = {
-        savedAt: new Date().toISOString(),
-        fields: {},
-        alpine: {}
-      };
+      const firstName = document.getElementById('first_name')?.value?.trim();
+      const mobile = document.querySelector('[name=parent_mobile]')?.value?.trim();
+      const classId = document.querySelector('[name=class_id]')?.value;
 
-      // Collect standard form fields (excluding files and tokens)
+      // Don't auto-save if completely empty
+      if (!firstName && !mobile && !classId) return;
+
+      isSavingDraft = true;
+      setDraftIndicator('saving');
+
+      // Collect form inputs
+      const fields = {};
       const elements = formEl.elements;
       for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
         if (!el.name || el.type === 'file' || el.name === '_token') continue;
         if (el.type === 'checkbox') {
-          draft.fields[el.name] = el.checked;
+          fields[el.name] = el.checked ? '1' : '0';
         } else if (el.type === 'radio') {
-          if (el.checked) draft.fields[el.name] = el.value;
+          if (el.checked) fields[el.name] = el.value;
         } else {
-          draft.fields[el.name] = el.value;
+          fields[el.name] = el.value;
         }
       }
 
       // Collect reactive Alpine state
+      let alpineState = {};
       const alpineRoot = document.querySelector('[x-data]');
       if (alpineRoot && window.Alpine) {
         const ad = Alpine.$data(alpineRoot);
         if (ad) {
-          draft.alpine = {
+          alpineState = {
             selectedClassId: ad.selectedClassId || '',
             selectedSectionId: ad.selectedSectionId || '',
             userAmountCollected: ad.userAmountCollected || '',
@@ -4834,101 +4962,141 @@
             concessionAmountInput: ad.concessionAmountInput || '',
             concessionRemarks: ad.concessionRemarks || '',
             aspRequired: ad.aspRequired || false,
-            aspTerm: ad.aspTerm || '',
             transportRequired: ad.transportRequired || false,
-            selectedRouteId: ad.selectedRouteId || '',
-            selectedStopId: ad.selectedStopId || '',
             isPaymentVerified: ad.isPaymentVerified || false,
-            verifiedAt: ad.verifiedAt || '',
-            verifiedBy: ad.verifiedBy || '',
-            verificationNotes: ad.verificationNotes || '',
-            verificationHistory: ad.verificationHistory || []
           };
         }
       }
 
+      const draftIdInput = document.getElementById('form_draft_id');
+      const enquiryIdInput = document.getElementById('form_enquiry_id');
+      const currentDraftId = draftIdInput ? draftIdInput.value : '';
+      const currentEnquiryId = enquiryIdInput ? enquiryIdInput.value : '';
+
+      // Backup to localStorage
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          savedAt: new Date().toISOString(),
+          fields: fields,
+          alpine: alpineState,
+          draft_id: currentDraftId
+        }));
+      } catch (e) {}
+
+      try {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                      document.querySelector('input[name="_token"]')?.value;
+
+        const res = await fetch("{{ route('admissions.draft.save') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': token,
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({
+            draft_id: currentDraftId,
+            enquiry_id: currentEnquiryId,
+            current_step: 1,
+            form_data: fields,
+            alpine_data: alpineState
+          })
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && (json.draft_id || json.draft)) {
+            if (draftIdInput) draftIdInput.value = json.draft_id || json.draft?.id;
+            hasUnsavedChanges = false;
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+            setDraftIndicator('saved', `Saved (${timeStr})`);
+          } else {
+            setDraftIndicator('saved', 'Saved locally');
+          }
+        } else {
+          setDraftIndicator('offline');
+        }
       } catch (err) {
-        console.warn('Draft save error:', err);
+        console.warn('Draft server sync error:', err);
+        setDraftIndicator('offline');
+      } finally {
+        isSavingDraft = false;
       }
     }
 
-    function saveAdmissionDraftDebounced() {
+    function triggerManualDraftSave() {
+      sendDraftToServer();
+    }
+
+    function onFormUserEdit() {
+      hasUnsavedChanges = true;
+      setDraftIndicator('unsaved');
       clearTimeout(draftSaveTimer);
-      draftSaveTimer = setTimeout(saveAdmissionDraft, 500);
+      draftSaveTimer = setTimeout(sendDraftToServer, 1500);
     }
 
     // Auto-save draft on every user keystroke / selection change
     if (form) {
-      form.addEventListener('input', saveAdmissionDraftDebounced);
-      form.addEventListener('change', saveAdmissionDraftDebounced);
+      form.addEventListener('input', onFormUserEdit);
+      form.addEventListener('change', onFormUserEdit);
+      form.addEventListener('submit', function() {
+        hasUnsavedChanges = false;
+      });
     }
-    window.addEventListener('beforeunload', saveAdmissionDraft);
 
-    // Auto-restore draft on page load
-    const hasServerErrors = {{ $errors->any() ? 'true' : 'false' }};
-    if (hasServerErrors) {
-      // Server returned with errors — Laravel old() has already filled form fields.
-      // Sync latest data into draft storage.
-      saveAdmissionDraft();
-    } else {
-      // Fresh load or refresh — check if local draft exists
+    window.addEventListener('beforeunload', function(e) {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes in the admission form.';
+      }
+    });
+
+    // Check active draft prompt on fresh load
+    async function checkActiveDraftPrompt() {
+      const draftIdVal = document.getElementById('form_draft_id')?.value;
+      const enquiryIdVal = document.getElementById('form_enquiry_id')?.value;
+      const hasErrors = {{ $errors->any() ? 'true' : 'false' }};
+
+      if (draftIdVal || enquiryIdVal || hasErrors) return;
+
       try {
-        const raw = localStorage.getItem(DRAFT_KEY);
-        if (raw) {
-          const draft = JSON.parse(raw);
-          const firstNameInput = document.getElementById('first_name');
-          // If first_name or mobile was entered in draft and current first_name is empty, restore!
-          if (draft && draft.fields && (draft.fields['first_name'] || draft.fields['parent_mobile'] || draft.fields['class_id'])) {
-            if (firstNameInput && !firstNameInput.value.trim()) {
-              // Populate form fields
-              for (const [name, val] of Object.entries(draft.fields)) {
-                const el = form.elements[name];
-                if (!el) continue;
-                if (el.type === 'checkbox') {
-                  el.checked = Boolean(val);
-                } else if (el.type === 'radio') {
-                  if (el.value === val) el.checked = true;
-                } else {
-                  el.value = val;
-                }
-              }
-
-              // Restore Alpine reactive state
-              const alpineRoot = document.querySelector('[x-data]');
-              if (alpineRoot && window.Alpine && draft.alpine) {
-                const ad = Alpine.$data(alpineRoot);
-                if (ad) {
-                  if (draft.alpine.selectedClassId) ad.selectedClassId = draft.alpine.selectedClassId;
-                  if (draft.alpine.selectedSectionId) ad.selectedSectionId = draft.alpine.selectedSectionId;
-                  if (draft.alpine.userAmountCollected) ad.userAmountCollected = draft.alpine.userAmountCollected;
-                  if (draft.alpine.concessionType) ad.concessionType = draft.alpine.concessionType;
-                  if (draft.alpine.concessionAmountInput) ad.concessionAmountInput = draft.alpine.concessionAmountInput;
-                  if (draft.alpine.concessionRemarks) ad.concessionRemarks = draft.alpine.concessionRemarks;
-                  if (draft.alpine.aspRequired !== undefined) ad.aspRequired = draft.alpine.aspRequired;
-                  if (draft.alpine.transportRequired !== undefined) ad.transportRequired = draft.alpine.transportRequired;
-                  if (draft.alpine.isPaymentVerified !== undefined) ad.isPaymentVerified = draft.alpine.isPaymentVerified;
-                  if (draft.alpine.verifiedAt) ad.verifiedAt = draft.alpine.verifiedAt;
-                  if (draft.alpine.verifiedBy) ad.verifiedBy = draft.alpine.verifiedBy;
-                  if (draft.alpine.verificationHistory) ad.verificationHistory = draft.alpine.verificationHistory;
-                }
-              }
-
-              // Display recovery banner
-              const banner = document.getElementById('draftRecoveryBanner');
-              const timeText = document.getElementById('draftTimestampText');
-              if (banner && timeText && draft.savedAt) {
-                const savedDate = new Date(draft.savedAt);
-                timeText.innerText = `Previously entered data from ${savedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} (${savedDate.toLocaleDateString('en-IN')}) was restored. You can continue without retyping.`;
-                banner.classList.remove('hidden');
-              }
-            }
+        const res = await fetch("{{ route('admissions.draft.check-active') }}", {
+          headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if ((data.has_draft || data.has_active_draft) && data.draft) {
+            showDraftPromptModal(data.draft);
           }
         }
       } catch (e) {
-        console.warn('Draft restoration error:', e);
+        console.warn('Active draft check error:', e);
       }
+    }
+
+    function showDraftPromptModal(draft) {
+      const modal = document.getElementById('activeDraftModal');
+      const text = document.getElementById('activeDraftModalText');
+      const resumeBtn = document.getElementById('activeDraftModalResumeBtn');
+      if (modal && text && resumeBtn) {
+        const student = draft.student_name || draft.candidate_name || 'Candidate';
+        const cls = draft.class_name ? `(Class ${draft.class_name})` : '';
+        const timeAgo = draft.time_ago || draft.last_saved_ago || 'recently';
+        text.innerText = `You have an unfinished admission draft for ${student} ${cls} saved ${timeAgo} (${draft.completion_percentage}% completed). Would you like to resume it?`;
+        resumeBtn.href = `/admissions/create?draft_id=${draft.id}`;
+        modal.classList.remove('hidden');
+      }
+    }
+
+    // Trigger active draft check
+    setTimeout(checkActiveDraftPrompt, 300);
+
+    // Auto-restore local draft if server returned validation errors
+    const hasServerErrors = {{ $errors->any() ? 'true' : 'false' }};
+    if (hasServerErrors) {
+      sendDraftToServer();
     }
   });
 
@@ -4942,4 +5110,30 @@
     }
   }
 </script>
+
+{{-- ── Active Draft Recovery Prompt Modal ────────────────────── --}}
+<div id="activeDraftModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+  <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <div>
+        <h3 class="text-base font-black text-slate-900">Unfinished Draft Detected</h3>
+        <p class="text-xs text-slate-500">Resume your previous admission entry</p>
+      </div>
+    </div>
+    <p id="activeDraftModalText" class="text-xs text-slate-600 leading-relaxed">
+      You have an incomplete admission draft saved from earlier.
+    </p>
+    <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+      <button type="button" onclick="document.getElementById('activeDraftModal').classList.add('hidden')" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer">
+        Start Fresh
+      </button>
+      <a id="activeDraftModalResumeBtn" href="#" class="px-4 py-2 rounded-xl bg-[#8C2826] hover:bg-[#731E1C] text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+        <span>Resume Draft</span> &rarr;
+      </a>
+    </div>
+  </div>
+</div>
 @endsection

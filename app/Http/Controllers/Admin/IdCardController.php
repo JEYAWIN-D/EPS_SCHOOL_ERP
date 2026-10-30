@@ -451,8 +451,8 @@ class IdCardController extends Controller
             return back()->with('error', 'No eligible staff records found for ID card printing.');
         }
 
-        // Apply batch pagination if downloading bulk without specific individual IDs
-        if (empty($staffIds) && $totalMatching > $limit) {
+        // Apply batch pagination to prevent Dompdf memory/timeout crashes (max 24 cards per batch)
+        if ($totalMatching > $limit) {
             $offset = ($batch - 1) * $limit;
             $query->skip($offset)->take($limit);
         }
@@ -527,7 +527,7 @@ class IdCardController extends Controller
         ]);
 
         $catLabel = $category ?: 'all-staff';
-        $batchLabel = ($totalMatching > $limit && empty($staffIds)) ? "-batch-{$batch}" : '';
+        $batchLabel = ($totalMatching > $limit) ? "-batch-{$batch}" : '';
         return $pdf->download("staff-id-cards-{$catLabel}-{$orientation}-{$side}{$batchLabel}.pdf");
     }
 

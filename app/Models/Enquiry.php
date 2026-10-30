@@ -28,6 +28,9 @@ class Enquiry extends Model
         'referred_by', 'follow_up_remarks',
         'stream_group', 'year_of_passing', 'previous_school_attended', 'board',
         'dress_size', 'shoe_size', 'second_language',
+        'converted_student_id', 'converted_at', 'converted_by',
+        'non_conversion_reason', 'non_conversion_remarks',
+        'closed_by', 'closed_at',
     ];
 
     protected $casts = [
@@ -36,6 +39,8 @@ class Enquiry extends Model
         'entrance_test_date'  => 'date',
         'interview_date'      => 'date',
         'payment_date'        => 'date',
+        'converted_at'        => 'datetime',
+        'closed_at'           => 'datetime',
         'documents'           => 'array',
         'doc_checklist'       => 'array',
         'missing_docs'        => 'array',
@@ -67,7 +72,32 @@ class Enquiry extends Model
 
     public function followUps(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(EnquiryFollowUp::class);
+        return $this->hasMany(EnquiryFollowUp::class)->orderByDesc('created_at');
+    }
+
+    public function statusHistory(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EnquiryStatusHistory::class, 'enquiry_id')->orderByDesc('changed_at');
+    }
+
+    public function drafts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AdmissionDraft::class, 'enquiry_id')->orderByDesc('updated_at');
+    }
+
+    public function convertedStudent(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Student::class, 'converted_student_id');
+    }
+
+    public function convertedBy(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'converted_by');
+    }
+
+    public function closedBy(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'closed_by');
     }
 
     public static function generateNumber(): string
@@ -85,22 +115,35 @@ class Enquiry extends Model
     public function getStatusColorAttribute(): string
     {
         return match($this->status) {
-            'new'        => 'badge-blue',
-            'follow_up'  => 'badge-amber',
-            'converted'  => 'badge-green',
-            'lost'       => 'badge-red',
-            default      => 'badge-slate',
+            'new'                  => 'badge-blue',
+            'contacted'            => 'badge-cyan',
+            'follow_up', 'follow_up_required' => 'badge-amber',
+            'interested'           => 'badge-indigo',
+            'visit_scheduled'      => 'badge-purple',
+            'admission_pending'    => 'badge-amber',
+            'converted', 'enrolled'=> 'badge-green',
+            'not_interested', 'lost'=> 'badge-red',
+            'on_hold'              => 'badge-slate',
+            default                => 'badge-slate',
         };
     }
 
     public function getStatusLabelAttribute(): string
     {
         return match($this->status) {
-            'new'        => 'New',
-            'follow_up'  => 'Follow Up',
-            'converted'  => 'Converted',
-            'lost'       => 'Lost',
-            default      => ucfirst($this->status),
+            'new'                  => 'New',
+            'contacted'            => 'Contacted',
+            'follow_up'            => 'Follow Up',
+            'follow_up_required'   => 'Follow-up Required',
+            'interested'           => 'Interested',
+            'visit_scheduled'      => 'Visit Scheduled',
+            'admission_pending'    => 'Admission Pending',
+            'converted'            => 'Converted',
+            'not_interested'       => 'Not Interested',
+            'lost'                 => 'Lost',
+            'on_hold'              => 'On Hold',
+            'enrolled'             => 'Enrolled',
+            default                => ucwords(str_replace('_', ' ', $this->status ?? 'New')),
         };
     }
 

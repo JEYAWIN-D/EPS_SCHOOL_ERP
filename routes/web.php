@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AdmissionController;
+use App\Http\Controllers\Admin\AdmissionDraftController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\AcademicController;
 use App\Http\Controllers\Admin\AttendanceController;
@@ -217,6 +218,22 @@ Route::middleware(['auth', 'staff.access'])->group(function () {
         Route::post('/{id}/principal-approve',  [AdmissionController::class, 'principalApprove'])->name('principal-approve')->where('id', '[0-9]+');
         Route::post('/{id}/admin-confirm',      [AdmissionController::class, 'adminConfirm'])->name('admin-confirm')->where('id', '[0-9]+');
         Route::post('/{id}/reject-application', [AdmissionController::class, 'rejectApplication'])->name('reject-application')->where('id', '[0-9]+');
+
+        // Drafts Management & Auto-Save
+        Route::get('/drafts',                  [AdmissionDraftController::class, 'index'])->name('drafts.index');
+        Route::post('/draft/save',             [AdmissionDraftController::class, 'saveDraft'])->name('draft.save');
+        Route::get('/draft/check-active',      [AdmissionDraftController::class, 'checkActiveDraft'])->name('draft.check-active');
+        Route::get('/draft/{id}/load',         [AdmissionDraftController::class, 'loadDraft'])->name('draft.load')->where('id', '[0-9]+');
+        Route::delete('/draft/{id}',           [AdmissionDraftController::class, 'deleteDraft'])->name('draft.delete')->where('id', '[0-9]+');
+        Route::post('/draft/upload-document',  [AdmissionDraftController::class, 'uploadDraftDocument'])->name('draft.upload-document');
+        Route::delete('/draft/document/{id}',  [AdmissionDraftController::class, 'deleteDraftDocument'])->name('draft.delete-document')->where('id', '[0-9]+');
+
+        // Enquiry Lifecycle, Follow-Ups & Admission Conversion
+        Route::get('/enquiry/{id}/details',    [AdmissionController::class, 'enquiryDetailsJson'])->name('enquiry.details')->where('id', '[0-9]+');
+        Route::post('/enquiry/{id}/follow-up', [AdmissionController::class, 'addEnquiryFollowUp'])->name('enquiry.follow-up')->where('id', '[0-9]+');
+        Route::post('/enquiry/{id}/status',    [AdmissionController::class, 'updateEnquiryStatusAction'])->name('enquiry.update-status')->where('id', '[0-9]+');
+        Route::post('/enquiry/{id}/reopen',    [AdmissionController::class, 'reopenEnquiry'])->name('enquiry.reopen')->where('id', '[0-9]+');
+        Route::get('/enquiry/{id}/convert',    [AdmissionController::class, 'convertEnquiryToAdmission'])->name('enquiry.convert')->where('id', '[0-9]+');
 
         // Single record routes — keep AFTER all named static routes to avoid catch-all collisions
         Route::get('/{id}',        [AdmissionController::class, 'show'])->name('show');

@@ -7,6 +7,10 @@ use App\Models\AcademicYear;
 use App\Models\Classes;
 use App\Models\Enquiry;
 use App\Models\EnquiryFollowUp;
+use App\Models\EnquiryStatusHistory;
+use App\Models\AdmissionDraft;
+use App\Models\AdmissionDraftDocument;
+use App\Models\Student;
 use App\Models\AdmissionStage;
 use App\Models\SeatCapacity;
 use App\Models\SchoolSetting;
@@ -355,7 +359,7 @@ class AdmissionController extends Controller
         $feeData   = $this->getFeeStructureData();
         $classes   = $feeData['classes'];
 
-        $stats = Cache::remember('admission_index_stats_v1', 60, function () {
+        $stats = Cache::remember('admission_index_stats_v2', 30, function () {
             $statsRow = DB::table('enquiries')->whereNull('deleted_at')->selectRaw("
                 COUNT(*) as total,
                 COUNT(CASE WHEN status = 'new' THEN 1 END) as new,
@@ -364,19 +368,26 @@ class AdmissionController extends Controller
                 COUNT(CASE WHEN status = 'lost' THEN 1 END) as lost
             ")->first();
 
+            $total = (int) ($statsRow->total ?? 0);
+            $converted = (int) ($statsRow->converted ?? 0);
+            $rate = $total > 0 ? round(($converted / $total) * 100, 1) : 0;
+            $draftsCount = \App\Models\AdmissionDraft::whereIn('status', ['draft', 'submission_failed'])->count();
+
             return [
-                'total'     => (int) ($statsRow->total ?? 0),
-                'new'       => (int) ($statsRow->new ?? 0),
-                'follow_up' => (int) ($statsRow->follow_up ?? 0),
-                'converted' => (int) ($statsRow->converted ?? 0),
-                'lost'      => (int) ($statsRow->lost ?? 0),
+                'total'           => $total,
+                'new'             => (int) ($statsRow->new ?? 0),
+                'follow_up'       => (int) ($statsRow->follow_up ?? 0),
+                'converted'       => $converted,
+                'lost'            => (int) ($statsRow->lost ?? 0),
+                'conversion_rate' => $rate,
+                'drafts_count'    => $draftsCount,
             ];
         });
 
         return view('admissions.index', array_merge($feeData, compact('enquiries', 'classes', 'stats')));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $feeData      = $this->getFeeStructureData();
         $classes      = $feeData['classes'];
@@ -385,6 +396,25 @@ class AdmissionController extends Controller
         $standardFees = $feeData['standardFees'];
         $activities   = $feeData['activities'];
         $users        = \App\Models\User::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+
+        // Handle Enquiry Conversion pre-fill
+        $enquiry = null;
+        if ($request->filled('enquiry_id')) {
+            $enquiry = Enquiry::with(['class', 'academicYear'])->find($request->enquiry_id);
+            if ($enquiry && ($enquiry->status === 'converted' || $enquiry->converted_student_id)) {
+                $convertedStudent = $enquiry->convertedStudent ?? \App\Models\Student::find($enquiry->converted_student_id);
+                if ($convertedStudent) {
+                    return redirect()->route('students.show', $convertedStudent->id)
+                        ->with('info', "Enquiry #{$enquiry->enquiry_number} has already been converted into an admission for student {$convertedStudent->first_name} {$convertedStudent->last_name} ({$convertedStudent->admission_no}).");
+                }
+            }
+        }
+
+        // Handle Draft resumption pre-fill
+        $draft = null;
+        if ($request->filled('draft_id')) {
+            $draft = AdmissionDraft::with('documents')->find($request->draft_id);
+        }
 
         // Fetch standard-wise admission kits and inventory stock data
         $admissionKits = \App\Models\AdmissionKitConfig::with('item')
@@ -427,7 +457,7 @@ class AdmissionController extends Controller
 
         return view('admissions.create', compact(
             'classes', 'sections', 'academicYear', 'academicYears', 'academicGroups', 'standardFees', 'activities', 'users', 'admissionKits',
-            'transportRoutes', 'concessionTypes', 'officialDocChecklist'
+            'transportRoutes', 'concessionTypes', 'officialDocChecklist', 'enquiry', 'draft'
         ));
     }
 
@@ -1209,42 +1239,73 @@ class AdmissionController extends Controller
             DB::transaction(function () use ($validated, $currentYear, $totalFee, $amountCollected, $pendingAmount, $paymentMode, $paymentAccount, $paymentDate, $paymentTerms, $overallStatus, $terms, $issuedItemsSummary, $request, $photoPath, $fatherPhotoPath, $motherPhotoPath, $guardianPhotoPath, $isAsp, $aspFee, $transportFee, $concessionAmount, $customKitItems, &$student) {
                 $studentFullName = trim($request->first_name . ' ' . ($request->last_name ?? ''));
 
-            // Save Enquiry
-            $enquiry = Enquiry::create(array_merge($validated, [
-                'student_name'         => $studentFullName,
-                'enquiry_number'       => Enquiry::generateNumber(),
-                'status'               => 'converted',
-                'academic_year_id'     => $currentYear?->id,
-                'created_by'           => Auth::id(),
-                'father_name'          => $request->parent_name,
-                'father_mobile'        => $request->parent_mobile,
-                'father_occupation'    => $request->father_occupation,
-                'mother_name'          => $request->mother_name,
-                'mother_mobile'        => $request->mother_mobile,
-                'mother_occupation'    => $request->mother_occupation,
-                'last_school_studied'      => $request->previous_school_name ?: $request->previous_school,
-                'previous_school_attended' => $request->previous_school_name ?: $request->previous_school,
-                'last_class_studied'       => $request->previous_class,
-                'previous_class'           => $request->previous_class,
-                'board'                    => $request->previous_school_board ?: $request->board,
-                'previous_percentage'      => $request->previous_percentage ?: $request->previous_marks,
-                'year_of_passing'          => $request->year_of_passing,
-                'stream_group'             => $request->stream_group,
-                'referred_by'              => $request->referred_by ?? $request->source,
-                'dress_size'               => $request->dress_size,
-                'shoe_size'                => $request->shoe_size,
-                'second_language'          => $request->second_language,
-                'follow_up_remarks'        => $request->notes,
-                'payment_terms'        => $paymentTerms,
-                'total_admission_fee'  => $totalFee,
-                'amount_collected'     => $amountCollected,
-                'pending_amount'       => $pendingAmount,
-                'payment_mode'         => $paymentMode,
-                'payment_account'      => $paymentAccount,
-                'payment_date'         => $paymentDate,
-                'payment_status'       => $overallStatus,
-                'fee_breakdown'        => $terms,
-            ]));
+            // Save or Update Enquiry
+            $enquiryId = $request->input('enquiry_id');
+            $existingEnquiry = $enquiryId ? Enquiry::find($enquiryId) : null;
+            if ($existingEnquiry) {
+                $enquiry = $existingEnquiry;
+                $prevStatus = $existingEnquiry->status;
+                $existingEnquiry->update([
+                    'status'               => 'converted',
+                    'converted_at'         => now(),
+                    'converted_by'         => Auth::id(),
+                    'payment_terms'        => $paymentTerms,
+                    'total_admission_fee'  => $totalFee,
+                    'amount_collected'     => $amountCollected,
+                    'pending_amount'       => $pendingAmount,
+                    'payment_mode'         => $paymentMode,
+                    'payment_account'      => $paymentAccount,
+                    'payment_date'         => $paymentDate,
+                    'payment_status'       => $overallStatus,
+                    'fee_breakdown'        => $terms,
+                ]);
+                EnquiryStatusHistory::create([
+                    'enquiry_id'      => $existingEnquiry->id,
+                    'previous_status' => $prevStatus,
+                    'new_status'      => 'converted',
+                    'reason'          => 'Admission Conversion Completed',
+                    'remarks'         => "Converted to student record by " . (Auth::user()?->name ?? 'Staff'),
+                    'changed_by'      => Auth::id(),
+                ]);
+            } else {
+                $enquiry = Enquiry::create(array_merge($validated, [
+                    'student_name'         => $studentFullName,
+                    'enquiry_number'       => Enquiry::generateNumber(),
+                    'status'               => 'converted',
+                    'academic_year_id'     => $currentYear?->id,
+                    'created_by'           => Auth::id(),
+                    'converted_at'         => now(),
+                    'converted_by'         => Auth::id(),
+                    'father_name'          => $request->parent_name,
+                    'father_mobile'        => $request->parent_mobile,
+                    'father_occupation'    => $request->father_occupation,
+                    'mother_name'          => $request->mother_name,
+                    'mother_mobile'        => $request->mother_mobile,
+                    'mother_occupation'    => $request->mother_occupation,
+                    'last_school_studied'      => $request->previous_school_name ?: $request->previous_school,
+                    'previous_school_attended' => $request->previous_school_name ?: $request->previous_school,
+                    'last_class_studied'       => $request->previous_class,
+                    'previous_class'           => $request->previous_class,
+                    'board'                    => $request->previous_school_board ?: $request->board,
+                    'previous_percentage'      => $request->previous_percentage ?: $request->previous_marks,
+                    'year_of_passing'          => $request->year_of_passing,
+                    'stream_group'             => $request->stream_group,
+                    'referred_by'              => $request->referred_by ?? $request->source,
+                    'dress_size'               => $request->dress_size,
+                    'shoe_size'                => $request->shoe_size,
+                    'second_language'          => $request->second_language,
+                    'follow_up_remarks'        => $request->notes,
+                    'payment_terms'        => $paymentTerms,
+                    'total_admission_fee'  => $totalFee,
+                    'amount_collected'     => $amountCollected,
+                    'pending_amount'       => $pendingAmount,
+                    'payment_mode'         => $paymentMode,
+                    'payment_account'      => $paymentAccount,
+                    'payment_date'         => $paymentDate,
+                    'payment_status'       => $overallStatus,
+                    'fee_breakdown'        => $terms,
+                ]));
+            }
 
             // Generate Official School Admission Number: Boys (EPSB0000 sample -> EPSB0001...), Girls (EPSG000 sample -> EPSG0001...)
             $admNo = \App\Models\Student::generateAdmissionNumber($request->gender);
@@ -1274,6 +1335,8 @@ class AdmissionController extends Controller
 
             // Save Student with Parent Photos
             $student = \App\Models\Student::create([
+                'enquiry_id'               => $enquiry->id,
+                'admission_draft_id'       => $request->input('draft_id'),
                 'admission_no'             => $admNo,
                 'admission_date'           => $paymentDate,
                 'roll_number'              => $autoRollNo,
@@ -1370,6 +1433,42 @@ class AdmissionController extends Controller
                     'textbook_notes'  => $request->textbook_notes,
                 ],
             ]);
+
+            // Ensure enquiry references the newly admitted student
+            $enquiry->update(['converted_student_id' => $student->id]);
+
+            // Finalize Admission Draft if admission was resumed from draft
+            if ($request->filled('draft_id')) {
+                $completedDraft = AdmissionDraft::with('documents')->find($request->draft_id);
+                if ($completedDraft) {
+                    $completedDraft->update([
+                        'status'               => 'submitted',
+                        'converted_student_id' => $student->id,
+                        'submission_error'     => null,
+                    ]);
+
+                    // Migrate draft documents to permanent student documents if not re-uploaded
+                    foreach ($completedDraft->documents as $draftDoc) {
+                        $alreadyUploaded = \App\Models\StudentDocument::where('student_id', $student->id)
+                            ->where('document_type', $draftDoc->document_type)
+                            ->exists();
+                        if (!$alreadyUploaded && \Illuminate\Support\Facades\Storage::disk('public')->exists($draftDoc->stored_path)) {
+                            $destPath = "students/{$student->id}/documents/" . basename($draftDoc->stored_path);
+                            \Illuminate\Support\Facades\Storage::disk('public')->copy($draftDoc->stored_path, $destPath);
+                            \App\Models\StudentDocument::create([
+                                'student_id'    => $student->id,
+                                'document_type' => $draftDoc->document_type,
+                                'file_path'     => $destPath,
+                                'original_name' => $draftDoc->original_filename,
+                                'status'        => 'verified',
+                                'verified_by'   => Auth::id(),
+                                'verified_at'   => now(),
+                                'remarks'       => 'Transferred from Admission Draft',
+                            ]);
+                        }
+                    }
+                }
+            }
 
             // Save Student Enrollment
             \App\Models\StudentEnrollment::create([
@@ -1575,6 +1674,16 @@ class AdmissionController extends Controller
             }
         });
         } catch (\Throwable $e) {
+            if ($request->filled('draft_id')) {
+                $failedDraft = AdmissionDraft::find($request->draft_id);
+                if ($failedDraft) {
+                    $failedDraft->update([
+                        'status'                  => 'submission_failed',
+                        'submission_attempted_at' => now(),
+                        'submission_error'        => $e->getMessage(),
+                    ]);
+                }
+            }
             \Illuminate\Support\Facades\Log::error('Admission enrollment error: ' . $e->getMessage(), ['exception' => $e]);
             return back()->withInput()->withErrors([
                 'general' => 'Admission could not be processed due to a server error: ' . $e->getMessage() . '. All your inputs have been retained. Please review and try submitting again.'
@@ -2659,5 +2768,237 @@ class AdmissionController extends Controller
     {
         $app = \App\Models\StudentApplication::with('formConfig')->where('application_number', $number)->firstOrFail();
         return view('admissions.application-success', compact('app'));
+    }
+
+    /**
+     * One-click Enquiry to Admission conversion initiation
+     */
+    public function convertEnquiryToAdmission(int $id)
+    {
+        $enquiry = Enquiry::with('convertedStudent')->findOrFail($id);
+
+        if ($enquiry->converted_student_id || $enquiry->status === 'converted') {
+            $student = $enquiry->convertedStudent;
+            if ($student) {
+                return redirect()->route('students.show', $student->id)
+                    ->with('info', "Enquiry #{$enquiry->enquiry_number} was already converted into Student {$student->first_name} {$student->last_name} ({$student->admission_no}).");
+            }
+        }
+
+        return redirect()->route('admissions.create', ['enquiry_id' => $enquiry->id]);
+    }
+
+    /**
+     * Add a structured follow-up record to an enquiry
+     */
+    public function addEnquiryFollowUp(Request $request, int $id)
+    {
+        $enquiry = Enquiry::findOrFail($id);
+
+        $validated = $request->validate([
+            'contact_date'        => 'required|date',
+            'contact_person'      => 'nullable|string|max:150',
+            'contact_method'      => 'required|string|in:phone,call,whatsapp,email,in_person,visit,other',
+            'discussion'          => 'required|string|max:2000',
+            'parent_response'     => 'nullable|string|max:100',
+            'next_follow_up_date' => 'nullable|date',
+            'new_status'          => 'nullable|string|max:50',
+            'assigned_staff_id'   => 'nullable|exists:users,id',
+        ]);
+
+        $prevStatus = $enquiry->status;
+        $newStatus  = $validated['new_status'] ?? $prevStatus;
+
+        // Save follow-up
+        $followUp = EnquiryFollowUp::create([
+            'enquiry_id'          => $enquiry->id,
+            'follow_up_date'      => $validated['contact_date'],
+            'contact_person'      => $validated['contact_person'] ?? ($enquiry->father_name ?: $enquiry->parent_name),
+            'contact_method'      => $validated['contact_method'],
+            'discussion'          => $validated['discussion'],
+            'parent_response'     => $validated['parent_response'] ?? null,
+            'next_follow_up_date' => $validated['next_follow_up_date'] ?? null,
+            'notes'               => $validated['discussion'],
+            'status'              => $newStatus,
+            'created_by'          => Auth::id(),
+            'assigned_staff_id'   => $validated['assigned_staff_id'] ?? Auth::id(),
+        ]);
+
+        // Update enquiry
+        $updates = [];
+        if (!empty($validated['next_follow_up_date'])) {
+            $updates['follow_up_date'] = $validated['next_follow_up_date'];
+        }
+        if ($newStatus && $newStatus !== $prevStatus) {
+            $updates['status'] = $newStatus;
+            EnquiryStatusHistory::create([
+                'enquiry_id'      => $enquiry->id,
+                'previous_status' => $prevStatus,
+                'new_status'      => $newStatus,
+                'reason'          => 'Follow-up interaction',
+                'remarks'         => $validated['discussion'],
+                'changed_by'      => Auth::id(),
+            ]);
+        }
+        if (!empty($updates)) {
+            $enquiry->update($updates);
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success'   => true,
+                'message'   => 'Follow-up recorded successfully.',
+                'follow_up' => $followUp,
+            ]);
+        }
+
+        return back()->with('success', 'Follow-up recorded successfully.');
+    }
+
+    /**
+     * Update Enquiry Status with optional closure reason
+     */
+    public function updateEnquiryStatusAction(Request $request, int $id)
+    {
+        $enquiry = Enquiry::findOrFail($id);
+
+        $validated = $request->validate([
+            'status'                 => 'required|string',
+            'non_conversion_reason'  => 'nullable|string|max:150',
+            'non_conversion_remarks' => 'nullable|string|max:1000',
+        ]);
+
+        $prevStatus = $enquiry->status;
+        $newStatus  = $validated['status'];
+
+        $updates = ['status' => $newStatus];
+
+        if (in_array($newStatus, ['not_interested', 'lost', 'on_hold'])) {
+            $updates['non_conversion_reason']  = $validated['non_conversion_reason'] ?? null;
+            $updates['non_conversion_remarks'] = $validated['non_conversion_remarks'] ?? null;
+            $updates['closed_by']              = Auth::id();
+            $updates['closed_at']              = now();
+        }
+
+        $enquiry->update($updates);
+
+        // Record history
+        EnquiryStatusHistory::create([
+            'enquiry_id'      => $enquiry->id,
+            'previous_status' => $prevStatus,
+            'new_status'      => $newStatus,
+            'reason'          => $validated['non_conversion_reason'] ?? 'Status updated by staff',
+            'remarks'         => $validated['non_conversion_remarks'] ?? null,
+            'changed_by'      => Auth::id(),
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Enquiry status updated successfully.',
+            ]);
+        }
+
+        return back()->with('success', 'Enquiry status updated successfully.');
+    }
+
+    /**
+     * Reopen a closed or lost enquiry
+     */
+    public function reopenEnquiry(Request $request, int $id)
+    {
+        $enquiry = Enquiry::findOrFail($id);
+        $prevStatus = $enquiry->status;
+
+        $enquiry->update([
+            'status'                 => 'follow_up',
+            'non_conversion_reason'  => null,
+            'non_conversion_remarks' => null,
+            'closed_by'              => null,
+            'closed_at'              => null,
+        ]);
+
+        EnquiryStatusHistory::create([
+            'enquiry_id'      => $enquiry->id,
+            'previous_status' => $prevStatus,
+            'new_status'      => 'follow_up',
+            'reason'          => 'Enquiry Reopened',
+            'remarks'         => $request->input('remarks', 'Reopened for active follow-up.'),
+            'changed_by'      => Auth::id(),
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Enquiry reopened successfully.',
+            ]);
+        }
+
+        return back()->with('success', 'Enquiry reopened successfully.');
+    }
+
+    /**
+     * Fetch complete Enquiry details, timeline and history for modal/drawer (AJAX)
+     */
+    public function enquiryDetailsJson(int $id)
+    {
+        $enquiry = Enquiry::with([
+            'class',
+            'academicYear',
+            'followUps.creator',
+            'statusHistory.user',
+            'convertedStudent.currentEnrollment.section',
+            'assignedTo',
+            'closedBy',
+        ])->findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'enquiry' => [
+                'id'                     => $enquiry->id,
+                'enquiry_number'         => $enquiry->enquiry_number,
+                'student_name'           => $enquiry->student_name,
+                'dob'                    => $enquiry->dob ? $enquiry->dob->format('d M Y') : '—',
+                'gender'                 => ucfirst($enquiry->gender ?? 'male'),
+                'class_name'             => $enquiry->class?->name ?? '—',
+                'academic_year'          => $enquiry->academicYear?->name ?? '2026–2027',
+                'parent_name'            => $enquiry->father_name ?: ($enquiry->parent_name ?: '—'),
+                'parent_mobile'          => $enquiry->father_mobile ?: ($enquiry->parent_mobile ?: '—'),
+                'parent_email'           => $enquiry->email ?: '—',
+                'address'                => $enquiry->address ?: '—',
+                'source'                 => $enquiry->source ?? 'Walk-in',
+                'status'                 => $enquiry->status,
+                'priority'               => $enquiry->priority ?? 'Warm',
+                'follow_up_date'         => $enquiry->follow_up_date ? $enquiry->follow_up_date->format('d M Y') : null,
+                'non_conversion_reason'  => $enquiry->non_conversion_reason,
+                'non_conversion_remarks' => $enquiry->non_conversion_remarks,
+                'converted_student_id'   => $enquiry->converted_student_id,
+                'converted_student_name' => $enquiry->convertedStudent?->full_name,
+                'converted_student_adm'  => $enquiry->convertedStudent?->admission_no,
+                'converted_at'           => $enquiry->converted_at?->format('d M Y, h:i A'),
+                'closed_at'              => $enquiry->closed_at?->format('d M Y, h:i A'),
+                'closed_by_name'         => $enquiry->closedBy?->name,
+                'created_at'             => $enquiry->created_at->format('d M Y, h:i A'),
+            ],
+            'follow_ups' => $enquiry->followUps->map(fn($f) => [
+                'id'                  => $f->id,
+                'date'                => $f->follow_up_date ? $f->follow_up_date->format('d M Y') : $f->created_at->format('d M Y'),
+                'contact_method'      => ucfirst(str_replace('_', ' ', $f->contact_method ?? 'phone')),
+                'contact_person'      => $f->contact_person,
+                'discussion'          => $f->discussion ?: ($f->notes ?: '—'),
+                'parent_response'     => $f->parent_response,
+                'next_date'           => $f->next_follow_up_date ? \Carbon\Carbon::parse($f->next_follow_up_date)->format('d M Y') : null,
+                'staff_name'          => $f->creator?->name ?? 'Staff',
+            ]),
+            'status_history' => $enquiry->statusHistory->map(fn($h) => [
+                'id'              => $h->id,
+                'previous_status' => ucfirst(str_replace('_', ' ', $h->previous_status ?? '—')),
+                'new_status'      => ucfirst(str_replace('_', ' ', $h->new_status)),
+                'reason'          => $h->reason,
+                'remarks'         => $h->remarks,
+                'changed_by'      => $h->user?->name ?? 'System',
+                'date'            => $h->created_at->format('d M Y, h:i A'),
+            ]),
+        ]);
     }
 }
